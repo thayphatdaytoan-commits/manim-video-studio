@@ -1,4 +1,4 @@
-"""AI generation: đề bài (text/ảnh) -> GeoGebra commands + Manim code via Gemini."""
+"""AI generation tách 2 bước: (1) đề -> GeoGebra, (2) GeoGebra -> Manim."""
 
 from __future__ import annotations
 
@@ -18,37 +18,56 @@ GEMINI_MODELS = (
     "gemini-1.5-flash",
 )
 
-SYSTEM_PROMPT = """Bạn là trợ lý hình học cho giáo viên Toán Việt Nam.
-Nhiệm vụ: từ đề bài (văn bản và/hoặc ảnh), tạo:
-1) Lệnh GeoGebra để dựng hình chính xác
-2) Mã Manim Community (Python) để làm video minh họa
+GEOGEBRA_PROMPT = """Bạn là chuyên gia dựng hình GeoGebra cho giáo viên Toán Việt Nam.
+Nhiệm vụ DUY NHẤT: từ đề bài (văn bản và/hoặc ảnh) tạo lệnh GeoGebra vẽ hình CHUẨN XÁC như đề.
 
-YÊU CẦU BẮT BUỘC — trả về ĐÚNG 1 JSON object (không markdown, không giải thích ngoài JSON):
+Trả về ĐÚNG 1 JSON (không markdown):
 {
   "title": "tiêu đề ngắn",
   "geogebra_mode": "geometry" | "graphing" | "3d",
   "geogebra_commands": ["lệnh1", "lệnh2", ...],
-  "scene_name": "TenClassScene",
-  "manim_code": "from manim import *\\n...",
-  "notes": "ghi chú ngắn cho giáo viên"
+  "notes": "ghi chú ngắn"
 }
 
-QUY TẮC GEOGEBRA:
-- Dùng cú pháp GeoGebra chuẩn (tiếng Anh): Point, Segment, Line, Circle, Polygon, Angle, Intersect, ...
-- Ví dụ: "A = (0, 0)", "B = (4, 0)", "c = Circle(A, B)", "f: y = x^2"
-- Đặt tên điểm rõ ràng; hiện nhãn cần thiết
-- Không dùng lệnh không tồn tại; ưu tiên hình tối giản đúng đề
-- Nếu là đồ thị hàm: geogebra_mode = "graphing"
-- Nếu hình không gian: geogebra_mode = "3d"
+QUY TẮC VẼ CHUẨN (BẮT BUỘC):
+1. Đọc kỹ đề/ảnh: đúng số đo, góc, quan hệ (vuông, song song, trung điểm, tiếp xúc...).
+2. Chỉ HIỆN các đối tượng thuộc hình hoàn chỉnh cần cho đề (điểm đề nêu, cạnh, đường tròn chính, nhãn cần thiết).
+3. MỌI đường phụ / trung gian dựng hình phải ẨN sau khi dùng:
+   - Đường tròn phụ, đường thẳng phụ, tia phụ, giao điểm phụ chỉ để dựng → SetVisible(tên, false)
+   - Hoặc SetColor + độ dày 0 và SetVisible false
+4. Thứ tự lệnh: dựng → lấy giao/quan hệ → ẨN phụ → để lại hình sạch.
+5. Ví dụ ẩn phụ:
+   - "c1 = Circle(A, B)"
+   - "C = Intersect(c1, c2, 1)"
+   - "SetVisible(c1, false)"
+   - "SetVisible(c2, false)"
+6. Cú pháp GeoGebra tiếng Anh chuẩn: Point, Segment, Line, Ray, Circle, Polygon, Angle, Intersect, Midpoint, PerpendicularLine, ParallelLine, SetVisible, ShowLabel, SetCaption...
+7. Đặt tên điểm đúng đề (A, B, C...). ShowLabel(điểm, true) cho điểm chính; ẩn nhãn đối tượng phụ.
+8. Không bịa thêm chi tiết không có trong đề.
+9. graphing nếu đồ thị hàm; 3d nếu hình không gian; còn lại geometry.
+10. Không sinh mã Manim trong bước này.
+"""
+
+MANIM_PROMPT = """Bạn là chuyên gia Manim Community cho video bài giảng Toán Việt Nam.
+Nhiệm vụ DUY NHẤT: từ đề bài + danh sách lệnh GeoGebra ĐÃ CHỈNH SỬA HOÀN CHỈNH, viết mã Manim dựng HÌNH ĐÚNG như GeoGebra (không phụ thuộc runtime GeoGebra).
+
+Trả về ĐÚNG 1 JSON (không markdown):
+{
+  "scene_name": "TenClassScene",
+  "manim_code": "from manim import *\\n...",
+  "notes": "ghi chú ngắn"
+}
 
 QUY TẮC MANIM:
-- Manim Community Edition, class kế thừa Scene hoặc ThreeDScene
-- scene_name phải khớp tên class trong manim_code
-- Với chữ tiếng Việt dùng Text(...) hoặc Tex kèm:
-  config.tex_template.add_to_preamble(r"\\\\usepackage[utf8]{vietnam}")
-- Animation ngắn gọn (Write/Create/FadeIn), self.wait() hợp lý
-- Không import thư viện ngoài manim/numpy
-- Code chạy được ngay, không placeholder
+1. Manim Community Edition; class kế thừa Scene hoặc ThreeDScene.
+2. scene_name khớp tên class trong manim_code.
+3. Tái tạo đúng hình từ lệnh GeoGebra đã cho (tọa độ, đoạn, góc, đường tròn...).
+4. BỎ qua / không vẽ các đối tượng đã SetVisible(..., false) trong GeoGebra — chỉ animation phần hình hoàn chỉnh.
+5. Animation rõ ràng từng bước (Create/Write/FadeIn), có self.wait() hợp lý, không quá dài.
+6. Chữ tiếng Việt: Text(...) hoặc Tex + preamble vietnam:
+   config.tex_template.add_to_preamble(r"\\\\usepackage[utf8]{vietnam}")
+7. Chỉ import manim / numpy. Code chạy được ngay, không placeholder.
+8. Không trả về lệnh GeoGebra.
 """
 
 
@@ -84,15 +103,12 @@ def _call_gemini(
             header, raw = raw.split(",", 1)
             if "image/" in header:
                 mime_type = header.split(";")[0].split(":")[-1]
-        parts.insert(
-            0,
-            {"inline_data": {"mime_type": mime_type, "data": raw}},
-        )
+        parts.insert(0, {"inline_data": {"mime_type": mime_type, "data": raw}})
 
     body = {
         "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {
-            "temperature": 0.35,
+            "temperature": 0.25,
             "responseMimeType": "application/json",
         },
     }
@@ -120,7 +136,37 @@ def _call_gemini(
     return "\n".join(texts)
 
 
-def generate_from_problem(
+def _gemini_with_fallback(
+    api_key: str,
+    prompt: str,
+    image_b64: str | None = None,
+    mime_type: str = "image/png",
+) -> str:
+    last_err: Exception | None = None
+    for model in GEMINI_MODELS:
+        try:
+            return _call_gemini(
+                api_key=api_key.strip(),
+                prompt=prompt,
+                image_b64=image_b64,
+                mime_type=mime_type,
+                model=model,
+            )
+        except Exception as exc:  # noqa: BLE001
+            last_err = exc
+            logger.info("Model %s failed: %s", model, exc)
+    raise RuntimeError(str(last_err) if last_err else "Không gọi được Gemini")
+
+
+def _normalize_commands(commands: Any) -> list[str]:
+    if isinstance(commands, str):
+        commands = [c.strip() for c in commands.split("\n") if c.strip()]
+    if not isinstance(commands, list):
+        return []
+    return [str(c).strip() for c in commands if str(c).strip()]
+
+
+def generate_geogebra(
     *,
     api_key: str,
     problem_text: str = "",
@@ -132,58 +178,84 @@ def generate_from_problem(
     if not problem_text.strip() and not image_b64:
         raise ValueError("Cần nhập nội dung đề hoặc tải ảnh đề")
 
-    user_prompt = SYSTEM_PROMPT + "\n\n--- ĐỀ BÀI ---\n"
+    user_prompt = GEOGEBRA_PROMPT + "\n\n--- ĐỀ BÀI ---\n"
     user_prompt += problem_text.strip() or "(Xem hình ảnh đề bài đính kèm)"
 
-    last_err: Exception | None = None
-    raw = ""
-    for model in GEMINI_MODELS:
-        try:
-            raw = _call_gemini(
-                api_key=api_key.strip(),
-                prompt=user_prompt,
-                image_b64=image_b64,
-                mime_type=mime_type,
-                model=model,
-            )
-            break
-        except Exception as exc:  # noqa: BLE001
-            last_err = exc
-            logger.info("Model %s failed: %s", model, exc)
-    else:
-        raise RuntimeError(str(last_err) if last_err else "Không gọi được Gemini")
-
+    raw = _gemini_with_fallback(
+        api_key=api_key,
+        prompt=user_prompt,
+        image_b64=image_b64,
+        mime_type=mime_type,
+    )
     data = _extract_json(raw)
+    commands = _normalize_commands(data.get("geogebra_commands"))
+    if not commands:
+        raise ValueError("AI không sinh được lệnh GeoGebra")
 
-    commands = data.get("geogebra_commands") or []
-    if isinstance(commands, str):
-        commands = [c.strip() for c in commands.split("\n") if c.strip()]
-    commands = [str(c).strip() for c in commands if str(c).strip()]
-
-    manim_code = str(data.get("manim_code") or "").strip()
-    scene_name = str(data.get("scene_name") or "GeometryScene").strip()
     mode = str(data.get("geogebra_mode") or "geometry").strip().lower()
     if mode not in {"geometry", "graphing", "3d"}:
         mode = "geometry"
 
+    return {
+        "title": str(data.get("title") or "Hình GeoGebra"),
+        "geogebra_mode": mode,
+        "geogebra_commands": commands,
+        "notes": str(data.get("notes") or ""),
+    }
+
+
+def generate_manim_from_geogebra(
+    *,
+    api_key: str,
+    geogebra_commands: list[str] | str,
+    problem_text: str = "",
+    geogebra_mode: str = "geometry",
+) -> dict[str, Any]:
+    if not api_key.strip():
+        raise ValueError("Thiếu Gemini API key")
+
+    commands = _normalize_commands(geogebra_commands)
+    if not commands:
+        raise ValueError("Chưa có lệnh GeoGebra để sinh Manim")
+
+    user_prompt = MANIM_PROMPT
+    user_prompt += "\n\n--- ĐỀ BÀI (ngữ cảnh) ---\n"
+    user_prompt += problem_text.strip() or "(Không có mô tả thêm)"
+    user_prompt += f"\n\n--- GEOGEBRA MODE ---\n{geogebra_mode}"
+    user_prompt += "\n\n--- LỆNH GEOGEBRA ĐÃ CHỈNH (hình hoàn chỉnh) ---\n"
+    user_prompt += "\n".join(commands)
+
+    raw = _gemini_with_fallback(api_key=api_key, prompt=user_prompt)
+    data = _extract_json(raw)
+
+    manim_code = str(data.get("manim_code") or "").strip()
+    scene_name = str(data.get("scene_name") or "GeometryScene").strip()
     if not manim_code:
         raise ValueError("AI không sinh được mã Manim")
     if "class " not in manim_code:
         raise ValueError("Mã Manim thiếu class Scene")
 
-    # Đảm bảo scene_name khớp class nếu có thể
     m = re.search(r"class\s+(\w+)\s*\([^)]*Scene", manim_code)
     if m:
         scene_name = m.group(1)
 
     return {
-        "title": str(data.get("title") or "Hình minh họa"),
-        "geogebra_mode": mode,
-        "geogebra_commands": commands,
         "scene_name": scene_name,
         "manim_code": manim_code,
         "notes": str(data.get("notes") or ""),
     }
+
+
+# Giữ tương thích cũ nếu còn chỗ gọi
+def generate_from_problem(**kwargs: Any) -> dict[str, Any]:
+    ggb = generate_geogebra(**kwargs)
+    manim = generate_manim_from_geogebra(
+        api_key=kwargs["api_key"],
+        geogebra_commands=ggb["geogebra_commands"],
+        problem_text=kwargs.get("problem_text") or "",
+        geogebra_mode=ggb["geogebra_mode"],
+    )
+    return {**ggb, **manim}
 
 
 def image_file_to_b64(content: bytes) -> str:

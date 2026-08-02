@@ -65,8 +65,13 @@ export default function App() {
   const [problemText, setProblemText] = useState('')
   const [imageDataUrl, setImageDataUrl] = useState(null)
   const [imageName, setImageName] = useState('')
-  const [generating, setGenerating] = useState(false)
-  const [ggbCommandsText, setGgbCommandsText] = useState('A = (0, 0)\nB = (4, 0)\nC = (1, 3)\npolygon1 = Polygon(A, B, C)')
+  const [generatingGgb, setGeneratingGgb] = useState(false)
+  const [generatingManim, setGeneratingManim] = useState(false)
+  const [ggbReady, setGgbReady] = useState(false)
+  const [manimReady, setManimReady] = useState(false)
+  const [ggbCommandsText, setGgbCommandsText] = useState(
+    '# AI sẽ tạo lệnh GeoGebra tại đây\n# Đường phụ phải có SetVisible(..., false)',
+  )
   const [ggbMode, setGgbMode] = useState('geometry')
   const [ggbRevision, setGgbRevision] = useState(0)
   const [aiNotes, setAiNotes] = useState('')
@@ -141,6 +146,7 @@ export default function App() {
     setCode(tpl.code)
     setScenes(tpl.scenes)
     setScene(tpl.default_scene)
+    setManimReady(true)
     setError(null)
   }
 
@@ -248,26 +254,33 @@ export default function App() {
     setShowKeyModal(false)
   }
 
-  const handleGenerate = async () => {
+  const requireApiKey = () => {
+    if (apiKey || backend.gemini_configured) return true
+    setDraftKey(apiKey)
+    setShowKeyModal(true)
+    setError('Cần Gemini API key (nút API KEY góc trên).')
+    return false
+  }
+
+  const authHeaders = () => ({
+    'Content-Type': 'application/json',
+    ...(apiKey ? { 'X-Gemini-Api-Key': apiKey } : {}),
+  })
+
+  const handleGenerateGeogebra = async () => {
     if (!problemText.trim() && !imageDataUrl) {
       setError('Nhập nội dung đề hoặc tải ảnh đề trước.')
       return
     }
-    if (!apiKey && !backend.gemini_configured) {
-      setDraftKey(apiKey)
-      setShowKeyModal(true)
-      setError('Cần Gemini API key để sinh GeoGebra + Manim.')
-      return
-    }
-    setGenerating(true)
+    if (!requireApiKey()) return
+
+    setGeneratingGgb(true)
     setError(null)
+    setManimReady(false)
     try {
-      const data = await api('/api/generate', {
+      const data = await api('/api/generate-geogebra', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { 'X-Gemini-Api-Key': apiKey } : {}),
-        },
+        headers: authHeaders(),
         body: JSON.stringify({
           problem_text: problemText,
           image_base64: imageDataUrl,
@@ -282,15 +295,51 @@ export default function App() {
       setGgbMode(data.geogebra_mode || 'geometry')
       setGgbCommandsText((data.geogebra_commands || []).join('\n'))
       setGgbRevision((n) => n + 1)
+      setGgbReady(true)
+      setVideoUrl(null)
+      setCode('# Chỉnh xong hình GeoGebra rồi bấm "Tạo code Manim bằng AI"')
+      setScenes([])
+      setScene('')
+    } catch (err) {
+      setError(err.message)
+      setGgbReady(false)
+    } finally {
+      setGeneratingGgb(false)
+    }
+  }
+
+  const handleGenerateManim = async () => {
+    if (!ggbCommands.length) {
+      setError('Chưa có lệnh GeoGebra. Hãy sinh/chỉnh hình trước.')
+      return
+    }
+    if (!requireApiKey()) return
+
+    setGeneratingManim(true)
+    setError(null)
+    try {
+      const data = await api('/api/generate-manim', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          problem_text: problemText,
+          geogebra_commands: ggbCommands,
+          geogebra_mode: ggbMode,
+        }),
+      })
+
       setCode(data.manim_code || '')
       setScenes([data.scene_name])
       setScene(data.scene_name)
       setTemplateId('')
+      setManimReady(true)
       setVideoUrl(null)
+      if (data.notes) setAiNotes(data.notes)
     } catch (err) {
       setError(err.message)
+      setManimReady(false)
     } finally {
-      setGenerating(false)
+      setGeneratingManim(false)
     }
   }
 
@@ -305,7 +354,7 @@ export default function App() {
           </div>
           <div>
             <h1>Manim Video Studio</h1>
-            <p>AI đề bài → GeoGebra + Manim → biên dịch video</p>
+            <p>1) GeoGebra từ đề → 2) chỉnh hình → 3) Manim → 4) video</p>
           </div>
         </div>
         <div className="header-actions">
@@ -328,16 +377,19 @@ export default function App() {
       </header>
 
       <main className="layout three">
-        {/* Cột 1: Nhập đề + AI */}
+        {/* Cột 1: Nhập đề + AI GeoGebra */}
         <section className="panel">
-          <h2 className="panel-title">1. Nhập đề bài</h2>
+          <h2 className="panel-title">1. Đề bài → GeoGebra</h2>
+          <p className="step-hint">
+            Bước 1: AI chỉ tạo lệnh vẽ GeoGebra (hình chuẩn, ẩn đường phụ). Chưa tạo Manim.
+          </p>
           <label className="field">
             <span className="field-label">NỘI DUNG ĐỀ (VĂN BẢN)</span>
             <textarea
               rows={6}
               value={problemText}
               onChange={(e) => setProblemText(e.target.value)}
-              placeholder={'Ví dụ:\nCho tam giác ABC vuông tại A, AB = 3, AC = 4. Vẽ hình và minh họa định lý Pythagore.'}
+              placeholder={'Ví dụ:\nCho tam giác ABC vuông tại A, AB = 3, AC = 4. Vẽ hình minh họa.'}
             />
           </label>
 
@@ -376,11 +428,11 @@ export default function App() {
           <button
             className="btn primary"
             type="button"
-            onClick={handleGenerate}
-            disabled={generating}
+            onClick={handleGenerateGeogebra}
+            disabled={generatingGgb}
           >
-            {generating ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
-            {generating ? 'Đang sinh GeoGebra + Manim...' : 'AI sinh hình & mã Manim'}
+            {generatingGgb ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
+            {generatingGgb ? 'Đang vẽ GeoGebra...' : 'AI tạo code GeoGebra'}
           </button>
 
           {aiTitle && (
@@ -389,23 +441,18 @@ export default function App() {
               {aiNotes && <p>{aiNotes}</p>}
             </div>
           )}
-
-          <label className="field">
-            <span className="field-label">MẪU MANIM SẴN (TÙY CHỌN)</span>
-            <select value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
-              <option value="">— Giữ mã hiện tại / từ AI —</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          {ggbReady && (
+            <div className="step-ok">Đã có GeoGebra — sang cột 2 để chỉnh hình cho chuẩn.</div>
+          )}
         </section>
 
         {/* Cột 2: GeoGebra */}
         <section className="panel">
-          <h2 className="panel-title">2. GeoGebra — chỉnh hình</h2>
+          <h2 className="panel-title">2. Chỉnh hình GeoGebra</h2>
+          <p className="step-hint">
+            Sửa lệnh / dùng toolbar GeoGebra. Đường phụ nên có <code>SetVisible(..., false)</code>.
+            Xong hình mới sang bước Manim.
+          </p>
           <label className="field">
             <span className="field-label">CHẾ ĐỘ</span>
             <select value={ggbMode} onChange={(e) => setGgbMode(e.target.value)}>
@@ -421,7 +468,10 @@ export default function App() {
               rows={7}
               className="mono"
               value={ggbCommandsText}
-              onChange={(e) => setGgbCommandsText(e.target.value)}
+              onChange={(e) => {
+                setGgbCommandsText(e.target.value)
+                setManimReady(false)
+              }}
             />
           </label>
 
@@ -437,11 +487,39 @@ export default function App() {
               revision={ggbRevision}
             />
           </div>
+
+          <button
+            className="btn primary"
+            type="button"
+            onClick={handleGenerateManim}
+            disabled={generatingManim || !ggbCommands.length}
+          >
+            {generatingManim ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+            {generatingManim ? 'Đang tạo Manim...' : 'Tạo code Manim bằng AI'}
+          </button>
+          {manimReady && (
+            <div className="step-ok">Đã có Manim — sang cột 3 để biên dịch video.</div>
+          )}
         </section>
 
         {/* Cột 3: Manim + Video */}
         <section className="panel">
-          <h2 className="panel-title">3. Manim — biên dịch video</h2>
+          <h2 className="panel-title">3. Manim → video</h2>
+          <p className="step-hint">
+            Chỉ biên dịch sau khi đã có mã Manim. Chọn 480p trên Render Free.
+          </p>
+
+          <label className="field">
+            <span className="field-label">MẪU MANIM SẴN (TÙY CHỌN)</span>
+            <select value={templateId} onChange={(e) => applyTemplate(e.target.value)}>
+              <option value="">— Dùng mã AI / đang soạn —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <label className="field">
             <span className="field-label">SCENE CẦN CHẠY</span>
@@ -451,7 +529,7 @@ export default function App() {
                   {s}
                 </option>
               ))}
-              {!scenes.length && <option value="">— Không có Scene —</option>}
+              {!scenes.length && <option value="">— Chưa có Scene (hãy tạo Manim) —</option>}
             </select>
           </label>
 
@@ -515,8 +593,8 @@ export default function App() {
               onClick={handleCompile}
               disabled={compiling || !backend.ready || !scene}
             >
-              {compiling ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
-              {compiling ? 'Đang biên dịch...' : 'Biên dịch video'}
+              {compiling ? <Loader2 className="spin" size={18} /> : <Clapperboard size={18} />}
+              {compiling ? 'Đang biên dịch...' : 'Tạo video (biên dịch Manim)'}
             </button>
             <button className="btn secondary" onClick={handleDownload} disabled={!videoUrl}>
               <Download size={18} />

@@ -88,14 +88,18 @@ Repo đã có `Dockerfile` + `render.yaml`. Cách nhanh nhất:
 
 ### Tính năng AI (GeoGebra + Manim)
 
-Luồng giống NTSM GeoGebra Studio:
+Luồng tách 3 bước (giống yêu cầu sư phạm):
 
-1. Nhập đề văn bản hoặc tải ảnh đề
-2. Bấm **API KEY** → dán Gemini key từ [Google AI Studio](https://aistudio.google.com/apikey)
-3. **AI sinh hình & mã Manim** → chỉnh lệnh GeoGebra + sửa `scene.py`
-4. **Biên dịch video** bằng Manim trên server
+1. **API KEY** → Gemini key từ [Google AI Studio](https://aistudio.google.com/apikey)
+2. Nhập đề / tải ảnh → **AI tạo code GeoGebra** (vẽ chuẩn, `SetVisible` ẩn đường phụ)
+3. Chỉnh hình trên GeoGebra cho hoàn chỉnh → **Tạo code Manim bằng AI**
+4. **Tạo video (biên dịch Manim)**
 
-Tuỳ chọn: đặt biến môi trường `GEMINI_API_KEY` trên Render để khỏi nhập key mỗi máy.
+API:
+- `POST /api/generate-geogebra`
+- `POST /api/generate-manim`
+
+Tuỳ chọn: đặt `GEMINI_API_KEY` trên Render.
 
 ### Docker local (nếu có máy tính)
 

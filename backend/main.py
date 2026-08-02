@@ -22,7 +22,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from generate import generate_from_problem
+from generate import generate_geogebra, generate_manim_from_geogebra
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("manim-studio")
@@ -120,6 +120,14 @@ class GenerateRequest(BaseModel):
     mime_type: str = Field(default="image/png")
 
 
+class GenerateManimRequest(BaseModel):
+    problem_text: str = Field(default="", description="Ngữ cảnh đề bài")
+    geogebra_commands: list[str] | str = Field(
+        ..., description="Lệnh GeoGebra đã chỉnh hoàn chỉnh"
+    )
+    geogebra_mode: str = Field(default="geometry")
+
+
 def resolve_gemini_key(header_key: str | None) -> str:
     key = (header_key or "").strip() or os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
@@ -130,15 +138,16 @@ def resolve_gemini_key(header_key: str | None) -> str:
     return key
 
 
-@app.post("/api/generate")
-async def generate_geometry(
+@app.post("/api/generate-geogebra")
+async def api_generate_geogebra(
     req: GenerateRequest,
     x_gemini_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
+    """Bước 1: đề/ảnh -> lệnh GeoGebra (ẩn đường phụ)."""
     api_key = resolve_gemini_key(x_gemini_api_key)
     try:
-        result = await asyncio.to_thread(
-            generate_from_problem,
+        return await asyncio.to_thread(
+            generate_geogebra,
             api_key=api_key,
             problem_text=req.problem_text,
             image_b64=req.image_base64,
@@ -147,9 +156,60 @@ async def generate_geometry(
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
+        logger.exception("generate-geogebra failed")
+        raise HTTPException(502, str(exc)) from exc
+
+
+@app.post("/api/generate-manim")
+async def api_generate_manim(
+    req: GenerateManimRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Bước 2: GeoGebra đã chỉnh -> mã Manim."""
+    api_key = resolve_gemini_key(x_gemini_api_key)
+    try:
+        return await asyncio.to_thread(
+            generate_manim_from_geogebra,
+            api_key=api_key,
+            geogebra_commands=req.geogebra_commands,
+            problem_text=req.problem_text,
+            geogebra_mode=req.geogebra_mode,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("generate-manim failed")
+        raise HTTPException(502, str(exc)) from exc
+
+
+@app.post("/api/generate")
+async def generate_geometry_legacy(
+    req: GenerateRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Legacy: GeoGebra rồi Manim (giữ tương thích)."""
+    api_key = resolve_gemini_key(x_gemini_api_key)
+    try:
+        ggb = await asyncio.to_thread(
+            generate_geogebra,
+            api_key=api_key,
+            problem_text=req.problem_text,
+            image_b64=req.image_base64,
+            mime_type=req.mime_type,
+        )
+        manim = await asyncio.to_thread(
+            generate_manim_from_geogebra,
+            api_key=api_key,
+            geogebra_commands=ggb["geogebra_commands"],
+            problem_text=req.problem_text,
+            geogebra_mode=ggb["geogebra_mode"],
+        )
+        return {**ggb, **manim}
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
         logger.exception("generate failed")
         raise HTTPException(502, str(exc)) from exc
-    return result
 
 
 def extract_scene_names(code: str) -> list[str]:
