@@ -86,6 +86,17 @@ Repo đã có `Dockerfile` + `render.yaml`. Cách nhanh nhất:
 - Manim cần RAM khá nhiều: nếu build/render lỗi (OOM), nâng lên gói **Starter** (~$7/tháng)
 - Trên host nên chọn chất lượng **480p - 15 FPS** (nhanh nhất)
 
+### Tính năng AI (GeoGebra + Manim)
+
+Luồng giống NTSM GeoGebra Studio:
+
+1. Nhập đề văn bản hoặc tải ảnh đề
+2. Bấm **API KEY** → dán Gemini key từ [Google AI Studio](https://aistudio.google.com/apikey)
+3. **AI sinh hình & mã Manim** → chỉnh lệnh GeoGebra + sửa `scene.py`
+4. **Biên dịch video** bằng Manim trên server
+
+Tuỳ chọn: đặt biến môi trường `GEMINI_API_KEY` trên Render để khỏi nhập key mỗi máy.
+
 ### Docker local (nếu có máy tính)
 
 ```bash

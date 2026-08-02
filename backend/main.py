@@ -12,16 +12,17 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+from generate import generate_from_problem
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("manim-studio")
@@ -109,6 +110,46 @@ class CompileResponse(BaseModel):
     job_id: str
     status: str
     message: str
+
+
+class GenerateRequest(BaseModel):
+    problem_text: str = Field(default="", description="Nội dung đề bài")
+    image_base64: str | None = Field(
+        default=None, description="Ảnh đề dạng base64 hoặc data URL"
+    )
+    mime_type: str = Field(default="image/png")
+
+
+def resolve_gemini_key(header_key: str | None) -> str:
+    key = (header_key or "").strip() or os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        raise HTTPException(
+            400,
+            "Thiếu Gemini API key. Nhập API key trên giao diện hoặc đặt GEMINI_API_KEY trên server.",
+        )
+    return key
+
+
+@app.post("/api/generate")
+async def generate_geometry(
+    req: GenerateRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    api_key = resolve_gemini_key(x_gemini_api_key)
+    try:
+        result = await asyncio.to_thread(
+            generate_from_problem,
+            api_key=api_key,
+            problem_text=req.problem_text,
+            image_b64=req.image_base64,
+            mime_type=req.mime_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("generate failed")
+        raise HTTPException(502, str(exc)) from exc
+    return result
 
 
 def extract_scene_names(code: str) -> list[str]:
@@ -245,6 +286,7 @@ def health() -> dict[str, Any]:
             "latex": latex_ok,
             "ffmpeg": ffmpeg_ok,
         },
+        "gemini_configured": bool(os.environ.get("GEMINI_API_KEY", "").strip()),
     }
 
 
