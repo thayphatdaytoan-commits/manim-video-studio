@@ -1,0 +1,14 @@
+.git
+.venv
+**/__pycache__
+**/*.pyc
+media/
+frontend/node_modules/
+frontend/dist/
+**/.DS_Store
+**/*.mp4
+**/*.log
+.env
+.env.*
+README.md
+start-*.sh

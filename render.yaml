@@ -1,0 +1,13 @@
+# Blueprint: https://dashboard.render.com → New → Blueprint
+# Connect repo: thayphatdaytoan-commits/manim-video-studio
+
+services:
+  - type: web
+    name: manim-video-studio
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"

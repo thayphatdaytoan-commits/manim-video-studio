@@ -70,6 +70,29 @@ cd backend && uvicorn main:app --host 0.0.0.0 --port 8000
 
 Mở http://localhost:8000
 
+## Đưa lên online (Render) — dùng được trên iPad
+
+Repo đã có `Dockerfile` + `render.yaml`. Cách nhanh nhất:
+
+1. Mở Safari → [render.com](https://render.com) → **Sign up / Log in** bằng GitHub
+2. **New +** → **Blueprint** (hoặc **Web Service**)
+3. Chọn repo `thayphatdaytoan-commits/manim-video-studio`
+4. Render đọc `Dockerfile` / `render.yaml` → **Create**
+5. Đợi build xong (lần đầu có thể **10–20 phút** vì cài LaTeX + Manim)
+6. Mở URL dạng: `https://manim-video-studio.onrender.com`
+
+**Lưu ý quan trọng**
+- Gói **Free** sẽ ngủ sau ~15 phút không dùng; lần mở lại chờ 30–60 giây
+- Manim cần RAM khá nhiều: nếu build/render lỗi (OOM), nâng lên gói **Starter** (~$7/tháng)
+- Trên host nên chọn chất lượng **480p - 15 FPS** (nhanh nhất)
+
+### Docker local (nếu có máy tính)
+
+```bash
+docker build -t manim-video-studio .
+docker run --rm -p 8000:8000 manim-video-studio
+```
+
 ## API chính
 
 | Method | Path | Mô tả |
