@@ -20,6 +20,7 @@ GEMINI_MODELS = (
 
 GEOGEBRA_PROMPT = """Bạn là chuyên gia dựng hình GeoGebra cho giáo viên Toán Việt Nam.
 Nhiệm vụ DUY NHẤT: từ đề bài (văn bản và/hoặc ảnh) tạo lệnh GeoGebra vẽ hình CHUẨN XÁC như đề.
+Lệnh sẽ chạy trên GeoGebra WEB applet (deployggb) — chỉ dùng cú pháp an toàn bên dưới.
 
 Trả về ĐÚNG 1 JSON (không markdown):
 {
@@ -31,19 +32,25 @@ Trả về ĐÚNG 1 JSON (không markdown):
 
 QUY TẮC VẼ CHUẨN (BẮT BUỘC):
 1. Đọc kỹ đề/ảnh: đúng số đo, góc, quan hệ (vuông, song song, trung điểm, tiếp xúc...).
-2. Chỉ HIỆN các đối tượng thuộc hình hoàn chỉnh cần cho đề (điểm đề nêu, cạnh, đường tròn chính, nhãn cần thiết).
-3. MỌI đường phụ / trung gian dựng hình phải ẨN sau khi dùng:
-   - Đường tròn phụ, đường thẳng phụ, tia phụ, giao điểm phụ chỉ để dựng → SetVisible(tên, false)
-   - Hoặc SetColor + độ dày 0 và SetVisible false
-4. Thứ tự lệnh: dựng → lấy giao/quan hệ → ẨN phụ → để lại hình sạch.
-5. Ví dụ ẩn phụ:
-   - "c1 = Circle(A, B)"
-   - "C = Intersect(c1, c2, 1)"
+2. Chỉ HIỆN đối tượng thuộc hình hoàn chỉnh (điểm đề nêu, cạnh, đường tròn chính, nhãn cần thiết).
+3. Đường phụ / trung gian: đặt tên rõ (c1, l1, ...) rồi ẨN bằng đúng 1 trong 2 dạng:
    - "SetVisible(c1, false)"
-   - "SetVisible(c2, false)"
-6. Cú pháp GeoGebra tiếng Anh chuẩn: Point, Segment, Line, Ray, Circle, Polygon, Angle, Intersect, Midpoint, PerpendicularLine, ParallelLine, SetVisible, ShowLabel, SetCaption...
-7. Đặt tên điểm đúng đề (A, B, C...). ShowLabel(điểm, true) cho điểm chính; ẩn nhãn đối tượng phụ.
-8. Không bịa thêm chi tiết không có trong đề.
+   - hoặc comment "# hide: c1, c2"
+4. Thứ tự: dựng đối tượng → dùng giao/quan hệ → ẨN phụ → còn hình sạch.
+5. CÚ PHÁP AN TOÀN CHO WEB (ưu tiên):
+   - Điểm: "A = (0, 0)", "B = (4, 0)"
+   - Đoạn/đường/tròn: "s = Segment(A, B)", "c = Circle(O, 5)", "c = Circle(O, A)"
+   - Đa giác: "poly1 = Polygon(A, B, C)" rồi dùng tên poly1 (KHÔNG viết Polygon(...) lồng trong SetColor)
+   - Giao: "D = Intersect(c1, c2, 1)"
+   - Trung điểm: "M = Midpoint(A, B)"
+   - Vuông góc / song song: "p = PerpendicularLine(A, s)", "q = ParallelLine(A, s)"
+6. CẤM / TRÁNH (gây lỗi popup trên web):
+   - KHÔNG dùng Point(circle, t) kiểu tham số cung
+   - KHÔNG dùng biến chưa gán (G, H...) nếu chưa tạo
+   - KHÔNG viết SetColor(Polygon(A,B,C), ...) — phải đặt tên trước
+   - KHÔNG dùng lệnh lạ ngoài danh sách trên
+7. Nhãn: "ShowLabel(A, true)" cho điểm chính; đường phụ thì ẩn + không hiện nhãn.
+8. Không bịa chi tiết không có trong đề.
 9. graphing nếu đồ thị hàm; 3d nếu hình không gian; còn lại geometry.
 10. Không sinh mã Manim trong bước này.
 """
@@ -163,7 +170,22 @@ def _normalize_commands(commands: Any) -> list[str]:
         commands = [c.strip() for c in commands.split("\n") if c.strip()]
     if not isinstance(commands, list):
         return []
-    return [str(c).strip() for c in commands if str(c).strip()]
+
+    out: list[str] = []
+    for raw in commands:
+        cmd = str(raw).strip()
+        if not cmd:
+            continue
+        # Sửa lỗi AI hay gặp
+        cmd = cmd.replace("Polvgon", "Polygon")
+        # SetColor(Polygon(A,B,C), ...) → bỏ qua (gây lỗi); nhắc dùng tên đã gán
+        if re.match(r"^SetColor\s*\(\s*Polygon\s*\(", cmd, re.I):
+            continue
+        # Point(circle, t) tham số cung — dễ lỗi trên web; bỏ
+        if re.match(r"^[A-Za-z_]\w*\s*=\s*Point\s*\(\s*[A-Za-z_]\w*\s*,\s*[-+]?\d", cmd):
+            continue
+        out.append(cmd)
+    return out
 
 
 def generate_geogebra(
