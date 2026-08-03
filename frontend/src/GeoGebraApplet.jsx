@@ -2,23 +2,17 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 
 /** Bảng màu NTSM: điểm đỏ đậm, đoạn xanh dương, tròn xanh lục */
 export const NTSM_COLORS = {
-  point: [139, 26, 26], // maroon
-  label: [220, 38, 38], // bright red (GeoGebra thường dùng màu điểm cho nhãn)
-  segment: [30, 64, 175], // dark blue
+  point: [139, 26, 26],
+  label: [220, 38, 38],
+  segment: [30, 64, 175],
   line: [30, 64, 175],
-  circle: [61, 107, 47], // olive green
-  angle: [96, 165, 250], // light blue arcs
+  circle: [61, 107, 47],
+  angle: [96, 165, 250],
 }
 
-/**
- * Chạy lệnh GeoGebra an toàn trên applet web.
- * Scripting (SetVisible/SetColor/...) dùng JS API — không evalCommand.
- */
 function applyCommands(api, commands) {
   try {
-    if (typeof api.setErrorDialogsActive === 'function') {
-      api.setErrorDialogsActive(false)
-    }
+    api.setErrorDialogsActive?.(false)
   } catch {
     /* ignore */
   }
@@ -138,7 +132,6 @@ function applyCommands(api, commands) {
   for (const obj of hideLater) safeSetVisible(api, obj, false)
 }
 
-/** Áp màu NTSM lên mọi đối tượng đang hiện */
 export function applyNtsmTheme(api) {
   if (!api || typeof api.getObjectNumber !== 'function') return
 
@@ -193,7 +186,7 @@ export function applyNtsmTheme(api) {
         api.setColor?.(name, ...NTSM_COLORS.angle)
       }
     } catch {
-      /* ignore per-object */
+      /* ignore */
     }
   }
 }
@@ -275,154 +268,112 @@ function namedColorToRgb(name) {
   return map[String(name).toLowerCase()] || null
 }
 
-function downloadBlob(filename, blob) {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.style.display = 'none'
-  document.body.appendChild(a)
-  a.click()
-  setTimeout(() => {
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }, 500)
+function toDataUrl(b64OrUrl, mime = 'image/png') {
+  const s = String(b64OrUrl || '')
+  if (s.startsWith('data:')) return s
+  return `data:${mime};base64,${s}`
 }
 
-function downloadText(filename, text, mime) {
-  downloadBlob(filename, new Blob([text], { type: mime }))
+async function dataUrlToBlob(dataUrl) {
+  const res = await fetch(dataUrl)
+  return res.blob()
 }
 
-function downloadDataUrl(filename, dataUrl) {
-  const a = document.createElement('a')
-  a.href = dataUrl
-  a.download = filename
-  a.style.display = 'none'
-  document.body.appendChild(a)
-  a.click()
-  setTimeout(() => document.body.removeChild(a), 500)
-}
-
-function canvasToPngDownload(hostEl, filename) {
-  if (!hostEl) return false
+function canvasToDataUrl(hostEl) {
+  if (!hostEl) return null
   const canvases = Array.from(hostEl.querySelectorAll('canvas')).sort(
     (a, b) => b.width * b.height - a.width * a.height,
   )
   const canvas = canvases[0]
-  if (!canvas || canvas.width < 2) return false
+  if (!canvas || canvas.width < 2) return null
   try {
     const dataUrl = canvas.toDataURL('image/png')
-    if (!dataUrl || dataUrl === 'data:,') return false
-    downloadDataUrl(filename, dataUrl)
-    return true
+    if (!dataUrl || dataUrl === 'data:,') return null
+    return dataUrl
   } catch {
-    return false
+    return null
   }
 }
 
-async function exportPngLikeNtsm(api, hostEl, filename) {
-  // 1) getPNGBase64 — ổn định nhất trên web
+/** Lấy PNG dạng dataUrl (không tự tải — để UI iPad xử lý Share/xem trước) */
+async function capturePngDataUrl(api, hostEl) {
   if (typeof api.getPNGBase64 === 'function') {
     try {
       const b64 = api.getPNGBase64(2, false, 300)
-      if (b64) {
-        const href = String(b64).startsWith('data:')
-          ? b64
-          : `data:image/png;base64,${b64}`
-        downloadDataUrl(filename, href)
-        return { ok: true, method: 'getPNGBase64' }
-      }
+      if (b64) return toDataUrl(b64)
     } catch {
       /* continue */
     }
   }
 
-  // 2) getScreenshotBase64 (callback) — cách NTSM dùng
   if (typeof api.getScreenshotBase64 === 'function') {
-    await new Promise((resolve, reject) => {
-      try {
+    try {
+      const data = await new Promise((resolve, reject) => {
         let done = false
-        api.getScreenshotBase64((data) => {
+        api.getScreenshotBase64((val) => {
           if (done) return
           done = true
-          if (!data) {
-            reject(new Error('getScreenshotBase64 trả về rỗng'))
-            return
-          }
-          const href = String(data).startsWith('data:')
-            ? data
-            : `data:image/png;base64,${data}`
-          downloadDataUrl(filename, href)
-          resolve()
+          if (!val) reject(new Error('Screenshot rỗng'))
+          else resolve(val)
         })
         setTimeout(() => {
           if (!done) {
             done = true
-            reject(new Error('Timeout getScreenshotBase64'))
+            reject(new Error('Timeout screenshot'))
           }
         }, 5000)
+      })
+      return toDataUrl(data)
+    } catch {
+      /* continue */
+    }
+  }
+
+  const fromCanvas = canvasToDataUrl(hostEl)
+  if (fromCanvas) return fromCanvas
+
+  throw new Error('Không chụp được ảnh từ GeoGebra')
+}
+
+async function captureSvgText(api) {
+  if (typeof api.getSVG === 'function') {
+    const svg = api.getSVG()
+    if (svg && String(svg).includes('<svg')) return String(svg)
+  }
+
+  if (typeof api.exportSVG === 'function') {
+    const svg = await new Promise((resolve, reject) => {
+      let settled = false
+      try {
+        const maybe = api.exportSVG((val) => {
+          if (settled) return
+          settled = true
+          if (val && String(val).includes('<svg')) resolve(String(val))
+          else reject(new Error('SVG rỗng'))
+        })
+        if (typeof maybe === 'string' && maybe.includes('<svg')) {
+          settled = true
+          resolve(maybe)
+        }
+        setTimeout(() => {
+          if (!settled) {
+            settled = true
+            reject(new Error('Timeout SVG'))
+          }
+        }, 8000)
       } catch (err) {
-        reject(err)
+        if (!settled) {
+          settled = true
+          reject(err)
+        }
       }
     })
-    return { ok: true, method: 'getScreenshotBase64' }
+    return svg
   }
 
-  // 3) Chụp canvas DOM (iPad / fallback)
-  if (canvasToPngDownload(hostEl, filename)) {
-    return { ok: true, method: 'canvas' }
-  }
-
-  // 4) Lệnh ExportImage
-  try {
-    const ok = api.evalCommand(
-      `ExportImage("filename","${filename}","type","png","scale",2,"view",1)`,
-    )
-    if (ok !== false) return { ok: true, method: 'ExportImage' }
-  } catch {
-    /* continue */
-  }
-
-  throw new Error(
-    'Không xuất được PNG. Thử menu GeoGebra (☰ → Download as → PNG).',
-  )
+  throw new Error('Bản GeoGebra này chưa hỗ trợ SVG')
 }
 
-function exportSvgLikeNtsm(api, filename) {
-  if (typeof api.exportSVG !== 'function') {
-    throw new Error('Bản GeoGebra này chưa hỗ trợ xuất SVG.')
-  }
-
-  return new Promise((resolve, reject) => {
-    let settled = false
-    const finish = (svg) => {
-      if (settled) return
-      settled = true
-      if (!svg || !String(svg).includes('<svg')) {
-        reject(new Error('Không thể xuất SVG.'))
-        return
-      }
-      downloadText(filename, svg, 'image/svg+xml;charset=utf-8')
-      resolve({ ok: true })
-    }
-
-    try {
-      // NTSM: exportSVG(callback) nhận chuỗi SVG
-      const maybe = api.exportSVG((svg) => finish(svg))
-      if (typeof maybe === 'string' && maybe.includes('<svg')) {
-        finish(maybe)
-      }
-      // Nếu callback không bao giờ gọi
-      setTimeout(() => {
-        if (!settled) reject(new Error('GeoGebra không trả SVG (timeout).'))
-      }, 8000)
-    } catch (err) {
-      reject(err)
-    }
-  })
-}
-
-/** Chuẩn hoá lệnh: SetVisible → SetVisibleInView */
 export function sanitizeGgbCommands(text) {
   return String(text || '')
     .split('\n')
@@ -453,22 +404,34 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
     applyTheme: () => {
       if (apiRef.current) applyNtsmTheme(apiRef.current)
     },
-    exportPNG: async (filename = 'geogebra.png') => {
+    /** Trả về { kind, filename, dataUrl?, text?, blob, mime } để UI iPad Share/xem trước */
+    capturePNG: async (filename = `geogebra-${Date.now()}.png`) => {
       const api = apiRef.current
-      if (!api) throw new Error('Applet GeoGebra chưa sẵn sàng — đợi hình load xong.')
-      return exportPngLikeNtsm(api, hostRef.current, filename)
-    },
-    exportSVG: async (filename = 'geogebra.svg') => {
-      const api = apiRef.current
-      if (!api) throw new Error('Applet GeoGebra chưa sẵn sàng — đợi hình load xong.')
-      if (typeof api.getSVG === 'function') {
-        const svg = api.getSVG()
-        if (svg && String(svg).includes('<svg')) {
-          downloadText(filename, svg, 'image/svg+xml;charset=utf-8')
-          return { ok: true, method: 'getSVG' }
-        }
+      if (!api) throw new Error('Applet chưa sẵn sàng — đợi hình load xong.')
+      const dataUrl = await capturePngDataUrl(api, hostRef.current)
+      const blob = await dataUrlToBlob(dataUrl)
+      return {
+        kind: 'png',
+        filename,
+        dataUrl,
+        blob,
+        mime: 'image/png',
       }
-      return exportSvgLikeNtsm(api, filename)
+    },
+    captureSVG: async (filename = `geogebra-${Date.now()}.svg`) => {
+      const api = apiRef.current
+      if (!api) throw new Error('Applet chưa sẵn sàng — đợi hình load xong.')
+      const text = await captureSvgText(api)
+      const blob = new Blob([text], { type: 'image/svg+xml;charset=utf-8' })
+      const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`
+      return {
+        kind: 'svg',
+        filename,
+        text,
+        dataUrl,
+        blob,
+        mime: 'image/svg+xml',
+      }
     },
   }))
 

@@ -197,6 +197,45 @@
   font-weight: 600;
 }
 
+.export-msg {
+  font-size: 0.82rem;
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.export-modal .export-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.export-preview-frame {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 8px;
+  max-height: 50vh;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+}
+
+.export-preview-frame img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.export-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .image-preview {
   display: flex;
   flex-direction: column;

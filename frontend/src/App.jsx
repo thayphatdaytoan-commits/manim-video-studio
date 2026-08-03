@@ -79,7 +79,9 @@ export default function App() {
   const [aiTitle, setAiTitle] = useState('')
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORAGE) || '')
   const [showKeyModal, setShowKeyModal] = useState(false)
-  const [draftKey, setDraftKey] = useState('')
+  const [exportMsg, setExportMsg] = useState(null)
+  const [exportPreview, setExportPreview] = useState(null) // { kind, filename, dataUrl, blob, mime, text? }
+  const [exporting, setExporting] = useState(false)
 
   const pollRef = useRef(null)
   const parseTimer = useRef(null)
@@ -351,43 +353,121 @@ export default function App() {
     setGgbRevision((n) => n + 1)
   }
 
+  const isIos = () =>
+    typeof navigator !== 'undefined' &&
+    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1))
+
+  const shareOrShowExport = async (payload) => {
+    // iPad/iOS: ưu tiên Share Sheet (Files / Ảnh / AirDrop)
+    if (navigator.share && navigator.canShare) {
+      try {
+        const file = new File([payload.blob], payload.filename, {
+          type: payload.mime,
+        })
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: payload.filename,
+          })
+          setExportMsg('Đã mở Share — chọn Lưu vào Files / Ảnh')
+          return
+        }
+      } catch (err) {
+        if (err?.name === 'AbortError') {
+          setExportMsg('Đã hủy chia sẻ')
+          return
+        }
+        // fall through to preview modal
+      }
+    }
+
+    // Hiện modal xem trước — trên iPad: giữ vào ảnh để lưu
+    setExportPreview(payload)
+    setExportMsg(
+      isIos()
+        ? 'Giữ vào ảnh → Lưu ảnh / hoặc bấm Chia sẻ'
+        : 'Xem trước — bấm Tải về hoặc Chia sẻ',
+    )
+  }
+
   const handleExportPng = async () => {
+    setExportMsg(null)
     setError(null)
+    setExporting(true)
     try {
-      if (!ggbRef.current?.exportPNG) {
-        setError('Applet chưa sẵn sàng. Đợi hình GeoGebra load xong rồi thử lại.')
+      if (!ggbRef.current?.capturePNG) {
+        setExportMsg('Applet chưa sẵn sàng. Đợi hình load xong.')
         return
       }
-      await ggbRef.current.exportPNG(`geogebra-${Date.now()}.png`)
+      const payload = await ggbRef.current.capturePNG(`geogebra-${Date.now()}.png`)
+      await shareOrShowExport(payload)
     } catch (err) {
-      setError(err.message || 'Xuất PNG thất bại')
+      setExportMsg(err.message || 'Xuất PNG thất bại')
+    } finally {
+      setExporting(false)
     }
   }
 
   const handleExportSvg = async () => {
+    setExportMsg(null)
     setError(null)
+    setExporting(true)
     try {
-      if (!ggbRef.current?.exportSVG) {
-        setError('Applet chưa sẵn sàng. Đợi hình GeoGebra load xong rồi thử lại.')
+      if (!ggbRef.current?.captureSVG) {
+        setExportMsg('Applet chưa sẵn sàng. Đợi hình load xong.')
         return
       }
-      await ggbRef.current.exportSVG(`geogebra-${Date.now()}.svg`)
+      const payload = await ggbRef.current.captureSVG(`geogebra-${Date.now()}.svg`)
+      await shareOrShowExport(payload)
     } catch (err) {
-      setError(err.message || 'Xuất SVG thất bại')
+      setExportMsg(err.message || 'Xuất SVG thất bại')
+    } finally {
+      setExporting(false)
     }
   }
 
   const handleApplyTheme = () => {
-    setError(null)
+    setExportMsg(null)
     try {
       if (!ggbRef.current?.applyTheme) {
-        setError('Applet chưa sẵn sàng.')
+        setExportMsg('Applet chưa sẵn sàng.')
         return
       }
       ggbRef.current.applyTheme()
+      setExportMsg('Đã áp màu NTSM')
     } catch (err) {
-      setError(err.message || 'Không áp được màu NTSM')
+      setExportMsg(err.message || 'Không áp được màu NTSM')
     }
+  }
+
+  const sharePreviewAgain = async () => {
+    if (!exportPreview) return
+    try {
+      const file = new File([exportPreview.blob], exportPreview.filename, {
+        type: exportPreview.mime,
+      })
+      if (navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: exportPreview.filename })
+        return
+      }
+    } catch (err) {
+      if (err?.name === 'AbortError') return
+    }
+    // Desktop fallback: mở tab mới
+    window.open(exportPreview.dataUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  const downloadPreviewDesktop = () => {
+    if (!exportPreview) return
+    const a = document.createElement('a')
+    a.href = exportPreview.dataUrl
+    a.download = exportPreview.filename
+    a.target = '_blank'
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    setTimeout(() => document.body.removeChild(a), 400)
   }
 
   return (
