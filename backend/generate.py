@@ -45,6 +45,11 @@ Trả về ĐÚNG 1 JSON (không markdown):
 5. Không để Line vô hạn chồng lên hình. Sau khi Intersect xong phải SetVisibleInView đường phụ.
 6. Tọa độ gọn, cân đối (ví dụ tam giác nội tiếp: O=(0,0), A=(0,4), B≈(-3.5,-1.94), C≈(3.5,-1.94)).
 7. Thứ tự: điểm → đường tròn/cạnh → đường phụ + ẨN ngay → giao điểm → Segment hiện → nhãn.
+8. Màu sắc NTSM (thêm cuối script, sau khi dựng xong):
+   - Điểm: SetColor(A, 139, 26, 26) và SetPointSize(A, 5)
+   - Segment/Line hiện: SetColor(seg_AB, 30, 64, 175) và SetLineThickness(seg_AB, 3)
+   - Đường tròn: SetColor(c_O, 61, 107, 47) và SetLineThickness(c_O, 3)
+   (Hệ thống cũng tự tô màu NTSM; vẫn nên ghi SetColor cho rõ.)
 
 === MẪU CHUẨN (Euler / đường cao — copy phong cách này) ===
 O = (0, 0)

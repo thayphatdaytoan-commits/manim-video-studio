@@ -185,10 +185,16 @@
   border-color: var(--accent);
 }
 
-.upload-row {
+.export-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.export-btn {
+  padding: 8px 12px !important;
+  font-size: 0.85rem !important;
+  font-weight: 600;
 }
 
 .image-preview {

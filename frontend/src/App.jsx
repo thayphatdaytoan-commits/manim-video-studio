@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react'
 import {
   Clapperboard,
   Download,
+  FileImage,
   FileText,
   ImagePlus,
   KeyRound,
@@ -83,6 +84,7 @@ export default function App() {
   const pollRef = useRef(null)
   const parseTimer = useRef(null)
   const fileRef = useRef(null)
+  const ggbRef = useRef(null)
 
   const ggbCommands = useMemo(
     () =>
@@ -349,6 +351,30 @@ export default function App() {
     setGgbRevision((n) => n + 1)
   }
 
+  const handleExportPng = () => {
+    try {
+      ggbRef.current?.exportPNG(`geogebra-${Date.now()}.png`)
+    } catch (err) {
+      setError(err.message || 'Xuất PNG thất bại')
+    }
+  }
+
+  const handleExportSvg = () => {
+    try {
+      ggbRef.current?.exportSVG(`geogebra-${Date.now()}.svg`)
+    } catch (err) {
+      setError(err.message || 'Xuất SVG thất bại')
+    }
+  }
+
+  const handleApplyTheme = () => {
+    try {
+      ggbRef.current?.applyTheme()
+    } catch (err) {
+      setError(err.message || 'Không áp được màu NTSM')
+    }
+  }
+
   return (
     <div className="app">
       <header className="header">
@@ -485,8 +511,21 @@ export default function App() {
             Áp dụng lệnh lên hình
           </button>
 
+          <div className="export-row">
+            <button type="button" className="btn ghost export-btn" onClick={handleExportSvg}>
+              <FileImage size={15} /> SVG
+            </button>
+            <button type="button" className="btn ghost export-btn" onClick={handleExportPng}>
+              <Download size={15} /> PNG
+            </button>
+            <button type="button" className="btn ghost export-btn" onClick={handleApplyTheme}>
+              <Sparkles size={15} /> Màu NTSM
+            </button>
+          </div>
+
           <div className="ggb-wrap">
             <GeoGebraApplet
+              ref={ggbRef}
               commands={ggbCommands}
               mode={ggbMode}
               revision={ggbRevision}

@@ -1,9 +1,18 @@
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+
+/** Bảng màu NTSM: điểm đỏ đậm, đoạn xanh dương, tròn xanh lục */
+export const NTSM_COLORS = {
+  point: [139, 26, 26], // maroon
+  label: [220, 38, 38], // bright red (GeoGebra thường dùng màu điểm cho nhãn)
+  segment: [30, 64, 175], // dark blue
+  line: [30, 64, 175],
+  circle: [61, 107, 47], // olive green
+  angle: [96, 165, 250], // light blue arcs
+}
 
 /**
  * Chạy lệnh GeoGebra an toàn trên applet web.
- * Mọi lệnh scripting (SetVisible/SetColor/...) KHÔNG được đưa vào evalCommand
- * vì GeoGebra web hay popup "Câu lệnh chưa định nghĩa".
+ * Scripting (SetVisible/SetColor/...) dùng JS API — không evalCommand.
  */
 function applyCommands(api, commands) {
   try {
@@ -20,7 +29,6 @@ function applyCommands(api, commands) {
     const cmd = String(raw || '').trim()
     if (!cmd) continue
 
-    // Comment: # hide: c1, c2
     if (cmd.startsWith('#')) {
       const hideMatch = cmd.match(/^#\s*hide\s*:\s*(.+)$/i)
       if (hideMatch) {
@@ -35,15 +43,11 @@ function applyCommands(api, commands) {
 
     const name = cmd.replace(/;+\s*$/, '').trim()
 
-    // ---- Scripting commands: chỉ dùng JS API ----
-    // NTSM style: SetVisibleInView(obj, 1, false)
     if (/^SetVisibleInView\b/i.test(name)) {
       const m = name.match(
         /^SetVisibleInView\s*[(\[]\s*([^,\])]+)\s*,\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i,
       )
-      if (m) {
-        safeSetVisible(api, m[1].trim(), parseBool(m[3]))
-      }
+      if (m) safeSetVisible(api, m[1].trim(), parseBool(m[3]))
       continue
     }
 
@@ -51,9 +55,7 @@ function applyCommands(api, commands) {
       const m = name.match(
         /^SetVisible\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i,
       )
-      if (m) {
-        safeSetVisible(api, m[1].trim(), parseBool(m[2]))
-      }
+      if (m) safeSetVisible(api, m[1].trim(), parseBool(m[2]))
       continue
     }
 
@@ -62,12 +64,8 @@ function applyCommands(api, commands) {
         /^ShowLabel\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i,
       )
       if (m) {
-        const obj = m[1].trim()
-        const vis = parseBool(m[2])
         try {
-          if (typeof api.setLabelVisible === 'function') {
-            api.setLabelVisible(obj, vis)
-          }
+          api.setLabelVisible?.(m[1].trim(), parseBool(m[2]))
         } catch {
           /* ignore */
         }
@@ -84,9 +82,9 @@ function applyCommands(api, commands) {
       const m = name.match(
         /^SetLine(?:Thickness|Width)\s*[(\[]\s*([^,\])]+)\s*,\s*([\d.]+)\s*[)\]]/i,
       )
-      if (m && typeof api.setLineThickness === 'function') {
+      if (m) {
         try {
-          api.setLineThickness(m[1].trim(), Number(m[2]))
+          api.setLineThickness?.(m[1].trim(), Number(m[2]))
         } catch {
           /* ignore */
         }
@@ -98,9 +96,9 @@ function applyCommands(api, commands) {
       const m = name.match(
         /^SetLineStyle\s*[(\[]\s*([^,\])]+)\s*,\s*([\d.]+)\s*[)\]]/i,
       )
-      if (m && typeof api.setLineStyle === 'function') {
+      if (m) {
         try {
-          api.setLineStyle(m[1].trim(), Number(m[2]))
+          api.setLineStyle?.(m[1].trim(), Number(m[2]))
         } catch {
           /* ignore */
         }
@@ -112,9 +110,9 @@ function applyCommands(api, commands) {
       const m = name.match(
         /^SetPointSize\s*[(\[]\s*([^,\])]+)\s*,\s*([\d.]+)\s*[)\]]/i,
       )
-      if (m && typeof api.setPointSize === 'function') {
+      if (m) {
         try {
-          api.setPointSize(m[1].trim(), Number(m[2]))
+          api.setPointSize?.(m[1].trim(), Number(m[2]))
         } catch {
           /* ignore */
         }
@@ -130,16 +128,73 @@ function applyCommands(api, commands) {
       continue
     }
 
-    // ---- Lệnh dựng hình ----
     try {
       api.evalCommand(name)
     } catch {
-      /* ignore single bad command */
+      /* ignore */
     }
   }
 
-  for (const obj of hideLater) {
-    safeSetVisible(api, obj, false)
+  for (const obj of hideLater) safeSetVisible(api, obj, false)
+}
+
+/** Áp màu NTSM lên mọi đối tượng đang hiện */
+export function applyNtsmTheme(api) {
+  if (!api || typeof api.getObjectNumber !== 'function') return
+
+  try {
+    api.setAxesVisible?.(false, false)
+    api.setGridVisible?.(false)
+  } catch {
+    /* ignore */
+  }
+
+  const n = api.getObjectNumber()
+  for (let i = 0; i < n; i++) {
+    let name
+    try {
+      name = api.getObjectName(i)
+    } catch {
+      continue
+    }
+    if (!name) continue
+    try {
+      if (typeof api.getVisible === 'function' && !api.getVisible(name)) continue
+    } catch {
+      /* ignore */
+    }
+
+    let type = ''
+    try {
+      type = String(api.getObjectType(name) || '').toLowerCase()
+    } catch {
+      continue
+    }
+
+    try {
+      if (type === 'point' || type === 'point3d') {
+        api.setColor?.(name, ...NTSM_COLORS.point)
+        api.setPointSize?.(name, 5)
+        api.setPointStyle?.(name, 0)
+      } else if (type === 'circle' || type === 'conic') {
+        api.setColor?.(name, ...NTSM_COLORS.circle)
+        api.setLineThickness?.(name, 3)
+      } else if (
+        type === 'segment' ||
+        type === 'line' ||
+        type === 'ray' ||
+        type === 'vector' ||
+        type === 'polyline' ||
+        type === 'polygon'
+      ) {
+        api.setColor?.(name, ...NTSM_COLORS.segment)
+        api.setLineThickness?.(name, type === 'segment' || type === 'polygon' ? 3 : 2)
+      } else if (type === 'angle') {
+        api.setColor?.(name, ...NTSM_COLORS.angle)
+      }
+    } catch {
+      /* ignore per-object */
+    }
   }
 }
 
@@ -151,9 +206,7 @@ function parseBool(raw) {
 
 function safeSetVisible(api, obj, visible) {
   try {
-    if (typeof api.setVisible === 'function') {
-      api.setVisible(obj, visible)
-    }
+    api.setVisible?.(obj, visible)
   } catch {
     /* ignore */
   }
@@ -162,30 +215,30 @@ function safeSetVisible(api, obj, visible) {
 function handleSetColor(api, name) {
   if (typeof api.setColor !== 'function') return
 
-  // SetColor(obj, "#RRGGBB")
   let m = name.match(
     /^SetColor\s*[(\[]\s*([^,\])]+)\s*,\s*"?#?([0-9A-Fa-f]{6})"?\s*[)\]]/i,
   )
   if (m) {
     const hex = m[2]
-    const r = parseInt(hex.slice(0, 2), 16)
-    const g = parseInt(hex.slice(2, 4), 16)
-    const b = parseInt(hex.slice(4, 6), 16)
     try {
-      api.setColor(m[1].trim(), r, g, b)
+      api.setColor(
+        m[1].trim(),
+        parseInt(hex.slice(0, 2), 16),
+        parseInt(hex.slice(2, 4), 16),
+        parseInt(hex.slice(4, 6), 16),
+      )
     } catch {
       /* ignore */
     }
     return
   }
 
-  // SetColor(obj, "red")
   m = name.match(/^SetColor\s*[(\[]\s*([^,\])]+)\s*,\s*"([^"]+)"\s*[)\]]/i)
   if (m) {
     const rgb = namedColorToRgb(m[2])
     if (rgb) {
       try {
-        api.setColor(m[1].trim(), rgb[0], rgb[1], rgb[2])
+        api.setColor(m[1].trim(), ...rgb)
       } catch {
         /* ignore */
       }
@@ -193,7 +246,6 @@ function handleSetColor(api, name) {
     return
   }
 
-  // SetColor(obj, r, g, b)
   m = name.match(
     /^SetColor\s*[(\[]\s*([^,\])]+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*[)\]]/i,
   )
@@ -208,9 +260,9 @@ function handleSetColor(api, name) {
 
 function namedColorToRgb(name) {
   const map = {
-    red: [255, 0, 0],
-    green: [0, 128, 0],
-    blue: [0, 0, 255],
+    red: [220, 38, 38],
+    green: [61, 107, 47],
+    blue: [30, 64, 175],
     black: [0, 0, 0],
     white: [255, 255, 255],
     orange: [255, 165, 0],
@@ -223,13 +275,32 @@ function namedColorToRgb(name) {
   return map[String(name).toLowerCase()] || null
 }
 
-/** Chuẩn hoá lệnh: giữ SetVisibleInView; đổi SetVisible → # hide */
+function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadText(filename, text, mime) {
+  downloadBlob(filename, new Blob([text], { type: mime }))
+}
+
+function downloadDataUrl(filename, dataUrl) {
+  const a = document.createElement('a')
+  a.href = dataUrl
+  a.download = filename
+  a.click()
+}
+
+/** Chuẩn hoá lệnh: SetVisible → SetVisibleInView */
 export function sanitizeGgbCommands(text) {
   return String(text || '')
     .split('\n')
     .map((line) => {
       const t = line.trim()
-      // Giữ nguyên SetVisibleInView (NTSM)
       if (/^SetVisibleInView\b/i.test(t)) return line
       const m = t.match(/^SetVisible\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i)
       if (m && !parseBool(m[2])) {
@@ -243,13 +314,65 @@ export function sanitizeGgbCommands(text) {
     .join('\n')
 }
 
-export default function GeoGebraApplet({
-  commands = [],
-  mode = 'geometry',
-  revision = 0,
-}) {
+const GeoGebraApplet = forwardRef(function GeoGebraApplet(
+  { commands = [], mode = 'geometry', revision = 0, onReady },
+  ref,
+) {
   const hostRef = useRef(null)
   const apiRef = useRef(null)
+
+  useImperativeHandle(ref, () => ({
+    getApi: () => apiRef.current,
+    applyTheme: () => {
+      if (apiRef.current) applyNtsmTheme(apiRef.current)
+    },
+    exportPNG: (filename = 'geogebra.png') => {
+      const api = apiRef.current
+      if (!api?.getPNGBase64) {
+        throw new Error('Applet chưa sẵn sàng để xuất PNG')
+      }
+      const b64 = api.getPNGBase64(2, false, 150)
+      if (!b64) throw new Error('Không lấy được PNG từ GeoGebra')
+      downloadDataUrl(filename, `data:image/png;base64,${b64}`)
+    },
+    exportSVG: (filename = 'geogebra.svg') => {
+      const api = apiRef.current
+      if (!api) throw new Error('Applet chưa sẵn sàng để xuất SVG')
+
+      // Một số bản có getSVG()
+      if (typeof api.getSVG === 'function') {
+        const svg = api.getSVG()
+        if (svg) {
+          downloadText(filename, svg, 'image/svg+xml;charset=utf-8')
+          return
+        }
+      }
+
+      // exportSVG(filename) — GeoGebra tự tải
+      if (typeof api.exportSVG === 'function') {
+        try {
+          api.exportSVG(filename)
+          return
+        } catch {
+          /* fall through */
+        }
+      }
+
+      // Callback dạng exportSVG(cb) nếu có
+      if (typeof api.exportSVG === 'function') {
+        api.exportSVG((svg) => {
+          if (typeof svg === 'string' && svg.includes('<svg')) {
+            downloadText(filename, svg, 'image/svg+xml;charset=utf-8')
+          }
+        })
+        return
+      }
+
+      throw new Error(
+        'Bản GeoGebra web này không hỗ trợ SVG. Hãy dùng xuất PNG.',
+      )
+    },
+  }))
 
   useEffect(() => {
     const host = hostRef.current
@@ -277,21 +400,20 @@ export default function GeoGebraApplet({
         if (cancelled) return
         apiRef.current = api
         try {
-          if (typeof api.setErrorDialogsActive === 'function') {
-            api.setErrorDialogsActive(false)
-          }
+          api.setErrorDialogsActive?.(false)
         } catch {
           /* ignore */
         }
-        // Chạy sau 1 tick để applet ổn định, giảm dialog
         setTimeout(() => {
           if (cancelled) return
           try {
             applyCommands(api, commands)
+            applyNtsmTheme(api)
+            onReady?.(api)
           } catch {
             /* ignore */
           }
-        }, 50)
+        }, 80)
       },
     }
 
@@ -323,7 +445,9 @@ export default function GeoGebraApplet({
       host.innerHTML = ''
       apiRef.current = null
     }
-  }, [commands, mode, revision])
+  }, [commands, mode, revision, onReady])
 
   return <div className="ggb-host" ref={hostRef} />
-}
+})
+
+export default GeoGebraApplet
