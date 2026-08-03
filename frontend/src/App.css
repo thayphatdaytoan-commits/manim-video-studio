@@ -185,6 +185,20 @@
   border-color: var(--accent);
 }
 
+.key-input.mono {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  min-height: 120px;
+  resize: vertical;
+}
+
+.key-count {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
 .export-row {
   display: flex;
   gap: 8px;

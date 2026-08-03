@@ -20,7 +20,37 @@ import GeoGebraApplet, { sanitizeGgbCommands } from './GeoGebraApplet'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
-const KEY_STORAGE = 'mvs_gemini_api_key'
+const KEY_STORAGE = 'mvs_gemini_api_keys'
+const KEY_STORAGE_LEGACY = 'mvs_gemini_api_key'
+
+function loadStoredApiKeys() {
+  try {
+    const multi = localStorage.getItem(KEY_STORAGE)
+    if (multi) {
+      const parsed = JSON.parse(multi)
+      if (Array.isArray(parsed)) {
+        return parsed.map((k) => String(k).trim()).filter(Boolean)
+      }
+      if (typeof parsed === 'string' && parsed.trim()) return [parsed.trim()]
+    }
+  } catch {
+    /* ignore */
+  }
+  const legacy = localStorage.getItem(KEY_STORAGE_LEGACY)
+  if (legacy?.trim()) return [legacy.trim()]
+  return []
+}
+
+function saveStoredApiKeys(keys) {
+  const cleaned = [...new Set(keys.map((k) => k.trim()).filter(Boolean))]
+  if (cleaned.length) {
+    localStorage.setItem(KEY_STORAGE, JSON.stringify(cleaned))
+  } else {
+    localStorage.removeItem(KEY_STORAGE)
+  }
+  localStorage.removeItem(KEY_STORAGE_LEGACY)
+  return cleaned
+}
 
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, options)
@@ -77,10 +107,11 @@ export default function App() {
   const [ggbRevision, setGgbRevision] = useState(0)
   const [aiNotes, setAiNotes] = useState('')
   const [aiTitle, setAiTitle] = useState('')
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(KEY_STORAGE) || '')
+  const [apiKeys, setApiKeys] = useState(() => loadStoredApiKeys())
   const [showKeyModal, setShowKeyModal] = useState(false)
+  const [draftKeys, setDraftKeys] = useState('')
   const [exportMsg, setExportMsg] = useState(null)
-  const [exportPreview, setExportPreview] = useState(null) // { kind, filename, dataUrl, blob, mime, text? }
+  const [exportPreview, setExportPreview] = useState(null)
   const [exporting, setExporting] = useState(false)
 
   const pollRef = useRef(null)
@@ -250,25 +281,27 @@ export default function App() {
     setImageName(file.name)
   }
 
-  const saveApiKey = () => {
-    const k = draftKey.trim()
-    setApiKey(k)
-    if (k) localStorage.setItem(KEY_STORAGE, k)
-    else localStorage.removeItem(KEY_STORAGE)
+  const saveApiKeys = () => {
+    const list = draftKeys
+      .split(/[\n,;]+/)
+      .map((k) => k.trim())
+      .filter(Boolean)
+    const cleaned = saveStoredApiKeys(list)
+    setApiKeys(cleaned)
     setShowKeyModal(false)
   }
 
   const requireApiKey = () => {
-    if (apiKey || backend.gemini_configured) return true
-    setDraftKey(apiKey)
+    if (apiKeys.length || backend.gemini_configured) return true
+    setDraftKeys(apiKeys.join('\n'))
     setShowKeyModal(true)
-    setError('Cần Gemini API key (nút API KEY góc trên).')
+    setError('Cần ít nhất 1 Gemini API key (nút API KEY góc trên).')
     return false
   }
 
   const authHeaders = () => ({
     'Content-Type': 'application/json',
-    ...(apiKey ? { 'X-Gemini-Api-Key': apiKey } : {}),
+    ...(apiKeys.length ? { 'X-Gemini-Api-Key': apiKeys.join('\n') } : {}),
   })
 
   const handleGenerateGeogebra = async () => {
@@ -487,12 +520,12 @@ export default function App() {
             type="button"
             className="btn ghost"
             onClick={() => {
-              setDraftKey(apiKey)
+              setDraftKeys(apiKeys.join('\n'))
               setShowKeyModal(true)
             }}
           >
             <KeyRound size={16} />
-            {apiKey ? 'API KEY ✓' : 'API KEY'}
+            {apiKeys.length ? `API KEY (${apiKeys.length})` : 'API KEY'}
           </button>
           <div className={`status ${backend.ready ? 'ok' : 'bad'}`}>
             {backend.ready ? <Wifi size={16} /> : <WifiOff size={16} />}
@@ -607,16 +640,29 @@ export default function App() {
           </button>
 
           <div className="export-row">
-            <button type="button" className="btn ghost export-btn" onClick={handleExportSvg}>
-              <FileImage size={15} /> SVG
+            <button
+              type="button"
+              className="btn ghost export-btn"
+              onClick={handleExportSvg}
+              disabled={exporting}
+            >
+              {exporting ? <Loader2 className="spin" size={15} /> : <FileImage size={15} />}
+              SVG
             </button>
-            <button type="button" className="btn ghost export-btn" onClick={handleExportPng}>
-              <Download size={15} /> PNG
+            <button
+              type="button"
+              className="btn ghost export-btn"
+              onClick={handleExportPng}
+              disabled={exporting}
+            >
+              {exporting ? <Loader2 className="spin" size={15} /> : <Download size={15} />}
+              PNG
             </button>
             <button type="button" className="btn ghost export-btn" onClick={handleApplyTheme}>
               <Sparkles size={15} /> Màu NTSM
             </button>
           </div>
+          {exportMsg && <div className="export-msg">{exportMsg}</div>}
 
           <div className="ggb-wrap">
             <GeoGebraApplet
@@ -762,11 +808,49 @@ export default function App() {
         </div>
       )}
 
+      {exportPreview && (
+        <div className="modal-backdrop" onClick={() => setExportPreview(null)}>
+          <div className="modal narrow export-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Xuất {exportPreview.kind.toUpperCase()}</h2>
+              <button
+                className="icon-btn"
+                onClick={() => setExportPreview(null)}
+                aria-label="Đóng"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="export-hint">
+                Trên iPad: <strong>giữ vào ảnh</strong> → Lưu ảnh, hoặc bấm <strong>Chia sẻ</strong> →
+                Lưu vào Files.
+              </p>
+              <div className="export-preview-frame">
+                {exportPreview.kind === 'png' ? (
+                  <img src={exportPreview.dataUrl} alt="GeoGebra PNG" />
+                ) : (
+                  <img src={exportPreview.dataUrl} alt="GeoGebra SVG" />
+                )}
+              </div>
+              <div className="export-actions">
+                <button type="button" className="btn primary" onClick={sharePreviewAgain}>
+                  <Upload size={16} /> Chia sẻ / Lưu
+                </button>
+                <button type="button" className="btn secondary" onClick={downloadPreviewDesktop}>
+                  <Download size={16} /> Mở / Tải
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showKeyModal && (
         <div className="modal-backdrop" onClick={() => setShowKeyModal(false)}>
           <div className="modal narrow" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
-              <h2>Gemini API Key</h2>
+              <h2>Gemini API Keys</h2>
               <button className="icon-btn" onClick={() => setShowKeyModal(false)} aria-label="Đóng">
                 <X size={18} />
               </button>
@@ -777,17 +861,22 @@ export default function App() {
                 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">
                   Google AI Studio
                 </a>
-                . Key chỉ lưu trên trình duyệt của bạn.
+                . Có thể nhập <strong>nhiều key</strong> (mỗi dòng 1 key). Khi key bị limit, hệ thống
+                tự chuyển sang key tiếp theo.
               </p>
-              <input
-                type="password"
-                value={draftKey}
-                onChange={(e) => setDraftKey(e.target.value)}
-                placeholder="AIza..."
-                className="key-input"
+              <textarea
+                rows={6}
+                value={draftKeys}
+                onChange={(e) => setDraftKeys(e.target.value)}
+                placeholder={'AIza...key1\nAIza...key2\nAIza...key3'}
+                className="key-input mono"
+                spellCheck={false}
               />
-              <button type="button" className="btn primary" onClick={saveApiKey}>
-                <Upload size={16} /> Lưu API Key
+              <p className="key-count">
+                Đang có: <strong>{apiKeys.length}</strong> key đã lưu
+              </p>
+              <button type="button" className="btn primary" onClick={saveApiKeys}>
+                <Upload size={16} /> Lưu danh sách API Key
               </button>
             </div>
           </div>

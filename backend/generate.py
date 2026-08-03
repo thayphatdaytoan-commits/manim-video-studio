@@ -149,6 +149,33 @@ def _extract_json(text: str) -> dict[str, Any]:
         return json.loads(match.group(0))
 
 
+class GeminiRateLimitError(RuntimeError):
+    """Key bị quota / rate limit — nên thử key khác."""
+
+
+def _is_rate_limit_error(exc: BaseException, code: int | None = None, body: str = "") -> bool:
+    text = f"{exc} {body}".lower()
+    if code in {429, 403}:
+        if any(
+            k in text
+            for k in (
+                "quota",
+                "rate limit",
+                "resource_exhausted",
+                "too many requests",
+                "exceeded",
+                "limit: 0",
+            )
+        ):
+            return True
+        if code == 429:
+            return True
+    return any(
+        k in text
+        for k in ("quota", "rate limit", "resource_exhausted", "too many requests")
+    )
+
+
 def _call_gemini(
     api_key: str,
     prompt: str,
@@ -188,7 +215,10 @@ def _call_gemini(
     except urllib.error.HTTPError as exc:
         err_body = exc.read().decode("utf-8", errors="replace")
         logger.warning("Gemini HTTP %s: %s", exc.code, err_body[:500])
-        raise RuntimeError(f"Gemini lỗi {exc.code}: {err_body[:300]}") from exc
+        msg = f"Gemini lỗi {exc.code}: {err_body[:300]}"
+        if _is_rate_limit_error(exc, exc.code, err_body):
+            raise GeminiRateLimitError(msg) from exc
+        raise RuntimeError(msg) from exc
 
     candidates = payload.get("candidates") or []
     if not candidates:
@@ -200,26 +230,69 @@ def _call_gemini(
     return "\n".join(texts)
 
 
+def _normalize_api_keys(api_key: str | list[str] | None) -> list[str]:
+    if api_key is None:
+        return []
+    if isinstance(api_key, list):
+        raw_items = api_key
+    else:
+        raw_items = re.split(r"[\n,;]+", str(api_key))
+    keys: list[str] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        k = str(item).strip()
+        if not k or k.startswith("#"):
+            continue
+        if k not in seen:
+            seen.add(k)
+            keys.append(k)
+    return keys
+
+
 def _gemini_with_fallback(
-    api_key: str,
+    api_key: str | list[str],
     prompt: str,
     image_b64: str | None = None,
     mime_type: str = "image/png",
 ) -> str:
+    keys = _normalize_api_keys(api_key)
+    if not keys:
+        raise ValueError("Thiếu Gemini API key")
+
     last_err: Exception | None = None
-    for model in GEMINI_MODELS:
-        try:
-            return _call_gemini(
-                api_key=api_key.strip(),
-                prompt=prompt,
-                image_b64=image_b64,
-                mime_type=mime_type,
-                model=model,
-            )
-        except Exception as exc:  # noqa: BLE001
-            last_err = exc
-            logger.info("Model %s failed: %s", model, exc)
-    raise RuntimeError(str(last_err) if last_err else "Không gọi được Gemini")
+    for idx, key in enumerate(keys):
+        for model in GEMINI_MODELS:
+            try:
+                result = _call_gemini(
+                    api_key=key,
+                    prompt=prompt,
+                    image_b64=image_b64,
+                    mime_type=mime_type,
+                    model=model,
+                )
+                if idx > 0:
+                    logger.info("Đã chuyển sang API key #%s (model %s)", idx + 1, model)
+                return result
+            except GeminiRateLimitError as exc:
+                last_err = exc
+                logger.info(
+                    "Key #%s model %s bị limit → thử tiếp: %s",
+                    idx + 1,
+                    model,
+                    exc,
+                )
+                # Limit: thử model khác cùng key, rồi key kế
+                continue
+            except Exception as exc:  # noqa: BLE001
+                last_err = exc
+                logger.info("Key #%s model %s lỗi: %s", idx + 1, model, exc)
+                # Lỗi khác (auth sai, model 404...): thử model khác; nếu hết model thì key tiếp
+                continue
+    raise RuntimeError(
+        str(last_err)
+        if last_err
+        else "Không gọi được Gemini (hết key hoặc tất cả bị limit)"
+    )
 
 
 def _normalize_commands(commands: Any) -> list[str]:
@@ -270,12 +343,13 @@ def _normalize_commands(commands: Any) -> list[str]:
 
 def generate_geogebra(
     *,
-    api_key: str,
+    api_key: str | list[str],
     problem_text: str = "",
     image_b64: str | None = None,
     mime_type: str = "image/png",
 ) -> dict[str, Any]:
-    if not api_key.strip():
+    keys = _normalize_api_keys(api_key)
+    if not keys:
         raise ValueError("Thiếu Gemini API key")
     if not problem_text.strip() and not image_b64:
         raise ValueError("Cần nhập nội dung đề hoặc tải ảnh đề")
@@ -284,7 +358,7 @@ def generate_geogebra(
     user_prompt += problem_text.strip() or "(Xem hình ảnh đề bài đính kèm)"
 
     raw = _gemini_with_fallback(
-        api_key=api_key,
+        api_key=keys,
         prompt=user_prompt,
         image_b64=image_b64,
         mime_type=mime_type,
@@ -303,17 +377,19 @@ def generate_geogebra(
         "geogebra_mode": mode,
         "geogebra_commands": commands,
         "notes": str(data.get("notes") or ""),
+        "keys_available": len(keys),
     }
 
 
 def generate_manim_from_geogebra(
     *,
-    api_key: str,
+    api_key: str | list[str],
     geogebra_commands: list[str] | str,
     problem_text: str = "",
     geogebra_mode: str = "geometry",
 ) -> dict[str, Any]:
-    if not api_key.strip():
+    keys = _normalize_api_keys(api_key)
+    if not keys:
         raise ValueError("Thiếu Gemini API key")
 
     commands = _normalize_commands(geogebra_commands)
@@ -327,7 +403,7 @@ def generate_manim_from_geogebra(
     user_prompt += "\n\n--- LỆNH GEOGEBRA ĐÃ CHỈNH (hình hoàn chỉnh) ---\n"
     user_prompt += "\n".join(commands)
 
-    raw = _gemini_with_fallback(api_key=api_key, prompt=user_prompt)
+    raw = _gemini_with_fallback(api_key=keys, prompt=user_prompt)
     data = _extract_json(raw)
 
     manim_code = str(data.get("manim_code") or "").strip()
@@ -345,6 +421,7 @@ def generate_manim_from_geogebra(
         "scene_name": scene_name,
         "manim_code": manim_code,
         "notes": str(data.get("notes") or ""),
+        "keys_available": len(keys),
     }
 
 

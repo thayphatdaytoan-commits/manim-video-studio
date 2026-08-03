@@ -128,14 +128,31 @@ class GenerateManimRequest(BaseModel):
     geogebra_mode: str = Field(default="geometry")
 
 
-def resolve_gemini_key(header_key: str | None) -> str:
-    key = (header_key or "").strip() or os.environ.get("GEMINI_API_KEY", "").strip()
-    if not key:
+def resolve_gemini_keys(header_key: str | None) -> list[str]:
+    """Nhận nhiều key từ header (cách nhau bởi xuống dòng / dấu phẩy) + env."""
+    keys: list[str] = []
+    seen: set[str] = set()
+
+    def add_chunk(chunk: str | None) -> None:
+        if not chunk:
+            return
+        for part in re.split(r"[\n,;]+", chunk):
+            k = part.strip()
+            if k and not k.startswith("#") and k not in seen:
+                seen.add(k)
+                keys.append(k)
+
+    add_chunk(header_key)
+    add_chunk(os.environ.get("GEMINI_API_KEYS"))
+    add_chunk(os.environ.get("GEMINI_API_KEY"))
+
+    if not keys:
         raise HTTPException(
             400,
-            "Thiếu Gemini API key. Nhập API key trên giao diện hoặc đặt GEMINI_API_KEY trên server.",
+            "Thiếu Gemini API key. Nhập một hoặc nhiều key trên giao diện "
+            "(mỗi dòng 1 key) hoặc đặt GEMINI_API_KEY / GEMINI_API_KEYS trên server.",
         )
-    return key
+    return keys
 
 
 @app.post("/api/generate-geogebra")
@@ -144,11 +161,11 @@ async def api_generate_geogebra(
     x_gemini_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
     """Bước 1: đề/ảnh -> lệnh GeoGebra (ẩn đường phụ)."""
-    api_key = resolve_gemini_key(x_gemini_api_key)
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
     try:
         return await asyncio.to_thread(
             generate_geogebra,
-            api_key=api_key,
+            api_key=api_keys,
             problem_text=req.problem_text,
             image_b64=req.image_base64,
             mime_type=req.mime_type,
@@ -166,11 +183,11 @@ async def api_generate_manim(
     x_gemini_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
     """Bước 2: GeoGebra đã chỉnh -> mã Manim."""
-    api_key = resolve_gemini_key(x_gemini_api_key)
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
     try:
         return await asyncio.to_thread(
             generate_manim_from_geogebra,
-            api_key=api_key,
+            api_key=api_keys,
             geogebra_commands=req.geogebra_commands,
             problem_text=req.problem_text,
             geogebra_mode=req.geogebra_mode,
@@ -188,18 +205,18 @@ async def generate_geometry_legacy(
     x_gemini_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
     """Legacy: GeoGebra rồi Manim (giữ tương thích)."""
-    api_key = resolve_gemini_key(x_gemini_api_key)
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
     try:
         ggb = await asyncio.to_thread(
             generate_geogebra,
-            api_key=api_key,
+            api_key=api_keys,
             problem_text=req.problem_text,
             image_b64=req.image_base64,
             mime_type=req.mime_type,
         )
         manim = await asyncio.to_thread(
             generate_manim_from_geogebra,
-            api_key=api_key,
+            api_key=api_keys,
             geogebra_commands=ggb["geogebra_commands"],
             problem_text=req.problem_text,
             geogebra_mode=ggb["geogebra_mode"],
@@ -346,7 +363,10 @@ def health() -> dict[str, Any]:
             "latex": latex_ok,
             "ffmpeg": ffmpeg_ok,
         },
-        "gemini_configured": bool(os.environ.get("GEMINI_API_KEY", "").strip()),
+        "gemini_configured": bool(
+            os.environ.get("GEMINI_API_KEY", "").strip()
+            or os.environ.get("GEMINI_API_KEYS", "").strip()
+        ),
     }
 
 
