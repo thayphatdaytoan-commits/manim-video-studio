@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import {
   Clapperboard,
+  Code2,
+  Copy,
   Download,
   FileImage,
   FileText,
@@ -112,6 +114,7 @@ export default function App() {
   const [draftKeys, setDraftKeys] = useState('')
   const [exportMsg, setExportMsg] = useState(null)
   const [exportPreview, setExportPreview] = useState(null)
+  const [svgCodePreview, setSvgCodePreview] = useState(null)
   const [exporting, setExporting] = useState(false)
 
   const pollRef = useRef(null)
@@ -460,6 +463,63 @@ export default function App() {
     }
   }
 
+  const handleExportSvgCode = async () => {
+    setExportMsg(null)
+    setError(null)
+    setExporting(true)
+    try {
+      if (!ggbRef.current?.captureSVG) {
+        setExportMsg('Applet chưa sẵn sàng. Đợi hình load xong.')
+        return
+      }
+      const payload = await ggbRef.current.captureSVG(`geogebra-${Date.now()}.svg`)
+      const text = String(payload?.text || '').trim()
+      if (!text) throw new Error('Không lấy được mã SVG')
+      setSvgCodePreview({
+        filename: payload.filename,
+        text,
+        dataUrl: payload.dataUrl,
+        blob: payload.blob,
+        mime: payload.mime,
+      })
+      setExportMsg('Đã xuất mã SVG — có thể sao chép hoặc tải file')
+    } catch (err) {
+      setExportMsg(err.message || 'Xuất mã SVG thất bại')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const copySvgCode = async () => {
+    if (!svgCodePreview?.text) return
+    try {
+      await navigator.clipboard.writeText(svgCodePreview.text)
+      setExportMsg('Đã sao chép mã SVG')
+    } catch {
+      // Fallback chọn text trong textarea
+      const el = document.getElementById('svg-code-textarea')
+      if (el) {
+        el.focus()
+        el.select()
+        setExportMsg('Giữ / chọn toàn bộ → Copy')
+      } else {
+        setExportMsg('Không sao chép được — hãy chọn thủ công trong ô mã')
+      }
+    }
+  }
+
+  const downloadSvgCodeFile = () => {
+    if (!svgCodePreview) return
+    const a = document.createElement('a')
+    a.href = svgCodePreview.dataUrl
+    a.download = svgCodePreview.filename
+    a.target = '_blank'
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    setTimeout(() => document.body.removeChild(a), 400)
+  }
+
   const handleApplyTheme = () => {
     setExportMsg(null)
     try {
@@ -652,6 +712,16 @@ export default function App() {
             <button
               type="button"
               className="btn ghost export-btn"
+              onClick={handleExportSvgCode}
+              disabled={exporting}
+              title="Xem và sao chép mã nguồn SVG"
+            >
+              {exporting ? <Loader2 className="spin" size={15} /> : <Code2 size={15} />}
+              Mã SVG
+            </button>
+            <button
+              type="button"
+              className="btn ghost export-btn"
               onClick={handleExportPng}
               disabled={exporting}
             >
@@ -839,6 +909,63 @@ export default function App() {
                 </button>
                 <button type="button" className="btn secondary" onClick={downloadPreviewDesktop}>
                   <Download size={16} /> Mở / Tải
+                </button>
+                {exportPreview.kind === 'svg' && exportPreview.text && (
+                  <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={() => {
+                      setSvgCodePreview({
+                        filename: exportPreview.filename,
+                        text: exportPreview.text,
+                        dataUrl: exportPreview.dataUrl,
+                        blob: exportPreview.blob,
+                        mime: exportPreview.mime,
+                      })
+                      setExportPreview(null)
+                    }}
+                  >
+                    <Code2 size={16} /> Xem mã SVG
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {svgCodePreview && (
+        <div className="modal-backdrop" onClick={() => setSvgCodePreview(null)}>
+          <div className="modal export-modal svg-code-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Mã SVG</h2>
+              <button
+                className="icon-btn"
+                onClick={() => setSvgCodePreview(null)}
+                aria-label="Đóng"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="export-hint">
+                Sao chép mã bên dưới để dán vào Word, HTML, Canva… hoặc tải file{' '}
+                <code>{svgCodePreview.filename}</code>.
+              </p>
+              <textarea
+                id="svg-code-textarea"
+                className="svg-code-textarea mono"
+                readOnly
+                value={svgCodePreview.text}
+                spellCheck={false}
+                onFocus={(e) => e.target.select()}
+              />
+              <div className="export-actions">
+                <button type="button" className="btn primary" onClick={copySvgCode}>
+                  <Copy size={16} /> Sao chép mã
+                </button>
+                <button type="button" className="btn secondary" onClick={downloadSvgCodeFile}>
+                  <Download size={16} /> Tải file .svg
                 </button>
               </div>
             </div>

@@ -250,6 +250,30 @@
   gap: 8px;
 }
 
+.svg-code-modal {
+  width: min(720px, 94vw);
+}
+
+.svg-code-textarea {
+  width: 100%;
+  min-height: 280px;
+  max-height: 50vh;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #0f172a;
+  color: #e2e8f0;
+  box-sizing: border-box;
+}
+
+.svg-code-modal .export-hint code {
+  font-size: 0.85em;
+}
+
 .image-preview {
   display: flex;
   flex-direction: column;
