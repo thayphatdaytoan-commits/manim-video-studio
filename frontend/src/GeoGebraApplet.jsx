@@ -299,7 +299,14 @@ function canvasToDataUrl(hostEl) {
 async function capturePngDataUrl(api, hostEl) {
   if (typeof api.getPNGBase64 === 'function') {
     try {
-      const b64 = api.getPNGBase64(2, false, 300)
+      // DPI = undefined: GeoGebra docs — DPI chậm, dễ treo trên iPad/Safari
+      const b64 = api.getPNGBase64(2, false, undefined)
+      if (b64) return toDataUrl(b64)
+    } catch {
+      /* continue */
+    }
+    try {
+      const b64 = api.getPNGBase64(1.5, false)
       if (b64) return toDataUrl(b64)
     } catch {
       /* continue */
@@ -335,43 +342,165 @@ async function capturePngDataUrl(api, hostEl) {
   throw new Error('Không chụp được ảnh từ GeoGebra')
 }
 
-async function captureSvgText(api) {
+function normalizeSvgText(raw) {
+  if (raw == null) return null
+  let s = String(raw).trim()
+  if (!s) return null
+
+  if (s.startsWith('data:image/svg+xml')) {
+    const comma = s.indexOf(',')
+    if (comma < 0) return null
+    const meta = s.slice(0, comma)
+    const data = s.slice(comma + 1)
+    try {
+      s = /;base64/i.test(meta) ? atob(data) : decodeURIComponent(data)
+    } catch {
+      return null
+    }
+  }
+
+  if (!/<svg[\s>]/i.test(s)) return null
+  return s
+}
+
+function prepareGraphicsForExport(api) {
+  try {
+    api.setPerspective?.('G')
+  } catch {
+    /* ignore */
+  }
+  try {
+    // Một số bản GeoGebra chỉ export đúng khi Graphics View 1 active
+    api.setActiveView?.(1)
+  } catch {
+    /* ignore */
+  }
+}
+
+function waitFrames(n = 2) {
+  return new Promise((resolve) => {
+    const step = (left) => {
+      if (left <= 0) resolve()
+      else requestAnimationFrame(() => step(left - 1))
+    }
+    step(n)
+  })
+}
+
+function exportSvgViaApi(api, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (err, val) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (err) reject(err)
+      else resolve(val)
+    }
+
+    const timer = setTimeout(() => finish(new Error('Timeout SVG')), timeoutMs)
+
+    try {
+      const maybe = api.exportSVG(function onSvg(val) {
+        const svg = normalizeSvgText(val)
+        if (svg) finish(null, svg)
+        else finish(new Error('SVG rỗng'))
+      })
+
+      if (maybe && typeof maybe.then === 'function') {
+        maybe
+          .then((val) => {
+            const svg = normalizeSvgText(val)
+            if (svg) finish(null, svg)
+            else finish(new Error('SVG rỗng'))
+          })
+          .catch((err) => finish(err || new Error('SVG thất bại')))
+        return
+      }
+
+      const sync = normalizeSvgText(maybe)
+      if (sync) finish(null, sync)
+    } catch (err) {
+      finish(err)
+    }
+  })
+}
+
+function svgFromDom(hostEl) {
+  if (!hostEl) return null
+  const el = hostEl.querySelector('svg')
+  if (!el) return null
+  try {
+    const clone = el.cloneNode(true)
+    if (!clone.getAttribute('xmlns')) {
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg')
+    }
+    return normalizeSvgText(new XMLSerializer().serializeToString(clone))
+  } catch {
+    return null
+  }
+}
+
+/** Fallback: bọc PNG trong SVG để luôn tải được (khi exportSVG treo trên Safari/iPad) */
+function svgFromPngDataUrl(dataUrl, width = 800, height = 600) {
+  const w = Math.max(1, Math.round(width))
+  const h = Math.max(1, Math.round(height))
+  const href = String(dataUrl || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
+    `width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n` +
+    `  <image width="${w}" height="${h}" href="${href}" xlink:href="${href}"/>\n` +
+    `</svg>`
+  )
+}
+
+function readCanvasSize(hostEl) {
+  if (!hostEl) return { width: 800, height: 600 }
+  const canvases = Array.from(hostEl.querySelectorAll('canvas')).sort(
+    (a, b) => b.width * b.height - a.width * a.height,
+  )
+  const canvas = canvases[0]
+  if (!canvas || canvas.width < 2) return { width: 800, height: 600 }
+  return { width: canvas.width, height: canvas.height }
+}
+
+async function captureSvgText(api, hostEl) {
+  prepareGraphicsForExport(api)
+  await waitFrames(2)
+
   if (typeof api.getSVG === 'function') {
-    const svg = api.getSVG()
-    if (svg && String(svg).includes('<svg')) return String(svg)
+    try {
+      const svg = normalizeSvgText(api.getSVG())
+      if (svg) return svg
+    } catch {
+      /* continue */
+    }
   }
 
   if (typeof api.exportSVG === 'function') {
-    const svg = await new Promise((resolve, reject) => {
-      let settled = false
-      try {
-        const maybe = api.exportSVG((val) => {
-          if (settled) return
-          settled = true
-          if (val && String(val).includes('<svg')) resolve(String(val))
-          else reject(new Error('SVG rỗng'))
-        })
-        if (typeof maybe === 'string' && maybe.includes('<svg')) {
-          settled = true
-          resolve(maybe)
-        }
-        setTimeout(() => {
-          if (!settled) {
-            settled = true
-            reject(new Error('Timeout SVG'))
-          }
-        }, 8000)
-      } catch (err) {
-        if (!settled) {
-          settled = true
-          reject(err)
-        }
-      }
-    })
-    return svg
+    // GeoGebra đôi khi treo callback trên Safari/iPad — không chặn UX quá lâu
+    try {
+      const svg = await exportSvgViaApi(api, 4500)
+      if (svg) return svg
+    } catch {
+      /* fallback bên dưới */
+    }
   }
 
-  throw new Error('Bản GeoGebra này chưa hỗ trợ SVG')
+  const fromDom = svgFromDom(hostEl)
+  if (fromDom) return fromDom
+
+  // Fallback đáng tin: PNG → SVG (file .svg vẫn mở được ở hầu hết app)
+  try {
+    const pngDataUrl = await capturePngDataUrl(api, hostEl)
+    const { width, height } = readCanvasSize(hostEl)
+    return svgFromPngDataUrl(pngDataUrl, width, height)
+  } catch {
+    /* ignore */
+  }
+
+  throw new Error('Không xuất được SVG từ GeoGebra')
 }
 
 export function sanitizeGgbCommands(text) {
@@ -421,7 +550,7 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
     captureSVG: async (filename = `geogebra-${Date.now()}.svg`) => {
       const api = apiRef.current
       if (!api) throw new Error('Applet chưa sẵn sàng — đợi hình load xong.')
-      const text = await captureSvgText(api)
+      const text = await captureSvgText(api, hostRef.current)
       const blob = new Blob([text], { type: 'image/svg+xml;charset=utf-8' })
       const dataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`
       return {
