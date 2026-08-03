@@ -15,7 +15,7 @@ import {
   Wand2,
   X,
 } from 'lucide-react'
-import GeoGebraApplet from './GeoGebraApplet'
+import GeoGebraApplet, { sanitizeGgbCommands } from './GeoGebraApplet'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
@@ -293,7 +293,7 @@ export default function App() {
       setAiTitle(data.title || '')
       setAiNotes(data.notes || '')
       setGgbMode(data.geogebra_mode || 'geometry')
-      setGgbCommandsText((data.geogebra_commands || []).join('\n'))
+      setGgbCommandsText(sanitizeGgbCommands((data.geogebra_commands || []).join('\n')))
       setGgbRevision((n) => n + 1)
       setGgbReady(true)
       setVideoUrl(null)
@@ -343,7 +343,11 @@ export default function App() {
     }
   }
 
-  const applyGgbToPreview = () => setGgbRevision((n) => n + 1)
+  const applyGgbToPreview = () => {
+    const cleaned = sanitizeGgbCommands(ggbCommandsText)
+    if (cleaned !== ggbCommandsText) setGgbCommandsText(cleaned)
+    setGgbRevision((n) => n + 1)
+  }
 
   return (
     <div className="app">
@@ -450,8 +454,8 @@ export default function App() {
         <section className="panel">
           <h2 className="panel-title">2. Chỉnh hình GeoGebra</h2>
           <p className="step-hint">
-            Sửa lệnh / dùng toolbar GeoGebra. Đường phụ nên có <code>SetVisible(..., false)</code>.
-            Xong hình mới sang bước Manim.
+            Sửa lệnh / dùng toolbar GeoGebra. Để ẩn đường phụ viết{' '}
+            <code># hide: c1, c2</code> (không dùng SetVisible trên web). Xong hình mới tạo Manim.
           </p>
           <label className="field">
             <span className="field-label">CHẾ ĐỘ</span>

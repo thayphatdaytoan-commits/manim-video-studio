@@ -33,10 +33,10 @@ Trả về ĐÚNG 1 JSON (không markdown):
 QUY TẮC VẼ CHUẨN (BẮT BUỘC):
 1. Đọc kỹ đề/ảnh: đúng số đo, góc, quan hệ (vuông, song song, trung điểm, tiếp xúc...).
 2. Chỉ HIỆN đối tượng thuộc hình hoàn chỉnh (điểm đề nêu, cạnh, đường tròn chính, nhãn cần thiết).
-3. Đường phụ / trung gian: đặt tên rõ (c1, l1, ...) rồi ẨN bằng đúng 1 trong 2 dạng:
-   - "SetVisible(c1, false)"
-   - hoặc comment "# hide: c1, c2"
-4. Thứ tự: dựng đối tượng → dùng giao/quan hệ → ẨN phụ → còn hình sạch.
+3. Đường phụ / trung gian: đặt tên rõ (c1, l1, ...) rồi ẨN bằng comment (bắt buộc cho GeoGebra WEB):
+   - "# hide: c1, c2"
+   - Có thể thêm "SetVisible(c1, false)" nhưng hệ thống sẽ đổi thành # hide — ưu tiên dùng # hide
+4. Thứ tự: dựng đối tượng → dùng giao/quan hệ → "# hide: ..." → còn hình sạch.
 5. CÚ PHÁP AN TOÀN CHO WEB (ưu tiên):
    - Điểm: "A = (0, 0)", "B = (4, 0)"
    - Đoạn/đường/tròn: "s = Segment(A, B)", "c = Circle(O, 5)", "c = Circle(O, A)"
@@ -178,7 +178,19 @@ def _normalize_commands(commands: Any) -> list[str]:
             continue
         # Sửa lỗi AI hay gặp
         cmd = cmd.replace("Polvgon", "Polygon")
-        # SetColor(Polygon(A,B,C), ...) → bỏ qua (gây lỗi); nhắc dùng tên đã gán
+        # SetVisible(...) → # hide / bỏ (web applet không hiểu evalCommand SetVisible)
+        m_vis = re.match(
+            r"^SetVisible\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]\s*;?\s*$",
+            cmd,
+            re.I,
+        )
+        if m_vis:
+            obj = m_vis[1].strip()
+            flag = m_vis[2].strip().lower().strip("'\"")
+            if flag in {"false", "0", "no"}:
+                out.append(f"# hide: {obj}")
+            continue
+        # SetColor(Polygon(A,B,C), ...) → bỏ qua
         if re.match(r"^SetColor\s*\(\s*Polygon\s*\(", cmd, re.I):
             continue
         # Point(circle, t) tham số cung — dễ lỗi trên web; bỏ

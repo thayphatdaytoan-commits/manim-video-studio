@@ -2,20 +2,26 @@ import { useEffect, useRef } from 'react'
 
 /**
  * Chạy lệnh GeoGebra an toàn trên applet web.
- * - Tắt hộp thoại lỗi phiền
- * - SetVisible / ShowLabel / SetColor dùng JS API (evalCommand hay báo "chưa định nghĩa")
+ * Mọi lệnh scripting (SetVisible/SetColor/...) KHÔNG được đưa vào evalCommand
+ * vì GeoGebra web hay popup "Câu lệnh chưa định nghĩa".
  */
 function applyCommands(api, commands) {
-  if (typeof api.setErrorDialogsActive === 'function') {
-    api.setErrorDialogsActive(false)
+  try {
+    if (typeof api.setErrorDialogsActive === 'function') {
+      api.setErrorDialogsActive(false)
+    }
+  } catch {
+    /* ignore */
   }
 
   const hideLater = []
 
   for (const raw of commands) {
     const cmd = String(raw || '').trim()
-    if (!cmd || cmd.startsWith('#')) {
-      // # hide: c1, c2
+    if (!cmd) continue
+
+    // Comment: # hide: c1, c2
+    if (cmd.startsWith('#')) {
       const hideMatch = cmd.match(/^#\s*hide\s*:\s*(.+)$/i)
       if (hideMatch) {
         hideMatch[1]
@@ -27,81 +33,147 @@ function applyCommands(api, commands) {
       continue
     }
 
-    // SetVisible(obj, false) | SetVisible[obj, false]
-    const vis = cmd.match(
-      /^SetVisible\s*[(\[]\s*([A-Za-z_][\w]*)\s*,\s*(true|false)\s*[)\]]\s*$/i,
-    )
-    if (vis) {
-      try {
-        api.setVisible(vis[1], vis[2].toLowerCase() === 'true')
-      } catch {
-        /* ignore */
+    const name = cmd.replace(/;+\s*$/, '').trim()
+
+    // ---- Scripting commands: chỉ dùng JS API ----
+    if (/^SetVisible\b/i.test(name)) {
+      const m = name.match(
+        /^SetVisible\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i,
+      )
+      if (m) {
+        const obj = m[1].trim()
+        const vis = parseBool(m[2])
+        safeSetVisible(api, obj, vis)
       }
       continue
     }
 
-    // ShowLabel(obj, true|false)
-    const lab = cmd.match(
-      /^ShowLabel\s*[(\[]\s*([A-Za-z_][\w]*)\s*,\s*(true|false)\s*[)\]]\s*$/i,
-    )
-    if (lab) {
-      try {
-        if (typeof api.setLabelVisible === 'function') {
-          api.setLabelVisible(lab[1], lab[2].toLowerCase() === 'true')
-        } else {
-          api.evalCommand(`ShowLabel[${lab[1]}, ${lab[2]}]`)
-        }
-      } catch {
-        /* ignore */
-      }
-      continue
-    }
-
-    // SetColor(obj, "red") hoặc SetColor(obj, 255, 0, 0)
-    const colorNamed = cmd.match(
-      /^SetColor\s*[(\[]\s*([A-Za-z_][\w]*)\s*,\s*"([^"]+)"\s*[)\]]\s*$/i,
-    )
-    if (colorNamed && typeof api.setColor === 'function') {
-      const rgb = namedColorToRgb(colorNamed[2])
-      if (rgb) {
+    if (/^ShowLabel\b/i.test(name)) {
+      const m = name.match(
+        /^ShowLabel\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i,
+      )
+      if (m) {
+        const obj = m[1].trim()
+        const vis = parseBool(m[2])
         try {
-          api.setColor(colorNamed[1], rgb[0], rgb[1], rgb[2])
+          if (typeof api.setLabelVisible === 'function') {
+            api.setLabelVisible(obj, vis)
+          }
         } catch {
           /* ignore */
         }
-        continue
-      }
-    }
-    const colorRgb = cmd.match(
-      /^SetColor\s*[(\[]\s*([A-Za-z_][\w]*)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*[)\]]\s*$/i,
-    )
-    if (colorRgb && typeof api.setColor === 'function') {
-      try {
-        api.setColor(
-          colorRgb[1],
-          Number(colorRgb[2]),
-          Number(colorRgb[3]),
-          Number(colorRgb[4]),
-        )
-      } catch {
-        /* ignore */
       }
       continue
     }
 
-    // Lệnh dựng hình thông thường
+    if (/^SetColor\b/i.test(name)) {
+      handleSetColor(api, name)
+      continue
+    }
+
+    if (/^SetLineThickness\b/i.test(name) || /^SetLineWidth\b/i.test(name)) {
+      const m = name.match(
+        /^SetLine(?:Thickness|Width)\s*[(\[]\s*([^,\])]+)\s*,\s*([\d.]+)\s*[)\]]/i,
+      )
+      if (m && typeof api.setLineThickness === 'function') {
+        try {
+          api.setLineThickness(m[1].trim(), Number(m[2]))
+        } catch {
+          /* ignore */
+        }
+      }
+      continue
+    }
+
+    if (/^SetPointSize\b/i.test(name)) {
+      const m = name.match(
+        /^SetPointSize\s*[(\[]\s*([^,\])]+)\s*,\s*([\d.]+)\s*[)\]]/i,
+      )
+      if (m && typeof api.setPointSize === 'function') {
+        try {
+          api.setPointSize(m[1].trim(), Number(m[2]))
+        } catch {
+          /* ignore */
+        }
+      }
+      continue
+    }
+
+    if (/^SetFixed\b/i.test(name) || /^SetCaption\b/i.test(name) || /^SetLayer\b/i.test(name)) {
+      // Bỏ qua các lệnh script khác dễ lỗi trên web
+      continue
+    }
+
+    // ---- Lệnh dựng hình ----
     try {
-      // Ưu tiên cú pháp ngoặc vuông cho script nếu AI gửi ngoặc tròn kiểu CAS
-      const normalized = normalizeEvalCommand(cmd)
-      api.evalCommand(normalized)
+      api.evalCommand(name)
     } catch {
       /* ignore single bad command */
     }
   }
 
-  for (const name of hideLater) {
+  for (const obj of hideLater) {
+    safeSetVisible(api, obj, false)
+  }
+}
+
+function parseBool(raw) {
+  const v = String(raw).trim().toLowerCase().replace(/["']/g, '')
+  if (v === 'false' || v === '0' || v === 'no') return false
+  return true
+}
+
+function safeSetVisible(api, obj, visible) {
+  try {
+    if (typeof api.setVisible === 'function') {
+      api.setVisible(obj, visible)
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function handleSetColor(api, name) {
+  if (typeof api.setColor !== 'function') return
+
+  // SetColor(obj, "#RRGGBB")
+  let m = name.match(
+    /^SetColor\s*[(\[]\s*([^,\])]+)\s*,\s*"?#?([0-9A-Fa-f]{6})"?\s*[)\]]/i,
+  )
+  if (m) {
+    const hex = m[2]
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
     try {
-      api.setVisible(name, false)
+      api.setColor(m[1].trim(), r, g, b)
+    } catch {
+      /* ignore */
+    }
+    return
+  }
+
+  // SetColor(obj, "red")
+  m = name.match(/^SetColor\s*[(\[]\s*([^,\])]+)\s*,\s*"([^"]+)"\s*[)\]]/i)
+  if (m) {
+    const rgb = namedColorToRgb(m[2])
+    if (rgb) {
+      try {
+        api.setColor(m[1].trim(), rgb[0], rgb[1], rgb[2])
+      } catch {
+        /* ignore */
+      }
+    }
+    return
+  }
+
+  // SetColor(obj, r, g, b)
+  m = name.match(
+    /^SetColor\s*[(\[]\s*([^,\])]+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*[)\]]/i,
+  )
+  if (m) {
+    try {
+      api.setColor(m[1].trim(), Number(m[2]), Number(m[3]), Number(m[4]))
     } catch {
       /* ignore */
     }
@@ -125,10 +197,22 @@ function namedColorToRgb(name) {
   return map[String(name).toLowerCase()] || null
 }
 
-function normalizeEvalCommand(cmd) {
-  // Point(c, t) trên một số bản không ổn — giữ nguyên, lỗi sẽ bị nuốt
-  // Đổi SetVisible/ShowLabel dạng ( ) đã xử lý ở trên
-  return cmd
+/** Lọc trước khi đưa vào applet: đổi SetVisible thành # hide */
+export function sanitizeGgbCommands(text) {
+  return String(text || '')
+    .split('\n')
+    .map((line) => {
+      const t = line.trim()
+      const m = t.match(/^SetVisible\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i)
+      if (m && !parseBool(m[2])) {
+        return `# hide: ${m[1].trim()}`
+      }
+      if (m && parseBool(m[2])) {
+        return `# show: ${m[1].trim()}`
+      }
+      return line
+    })
+    .join('\n')
 }
 
 export default function GeoGebraApplet({
@@ -160,16 +244,26 @@ export default function GeoGebraApplet({
       enableShiftDragZoom: true,
       showResetIcon: true,
       language: 'vi',
-      // Giảm popup lỗi của GeoGebra
       showErrorDialogs: false,
       appletOnLoad: (api) => {
         if (cancelled) return
         apiRef.current = api
         try {
-          applyCommands(api, commands)
+          if (typeof api.setErrorDialogsActive === 'function') {
+            api.setErrorDialogsActive(false)
+          }
         } catch {
-          /* ignore batch errors */
+          /* ignore */
         }
+        // Chạy sau 1 tick để applet ổn định, giảm dialog
+        setTimeout(() => {
+          if (cancelled) return
+          try {
+            applyCommands(api, commands)
+          } catch {
+            /* ignore */
+          }
+        }, 50)
       },
     }
 
