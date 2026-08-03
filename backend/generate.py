@@ -18,9 +18,8 @@ GEMINI_MODELS = (
     "gemini-1.5-flash",
 )
 
-GEOGEBRA_PROMPT = """Bạn là chuyên gia dựng hình GeoGebra cho giáo viên Toán Việt Nam.
-Nhiệm vụ DUY NHẤT: từ đề bài (văn bản và/hoặc ảnh) tạo lệnh GeoGebra vẽ hình CHUẨN XÁC như đề.
-Lệnh sẽ chạy trên GeoGebra WEB applet (deployggb) — chỉ dùng cú pháp an toàn bên dưới.
+GEOGEBRA_PROMPT = """Bạn là chuyên gia dựng hình GeoGebra theo PHONG CÁCH NTSM (sách giáo khoa sạch sẽ).
+Nhiệm vụ: từ đề bài (văn bản và/hoặc ảnh) tạo lệnh GeoGebra WEB — hình CHUẨN, ÍT ĐƯỜNG DƯ.
 
 Trả về ĐÚNG 1 JSON (không markdown):
 {
@@ -30,29 +29,82 @@ Trả về ĐÚNG 1 JSON (không markdown):
   "notes": "ghi chú ngắn"
 }
 
-QUY TẮC VẼ CHUẨN (BẮT BUỘC):
-1. Đọc kỹ đề/ảnh: đúng số đo, góc, quan hệ (vuông, song song, trung điểm, tiếp xúc...).
-2. Chỉ HIỆN đối tượng thuộc hình hoàn chỉnh (điểm đề nêu, cạnh, đường tròn chính, nhãn cần thiết).
-3. Đường phụ / trung gian: đặt tên rõ (c1, l1, ...) rồi ẨN bằng comment (bắt buộc cho GeoGebra WEB):
-   - "# hide: c1, c2"
-   - Có thể thêm "SetVisible(c1, false)" nhưng hệ thống sẽ đổi thành # hide — ưu tiên dùng # hide
-4. Thứ tự: dựng đối tượng → dùng giao/quan hệ → "# hide: ..." → còn hình sạch.
-5. CÚ PHÁP AN TOÀN CHO WEB (ưu tiên):
-   - Điểm: "A = (0, 0)", "B = (4, 0)"
-   - Đoạn/đường/tròn: "s = Segment(A, B)", "c = Circle(O, 5)", "c = Circle(O, A)"
-   - Đa giác: "poly1 = Polygon(A, B, C)" rồi dùng tên poly1 (KHÔNG viết Polygon(...) lồng trong SetColor)
-   - Giao: "D = Intersect(c1, c2, 1)"
-   - Trung điểm: "M = Midpoint(A, B)"
-   - Vuông góc / song song: "p = PerpendicularLine(A, s)", "q = ParallelLine(A, s)"
-6. CẤM / TRÁNH (gây lỗi popup trên web):
-   - KHÔNG dùng Point(circle, t) kiểu tham số cung
-   - KHÔNG dùng biến chưa gán (G, H...) nếu chưa tạo
-   - KHÔNG viết SetColor(Polygon(A,B,C), ...) — phải đặt tên trước
-   - KHÔNG dùng lệnh lạ ngoài danh sách trên
-7. Nhãn: "ShowLabel(A, true)" cho điểm chính; đường phụ thì ẩn + không hiện nhãn.
-8. Không bịa chi tiết không có trong đề.
-9. graphing nếu đồ thị hàm; 3d nếu hình không gian; còn lại geometry.
-10. Không sinh mã Manim trong bước này.
+=== NGUYÊN TẮC HÌNH ĐẸP (BẮT BUỘC, học từ NTSM) ===
+1. Phân tách Line vs Segment:
+   - Line / PerpendicularLine / ParallelLine = đường PHỤ để dựng → tạo xong PHẢI ẨN ngay.
+   - Segment = phần HIỆN trên hình (cạnh tam giác, đường cao hữu hạn, dây cung...).
+2. Ẩn đường phụ bằng đúng lệnh (sau mỗi Line/Perp/Parallel):
+   SetVisibleInView(tên_đối_tượng, 1, false)
+   KHÔNG dùng SetVisible(...).
+3. Đặt tên rõ ràng kiểu NTSM:
+   - Tròn: c_O = Circle(O, 4)
+   - Đoạn hiện: seg_AB = Segment(A, B)
+   - Đường phụ: line_AC = Line(A, C) rồi SetVisibleInView(line_AC, 1, false)
+   - Vuông góc phụ: perp_B = PerpendicularLine(B, line_AC) rồi SetVisibleInView(perp_B, 1, false)
+4. Chỉ ShowLabel cho điểm đề bài cần (A,B,C,O,H,...). Không hiện nhãn line_/perp_/seg_ trừ khi đề yêu cầu.
+5. Không để Line vô hạn chồng lên hình. Sau khi Intersect xong phải SetVisibleInView đường phụ.
+6. Tọa độ gọn, cân đối (ví dụ tam giác nội tiếp: O=(0,0), A=(0,4), B≈(-3.5,-1.94), C≈(3.5,-1.94)).
+7. Thứ tự: điểm → đường tròn/cạnh → đường phụ + ẨN ngay → giao điểm → Segment hiện → nhãn.
+
+=== MẪU CHUẨN (Euler / đường cao — copy phong cách này) ===
+O = (0, 0)
+c_O = Circle(O, 4)
+A = (0, 4)
+B = (-3.5, -1.94)
+C = (3.5, -1.94)
+seg_AB = Segment(A, B)
+seg_BC = Segment(B, C)
+seg_CA = Segment(C, A)
+line_AC = Line(A, C)
+SetVisibleInView(line_AC, 1, false)
+perp_B = PerpendicularLine(B, line_AC)
+SetVisibleInView(perp_B, 1, false)
+E = Intersect(perp_B, line_AC)
+seg_BE = Segment(B, E)
+line_AB = Line(A, B)
+SetVisibleInView(line_AB, 1, false)
+perp_C = PerpendicularLine(C, line_AB)
+SetVisibleInView(perp_C, 1, false)
+F = Intersect(perp_C, line_AB)
+seg_CF = Segment(C, F)
+H = Intersect(perp_B, perp_C)
+line_BC = Line(B, C)
+SetVisibleInView(line_BC, 1, false)
+perp_A = PerpendicularLine(A, line_BC)
+SetVisibleInView(perp_A, 1, false)
+seg_AH = Segment(A, H)
+line_AO = Line(A, O)
+SetVisibleInView(line_AO, 1, false)
+D = Intersect(line_AO, c_O, 2)
+seg_AD = Segment(A, D)
+seg_BH = Segment(B, H)
+seg_HC = Segment(H, C)
+seg_CD = Segment(C, D)
+seg_DB = Segment(D, B)
+M = Midpoint(B, C)
+seg_AM = Segment(A, M)
+G = Centroid(A, B, C)
+line_Euler = Line(H, O)
+ShowLabel(A, true)
+ShowLabel(B, true)
+ShowLabel(C, true)
+ShowLabel(O, true)
+ShowLabel(H, true)
+ShowLabel(E, true)
+ShowLabel(F, true)
+ShowLabel(D, true)
+ShowLabel(M, true)
+ShowLabel(G, true)
+
+=== CẤM ===
+- SetVisible(...) (sai trên web; dùng SetVisibleInView(obj, 1, false))
+- Point(circle, t) tham số cung
+- Để Line/PerpendicularLine hiện mà không ẩn
+- SetColor(Polygon(...), ...) chưa đặt tên
+- Bịa điểm chưa tạo
+
+geogebra_mode: graphing nếu đồ thị; 3d nếu không gian; còn lại geometry.
+Không sinh mã Manim ở bước này.
 """
 
 MANIM_PROMPT = """Bạn là chuyên gia Manim Community cho video bài giảng Toán Việt Nam.
@@ -69,7 +121,7 @@ QUY TẮC MANIM:
 1. Manim Community Edition; class kế thừa Scene hoặc ThreeDScene.
 2. scene_name khớp tên class trong manim_code.
 3. Tái tạo đúng hình từ lệnh GeoGebra đã cho (tọa độ, đoạn, góc, đường tròn...).
-4. BỎ qua / không vẽ các đối tượng đã SetVisible(..., false) trong GeoGebra — chỉ animation phần hình hoàn chỉnh.
+4. BỎ qua / không vẽ các đối tượng đã SetVisibleInView(..., false) hoặc SetVisible(..., false) — chỉ animation phần hình hoàn chỉnh (Segment, Circle hiện, điểm có nhãn).
 5. Animation rõ ràng từng bước (Create/Write/FadeIn), có self.wait() hợp lý, không quá dài.
 6. Chữ tiếng Việt: Text(...) hoặc Tex + preamble vietnam:
    config.tex_template.add_to_preamble(r"\\\\usepackage[utf8]{vietnam}")
@@ -178,7 +230,11 @@ def _normalize_commands(commands: Any) -> list[str]:
             continue
         # Sửa lỗi AI hay gặp
         cmd = cmd.replace("Polvgon", "Polygon")
-        # SetVisible(...) → # hide / bỏ (web applet không hiểu evalCommand SetVisible)
+        # SetVisibleInView(obj, 1, false) — giữ nguyên (phong cách NTSM)
+        if re.match(r"^SetVisibleInView\s*[(\[]", cmd, re.I):
+            out.append(cmd)
+            continue
+        # SetVisible(...) → SetVisibleInView(..., 1, false/true)
         m_vis = re.match(
             r"^SetVisible\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]\s*;?\s*$",
             cmd,
@@ -187,8 +243,15 @@ def _normalize_commands(commands: Any) -> list[str]:
         if m_vis:
             obj = m_vis[1].strip()
             flag = m_vis[2].strip().lower().strip("'\"")
-            if flag in {"false", "0", "no"}:
-                out.append(f"# hide: {obj}")
+            vis = "false" if flag in {"false", "0", "no"} else "true"
+            out.append(f"SetVisibleInView({obj}, 1, {vis})")
+            continue
+        # # hide: a, b → SetVisibleInView
+        m_hide = re.match(r"^#\s*hide\s*:\s*(.+)$", cmd, re.I)
+        if m_hide:
+            for obj in re.split(r"[,;\s]+", m_hide[1].strip()):
+                if obj:
+                    out.append(f"SetVisibleInView({obj}, 1, false)")
             continue
         # SetColor(Polygon(A,B,C), ...) → bỏ qua
         if re.match(r"^SetColor\s*\(\s*Polygon\s*\(", cmd, re.I):

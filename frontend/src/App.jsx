@@ -454,8 +454,9 @@ export default function App() {
         <section className="panel">
           <h2 className="panel-title">2. Chỉnh hình GeoGebra</h2>
           <p className="step-hint">
-            Sửa lệnh / dùng toolbar GeoGebra. Để ẩn đường phụ viết{' '}
-            <code># hide: c1, c2</code> (không dùng SetVisible trên web). Xong hình mới tạo Manim.
+            Phong cách NTSM: cạnh dùng <code>Segment</code>; đường dựng dùng{' '}
+            <code>Line</code>/<code>PerpendicularLine</code> rồi{' '}
+            <code>SetVisibleInView(tên, 1, false)</code>. Xong hình mới tạo Manim.
           </p>
           <label className="field">
             <span className="field-label">CHẾ ĐỘ</span>

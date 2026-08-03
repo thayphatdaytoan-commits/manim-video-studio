@@ -36,14 +36,23 @@ function applyCommands(api, commands) {
     const name = cmd.replace(/;+\s*$/, '').trim()
 
     // ---- Scripting commands: chỉ dùng JS API ----
+    // NTSM style: SetVisibleInView(obj, 1, false)
+    if (/^SetVisibleInView\b/i.test(name)) {
+      const m = name.match(
+        /^SetVisibleInView\s*[(\[]\s*([^,\])]+)\s*,\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i,
+      )
+      if (m) {
+        safeSetVisible(api, m[1].trim(), parseBool(m[3]))
+      }
+      continue
+    }
+
     if (/^SetVisible\b/i.test(name)) {
       const m = name.match(
         /^SetVisible\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i,
       )
       if (m) {
-        const obj = m[1].trim()
-        const vis = parseBool(m[2])
-        safeSetVisible(api, obj, vis)
+        safeSetVisible(api, m[1].trim(), parseBool(m[2]))
       }
       continue
     }
@@ -85,6 +94,20 @@ function applyCommands(api, commands) {
       continue
     }
 
+    if (/^SetLineStyle\b/i.test(name)) {
+      const m = name.match(
+        /^SetLineStyle\s*[(\[]\s*([^,\])]+)\s*,\s*([\d.]+)\s*[)\]]/i,
+      )
+      if (m && typeof api.setLineStyle === 'function') {
+        try {
+          api.setLineStyle(m[1].trim(), Number(m[2]))
+        } catch {
+          /* ignore */
+        }
+      }
+      continue
+    }
+
     if (/^SetPointSize\b/i.test(name)) {
       const m = name.match(
         /^SetPointSize\s*[(\[]\s*([^,\])]+)\s*,\s*([\d.]+)\s*[)\]]/i,
@@ -99,8 +122,11 @@ function applyCommands(api, commands) {
       continue
     }
 
-    if (/^SetFixed\b/i.test(name) || /^SetCaption\b/i.test(name) || /^SetLayer\b/i.test(name)) {
-      // Bỏ qua các lệnh script khác dễ lỗi trên web
+    if (
+      /^SetFixed\b/i.test(name) ||
+      /^SetCaption\b/i.test(name) ||
+      /^SetLayer\b/i.test(name)
+    ) {
       continue
     }
 
@@ -197,18 +223,20 @@ function namedColorToRgb(name) {
   return map[String(name).toLowerCase()] || null
 }
 
-/** Lọc trước khi đưa vào applet: đổi SetVisible thành # hide */
+/** Chuẩn hoá lệnh: giữ SetVisibleInView; đổi SetVisible → # hide */
 export function sanitizeGgbCommands(text) {
   return String(text || '')
     .split('\n')
     .map((line) => {
       const t = line.trim()
+      // Giữ nguyên SetVisibleInView (NTSM)
+      if (/^SetVisibleInView\b/i.test(t)) return line
       const m = t.match(/^SetVisible\s*[(\[]\s*([^,\])]+)\s*,\s*([^)\]]+)\s*[)\]]/i)
       if (m && !parseBool(m[2])) {
-        return `# hide: ${m[1].trim()}`
+        return `SetVisibleInView(${m[1].trim()}, 1, false)`
       }
       if (m && parseBool(m[2])) {
-        return `# show: ${m[1].trim()}`
+        return `SetVisibleInView(${m[1].trim()}, 1, true)`
       }
       return line
     })
