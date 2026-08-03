@@ -351,25 +351,40 @@ export default function App() {
     setGgbRevision((n) => n + 1)
   }
 
-  const handleExportPng = () => {
+  const handleExportPng = async () => {
+    setError(null)
     try {
-      ggbRef.current?.exportPNG(`geogebra-${Date.now()}.png`)
+      if (!ggbRef.current?.exportPNG) {
+        setError('Applet chưa sẵn sàng. Đợi hình GeoGebra load xong rồi thử lại.')
+        return
+      }
+      await ggbRef.current.exportPNG(`geogebra-${Date.now()}.png`)
     } catch (err) {
       setError(err.message || 'Xuất PNG thất bại')
     }
   }
 
-  const handleExportSvg = () => {
+  const handleExportSvg = async () => {
+    setError(null)
     try {
-      ggbRef.current?.exportSVG(`geogebra-${Date.now()}.svg`)
+      if (!ggbRef.current?.exportSVG) {
+        setError('Applet chưa sẵn sàng. Đợi hình GeoGebra load xong rồi thử lại.')
+        return
+      }
+      await ggbRef.current.exportSVG(`geogebra-${Date.now()}.svg`)
     } catch (err) {
       setError(err.message || 'Xuất SVG thất bại')
     }
   }
 
   const handleApplyTheme = () => {
+    setError(null)
     try {
-      ggbRef.current?.applyTheme()
+      if (!ggbRef.current?.applyTheme) {
+        setError('Applet chưa sẵn sàng.')
+        return
+      }
+      ggbRef.current.applyTheme()
     } catch (err) {
       setError(err.message || 'Không áp được màu NTSM')
     }
