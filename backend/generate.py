@@ -562,6 +562,83 @@ def generate_manim_from_geogebra(
     }
 
 
+REVISE_MANIM_PROMPT = """Bạn là chuyên gia sửa mã Manim Community (Python) cho bài giảng Toán Việt Nam.
+
+Nhiệm vụ: chỉnh SỬA mã Manim hiện có theo yêu cầu người dùng và/hoặc nhật ký biên dịch lỗi.
+Giữ nguyên ý đồ video (đề bài, lời giải từng bước, hiệu ứng hình) trừ khi yêu cầu bảo thay đổi.
+
+Trả về ĐÚNG 1 JSON (không markdown):
+{
+  "scene_name": "TenClassScene",
+  "manim_code": "from manim import *\\n...",
+  "notes": "tóm tắt đã sửa gì (tiếng Việt)"
+}
+
+QUY TẮC:
+1. Trả về TOÀN BỘ file Python đã sửa (không truncation, không diff).
+2. scene_name khớp tên class Scene trong code.
+3. Ưu tiên sửa lỗi trong nhật ký biên dịch (SyntaxError, NameError, TypeError, LaTeX, object out of frame...).
+4. Nếu có yêu cầu chỉnh sửa của người dùng: thực hiện đúng ý (vị trí, hiệu ứng, chữ, màu, timing...).
+5. Giữ comment tiếng Việt; thêm comment ngắn nơi đã sửa nếu hợp lý.
+6. Code chạy được với Manim Community; chỉ import manim/numpy.
+7. Tránh cắt mất hình: scale/căn VGroup trong khung ~ x∈[-7,7], y∈[-4,4].
+"""
+
+
+def revise_manim_code(
+    *,
+    api_key: str | list[str],
+    manim_code: str,
+    revision_prompt: str = "",
+    compile_log: str = "",
+    problem_text: str = "",
+    solution_text: str = "",
+) -> dict[str, Any]:
+    keys = _normalize_api_keys(api_key)
+    if not keys:
+        raise ValueError("Thiếu Gemini API key")
+    code = (manim_code or "").strip()
+    if not code:
+        raise ValueError("Chưa có mã Manim để chỉnh sửa")
+    prompt_user = (revision_prompt or "").strip()
+    log_text = (compile_log or "").strip()
+    if not prompt_user and not log_text:
+        raise ValueError("Nhập yêu cầu chỉnh sửa hoặc cần có nhật ký lỗi biên dịch")
+
+    user_prompt = REVISE_MANIM_PROMPT
+    if problem_text.strip():
+        user_prompt += "\n\n--- ĐỀ BÀI (ngữ cảnh) ---\n" + problem_text.strip()
+    if solution_text.strip():
+        user_prompt += "\n\n--- LỜI GIẢI (ngữ cảnh) ---\n" + solution_text.strip()
+    if prompt_user:
+        user_prompt += "\n\n--- YÊU CẦU CHỈNH SỬA CỦA NGƯỜI DÙNG ---\n" + prompt_user
+    if log_text:
+        # Truncate very long logs but keep error tails
+        clipped = log_text[-12000:] if len(log_text) > 12000 else log_text
+        user_prompt += "\n\n--- NHẬT KÝ BIÊN DỊCH / LỖI ---\n" + clipped
+    user_prompt += "\n\n--- MÃ MANIM HIỆN TẠI ---\n```python\n"
+    user_prompt += code[:24000]
+    user_prompt += "\n```"
+
+    raw = _gemini_with_fallback(api_key=keys, prompt=user_prompt)
+    data = _extract_json(raw)
+    new_code = str(data.get("manim_code") or "").strip()
+    scene_name = str(data.get("scene_name") or "GeometryScene").strip()
+    if not new_code:
+        raise ValueError("AI không trả được mã Manim đã sửa")
+    if "class " not in new_code:
+        raise ValueError("Mã Manim thiếu class Scene")
+    m = re.search(r"class\s+(\w+)\s*\([^)]*Scene", new_code)
+    if m:
+        scene_name = m.group(1)
+    return {
+        "scene_name": scene_name,
+        "manim_code": new_code,
+        "notes": str(data.get("notes") or ""),
+        "keys_available": len(keys),
+    }
+
+
 # Giữ tương thích cũ nếu còn chỗ gọi
 def generate_from_problem(**kwargs: Any) -> dict[str, Any]:
     ggb = generate_geogebra(**kwargs)

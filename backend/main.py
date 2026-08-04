@@ -26,6 +26,7 @@ from generate import (
     generate_geogebra,
     generate_manim_from_geogebra,
     generate_problem_solution,
+    revise_manim_code,
 )
 from voiceover import (
     generate_script,
@@ -148,6 +149,17 @@ class GenerateManimRequest(BaseModel):
         description="Ảnh PNG hình GeoGebra đã lưu sau kéo thả/chỉnh",
     )
     mime_type: str = Field(default="image/png")
+
+
+class ReviseManimRequest(BaseModel):
+    manim_code: str = Field(..., min_length=1, description="Mã Manim hiện tại")
+    revision_prompt: str = Field(default="", description="Yêu cầu chỉnh sửa bằng lời")
+    compile_log: str = Field(default="", description="Nhật ký biên dịch / lỗi")
+    problem_text: str = Field(default="")
+    solution_text: str = Field(default="")
+    include_compile_log: bool = Field(
+        default=True, description="Có dùng nhật ký lỗi khi sửa không"
+    )
 
 
 class ScriptRequest(BaseModel):
@@ -278,6 +290,31 @@ async def api_generate_manim(
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception("generate-manim failed")
+        raise HTTPException(502, str(exc)) from exc
+
+
+@app.post("/api/revise-manim")
+async def api_revise_manim(
+    req: ReviseManimRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Chỉnh sửa mã Manim theo prompt và/hoặc nhật ký lỗi biên dịch."""
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
+    log = req.compile_log if req.include_compile_log else ""
+    try:
+        return await asyncio.to_thread(
+            revise_manim_code,
+            api_key=api_keys,
+            manim_code=req.manim_code,
+            revision_prompt=req.revision_prompt,
+            compile_log=log,
+            problem_text=req.problem_text,
+            solution_text=req.solution_text,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("revise-manim failed")
         raise HTTPException(502, str(exc)) from exc
 
 
