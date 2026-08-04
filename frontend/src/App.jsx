@@ -10,9 +10,11 @@ import {
   ImagePlus,
   KeyRound,
   Loader2,
+  Mic,
   RefreshCw,
   Sparkles,
   Upload,
+  Volume2,
   Wifi,
   WifiOff,
   Wand2,
@@ -117,6 +119,16 @@ export default function App() {
   const [svgCodePreview, setSvgCodePreview] = useState(null)
   const [exporting, setExporting] = useState(false)
 
+  // Lồng tiếng Edge TTS
+  const [voiceScript, setVoiceScript] = useState('')
+  const [voiceTitle, setVoiceTitle] = useState('')
+  const [ttsVoices, setTtsVoices] = useState([])
+  const [ttsVoice, setTtsVoice] = useState('vi-VN-HoaiMyNeural')
+  const [ttsRate, setTtsRate] = useState('+0%')
+  const [generatingScript, setGeneratingScript] = useState(false)
+  const [applyingVoice, setApplyingVoice] = useState(false)
+  const [audioUrl, setAudioUrl] = useState(null)
+
   const pollRef = useRef(null)
   const parseTimer = useRef(null)
   const fileRef = useRef(null)
@@ -157,12 +169,17 @@ export default function App() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [tpls, quals] = await Promise.all([
+        const [tpls, quals, voices] = await Promise.all([
           api('/api/templates'),
           api('/api/qualities'),
+          api('/api/tts-voices').catch(() => []),
         ])
         setTemplates(tpls)
         setQualities(quals)
+        if (Array.isArray(voices) && voices.length) {
+          setTtsVoices(voices)
+          setTtsVoice(voices[0].id)
+        }
         if (tpls.length) {
           const first = tpls[0]
           setTemplateId(first.id)
@@ -250,6 +267,7 @@ export default function App() {
     setCompiling(true)
     setLog('Đang gửi yêu cầu biên dịch...\n')
     setVideoUrl(null)
+    setAudioUrl(null)
     try {
       const res = await api('/api/compile', {
         method: 'POST',
@@ -271,6 +289,67 @@ export default function App() {
     a.href = `${API_BASE}/api/video/${jobId}/download`
     a.download = `${scene || 'manim'}.mp4`
     a.click()
+  }
+
+  const handleGenerateScript = async () => {
+    if (!code.trim()) {
+      setError('Chưa có mã Manim để viết lời thoại.')
+      return
+    }
+    if (!requireApiKey()) return
+    setGeneratingScript(true)
+    setError(null)
+    try {
+      const data = await api('/api/generate-script', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          problem_text: problemText,
+          manim_code: code,
+          scene_name: scene,
+        }),
+      })
+      setVoiceScript(data.script || '')
+      setVoiceTitle(data.title || '')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setGeneratingScript(false)
+    }
+  }
+
+  const handleApplyVoiceover = async () => {
+    if (!jobId || !videoUrl) {
+      setError('Hãy tạo video Manim trước, rồi mới lồng tiếng.')
+      return
+    }
+    if (!voiceScript.trim()) {
+      setError('Nhập hoặc tạo lời thoại trước.')
+      return
+    }
+    setApplyingVoice(true)
+    setError(null)
+    try {
+      const data = await api('/api/voiceover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_id: jobId,
+          script: voiceScript,
+          voice: ttsVoice,
+          rate: ttsRate,
+        }),
+      })
+      const bust = Date.now()
+      setVideoUrl(`${API_BASE}${data.video_url}?t=${bust}`)
+      if (data.audio_url) {
+        setAudioUrl(`${API_BASE}${data.audio_url}?t=${bust}`)
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setApplyingVoice(false)
+    }
   }
 
   const onPickImage = async (file) => {
@@ -855,6 +934,83 @@ export default function App() {
               <Download size={18} />
               Tải video MP4
             </button>
+          </div>
+
+          <div className="voiceover-box">
+            <h3 className="voiceover-title">
+              <Mic size={16} /> Lồng tiếng AI (Edge TTS — miễn phí)
+            </h3>
+            <p className="step-hint">
+              Tạo video xong → AI viết lời thoại (Gemini) → Edge TTS đọc → ghép vào MP4.
+            </p>
+
+            <label className="field">
+              <span className="field-label">GIỌNG ĐỌC</span>
+              <select value={ttsVoice} onChange={(e) => setTtsVoice(e.target.value)}>
+                {(ttsVoices.length
+                  ? ttsVoices
+                  : [
+                      { id: 'vi-VN-HoaiMyNeural', label: 'Hoài My (nữ)' },
+                      { id: 'vi-VN-NamMinhNeural', label: 'Nam Minh (nam)' },
+                    ]
+                ).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span className="field-label">TỐC ĐỘ</span>
+              <select value={ttsRate} onChange={(e) => setTtsRate(e.target.value)}>
+                <option value="-20%">Chậm (−20%)</option>
+                <option value="-10%">Hơi chậm (−10%)</option>
+                <option value="+0%">Bình thường</option>
+                <option value="+10%">Hơi nhanh (+10%)</option>
+                <option value="+20%">Nhanh (+20%)</option>
+              </select>
+            </label>
+
+            <label className="field">
+              <span className="field-label">
+                LỜI THOẠI {voiceTitle ? `— ${voiceTitle}` : ''}
+              </span>
+              <textarea
+                rows={5}
+                value={voiceScript}
+                onChange={(e) => setVoiceScript(e.target.value)}
+                placeholder="Bấm “AI viết lời thoại” hoặc tự gõ đoạn cần đọc..."
+              />
+            </label>
+
+            <div className="export-row">
+              <button
+                type="button"
+                className="btn secondary export-btn"
+                onClick={handleGenerateScript}
+                disabled={generatingScript || !code.trim()}
+              >
+                {generatingScript ? <Loader2 className="spin" size={15} /> : <Wand2 size={15} />}
+                AI viết lời thoại
+              </button>
+              <button
+                type="button"
+                className="btn primary export-btn"
+                onClick={handleApplyVoiceover}
+                disabled={applyingVoice || !videoUrl || !voiceScript.trim()}
+              >
+                {applyingVoice ? <Loader2 className="spin" size={15} /> : <Volume2 size={15} />}
+                {applyingVoice ? 'Đang lồng tiếng...' : 'Lồng tiếng vào video'}
+              </button>
+            </div>
+
+            {audioUrl && (
+              <div className="audio-preview">
+                <span>Nghe thử audio:</span>
+                <audio key={audioUrl} src={audioUrl} controls />
+              </div>
+            )}
           </div>
 
           <button className="log-link" onClick={() => setShowLog(true)} type="button">
