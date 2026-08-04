@@ -19,6 +19,7 @@ import {
   Wifi,
   WifiOff,
   Wand2,
+  Wrench,
   X,
 } from 'lucide-react'
 import GeoGebraApplet, { sanitizeGgbCommands } from './GeoGebraApplet'
@@ -110,6 +111,10 @@ export default function App() {
   const [solutionText, setSolutionText] = useState('')
   const [solutionSteps, setSolutionSteps] = useState([])
   const [manimGuidance, setManimGuidance] = useState('')
+  const [revisePrompt, setRevisePrompt] = useState('')
+  const [useLogForRevise, setUseLogForRevise] = useState(true)
+  const [revisingManim, setRevisingManim] = useState(false)
+  const [reviseNotes, setReviseNotes] = useState('')
   const [savedGgbImage, setSavedGgbImage] = useState(null)
   const [savingGgb, setSavingGgb] = useState(false)
   const [ggbCommandsText, setGgbCommandsText] = useState(
@@ -549,12 +554,58 @@ export default function App() {
       setTemplateId('')
       setManimReady(true)
       setVideoUrl(null)
+      setReviseNotes('')
       if (data.notes) setAiNotes(data.notes)
     } catch (err) {
       setError(err.message)
       setManimReady(false)
     } finally {
       setGeneratingManim(false)
+    }
+  }
+
+  const handleReviseManim = async () => {
+    if (!code.trim() || code.trim().startsWith('#')) {
+      setError('Chưa có mã Manim để chỉnh sửa.')
+      return
+    }
+    const prompt = revisePrompt.trim()
+    const hasLog = Boolean(log?.trim()) && useLogForRevise
+    if (!prompt && !hasLog) {
+      setError('Nhập yêu cầu chỉnh sửa, hoặc bật dùng nhật ký lỗi sau khi biên dịch thất bại.')
+      return
+    }
+    if (!requireApiKey()) return
+
+    setRevisingManim(true)
+    setError(null)
+    setReviseNotes('')
+    try {
+      const data = await api('/api/revise-manim', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          manim_code: code,
+          revision_prompt: prompt,
+          compile_log: useLogForRevise ? log : '',
+          include_compile_log: useLogForRevise,
+          problem_text: problemText,
+          solution_text: solutionText,
+        }),
+      })
+      setCode(data.manim_code || code)
+      if (data.scene_name) {
+        setScenes([data.scene_name])
+        setScene(data.scene_name)
+      }
+      setTemplateId('')
+      setManimReady(true)
+      setVideoUrl(null)
+      setReviseNotes(data.notes || 'Đã cập nhật mã Manim')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRevisingManim(false)
     }
   }
 
@@ -1074,6 +1125,54 @@ export default function App() {
                 wordWrap: 'on',
               }}
             />
+          </div>
+
+          <div className="revise-box">
+            <h3 className="voiceover-title">
+              <Wrench size={16} /> AI chỉnh sửa code Manim
+            </h3>
+            <p className="step-hint">
+              Nhập chỗ muốn sửa, hoặc bật dùng <strong>nhật ký biên dịch</strong> để AI sửa lỗi khiến
+              không xuất được video.
+            </p>
+            <label className="field">
+              <span className="field-label">PROMPT CHỈNH SỬA</span>
+              <textarea
+                rows={4}
+                value={revisePrompt}
+                onChange={(e) => setRevisePrompt(e.target.value)}
+                placeholder={
+                  'Ví dụ:\n- Chữ lời giải nhỏ hơn, đặt bên phải\n- Bước 2 hãy Indicate đoạn AH\n- Sửa lỗi theo nhật ký (nếu biên dịch fail)'
+                }
+              />
+            </label>
+            <label className="field check-row">
+              <input
+                type="checkbox"
+                checked={useLogForRevise}
+                onChange={(e) => setUseLogForRevise(e.target.checked)}
+              />
+              <span>Dùng nhật ký biên dịch / lỗi để sửa ({log?.trim() ? 'đã có log' : 'chưa có log'})</span>
+            </label>
+            <div className="export-row">
+              <button
+                type="button"
+                className="btn secondary export-btn"
+                onClick={handleReviseManim}
+                disabled={revisingManim || !code.trim()}
+              >
+                {revisingManim ? <Loader2 className="spin" size={15} /> : <Wand2 size={15} />}
+                {revisingManim ? 'Đang sửa code...' : 'AI sửa code Manim'}
+              </button>
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={() => setShowLog(true)}
+              >
+                <FileText size={15} /> Xem nhật ký
+              </button>
+            </div>
+            {reviseNotes && <div className="step-ok">{reviseNotes}</div>}
           </div>
 
           <div className="preview compact">
