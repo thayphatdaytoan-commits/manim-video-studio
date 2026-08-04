@@ -128,9 +128,11 @@ export default function App() {
   const [ttsVoices, setTtsVoices] = useState([])
   const [ttsVoice, setTtsVoice] = useState('vi-VN-HoaiMyNeural')
   const [ttsRate, setTtsRate] = useState('+0%')
+  const [syncToNarration, setSyncToNarration] = useState(true)
   const [generatingScript, setGeneratingScript] = useState(false)
   const [applyingVoice, setApplyingVoice] = useState(false)
   const [audioUrl, setAudioUrl] = useState(null)
+  const [voiceSyncMsg, setVoiceSyncMsg] = useState(null)
 
   const pollRef = useRef(null)
   const parseTimer = useRef(null)
@@ -332,6 +334,7 @@ export default function App() {
     }
     setApplyingVoice(true)
     setError(null)
+    setVoiceSyncMsg(null)
     try {
       const data = await api('/api/voiceover', {
         method: 'POST',
@@ -341,6 +344,7 @@ export default function App() {
           script: voiceScript,
           voice: ttsVoice,
           rate: ttsRate,
+          sync_to_narration: syncToNarration,
         }),
       })
       const bust = Date.now()
@@ -348,6 +352,7 @@ export default function App() {
       if (data.audio_url) {
         setAudioUrl(`${API_BASE}${data.audio_url}?t=${bust}`)
       }
+      setVoiceSyncMsg(data.sync_note || data.message || 'Đã lồng tiếng')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -1002,8 +1007,18 @@ export default function App() {
             </h3>
             <p className="step-hint">
               AI viết lời thoại gồm <strong>đề bài</strong> + <strong>hướng dẫn giải</strong>, rồi Edge
-              TTS đọc và ghép vào MP4.
+              TTS đọc và ghép vào MP4. Bật “Khớp nhịp hình” để kéo giãn/nén hiệu ứng cho gần với độ dài
+              lời đọc (tương đối).
             </p>
+
+            <label className="field check-row">
+              <input
+                type="checkbox"
+                checked={syncToNarration}
+                onChange={(e) => setSyncToNarration(e.target.checked)}
+              />
+              <span>Khớp nhịp hình với lời đọc (tương đối)</span>
+            </label>
 
             <label className="field">
               <span className="field-label">GIỌNG ĐỌC</span>
@@ -1065,6 +1080,8 @@ export default function App() {
                 {applyingVoice ? 'Đang lồng tiếng...' : 'Lồng tiếng vào video'}
               </button>
             </div>
+
+            {voiceSyncMsg && <div className="step-ok">{voiceSyncMsg}</div>}
 
             {audioUrl && (
               <div className="audio-preview">

@@ -150,6 +150,10 @@ class VoiceoverRequest(BaseModel):
     script: str = Field(..., min_length=1, description="Lời thoại cần đọc")
     voice: str = Field(default="vi-VN-HoaiMyNeural", description="Giọng Edge TTS")
     rate: str = Field(default="+0%", description="Tốc độ đọc, ví dụ +0% / -10% / +10%")
+    sync_to_narration: bool = Field(
+        default=True,
+        description="Kéo giãn/nén nhịp hình để khớp tương đối độ dài lời đọc",
+    )
 
 
 def resolve_video_path(job_id: str) -> Path:
@@ -493,14 +497,24 @@ async def api_voiceover(req: VoiceoverRequest) -> dict[str, Any]:
 
     def _run() -> dict[str, Any]:
         synthesize_speech(req.script, audio_path, voice=req.voice, rate=req.rate)
-        merge_audio_video(video_path, audio_path, out_path)
+        merged = merge_audio_video(
+            video_path,
+            audio_path,
+            out_path,
+            sync_to_narration=req.sync_to_narration,
+        )
         return {
             "job_id": req.job_id,
             "status": "done",
             "video_url": f"/api/video/{req.job_id}",
             "audio_url": f"/api/audio/{req.job_id}",
             "voice": req.voice,
-            "message": "Đã lồng tiếng vào video",
+            "message": f"Đã lồng tiếng — {merged.get('sync_note', '')}",
+            "sync_to_narration": req.sync_to_narration,
+            "speed_ratio": merged.get("speed_ratio"),
+            "video_duration": merged.get("video_duration"),
+            "audio_duration": merged.get("audio_duration"),
+            "sync_note": merged.get("sync_note"),
         }
 
     try:

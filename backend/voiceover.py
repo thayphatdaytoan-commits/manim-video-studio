@@ -131,11 +131,39 @@ def synthesize_speech(
     return out_path
 
 
+def probe_duration_seconds(path: Path) -> float:
+    """Đọc độ dài media bằng ffprobe; lỗi thì trả 0."""
+    if not shutil.which("ffprobe"):
+        return 0.0
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        return float((result.stdout or "").strip() or 0)
+    except (ValueError, subprocess.TimeoutExpired, OSError):
+        return 0.0
+
+
 def merge_audio_video(
     video_path: Path,
     audio_path: Path,
     out_path: Path,
-) -> Path:
+    *,
+    sync_to_narration: bool = True,
+) -> dict[str, Any]:
+    """Ghép audio vào video.
+
+    Nếu sync_to_narration=True: kéo giãn/nén nhịp hình (setpts) để độ dài
+    video khớp tương đối với lời đọc (giới hạn 0.55×–2.4× để không quá nhanh/chậm).
+    """
     if not shutil.which("ffmpeg"):
         raise RuntimeError("Thiếu ffmpeg trên máy chủ")
     if not video_path.exists():
@@ -145,7 +173,39 @@ def merge_audio_video(
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Giữ đủ lời thoại: pad khung hình cuối nếu audio dài hơn video
+    video_dur = probe_duration_seconds(video_path)
+    audio_dur = probe_duration_seconds(audio_path)
+    speed_ratio = 1.0
+    sync_note = "giữ nguyên tốc độ hình"
+
+    if sync_to_narration and video_dur > 0.25 and audio_dur > 0.25:
+        raw_ratio = audio_dur / video_dur
+        # Khớp tương đối: không slow hơn 2.4×, không nhanh hơn ~1/0.55
+        speed_ratio = max(0.55, min(raw_ratio, 2.4))
+        if abs(speed_ratio - 1.0) < 0.08:
+            speed_ratio = 1.0
+            sync_note = "độ dài gần khớp — giữ nguyên tốc độ"
+        elif speed_ratio > 1.0:
+            sync_note = f"làm chậm hiệu ứng ×{speed_ratio:.2f} cho khớp lời đọc"
+        else:
+            sync_note = f"làm nhanh hiệu ứng ×{speed_ratio:.2f} cho khớp lời đọc"
+
+        # setpts>1 = chậm hơn; nếu vẫn ngắn hơn audio sau clamp → pad khung cuối
+        need_pad = raw_ratio > speed_ratio + 0.05
+        if speed_ratio == 1.0 and not need_pad:
+            vf = "[0:v]null[v]"
+        elif need_pad:
+            vf = (
+                f"[0:v]setpts={speed_ratio:.6f}*PTS,"
+                f"tpad=stop_mode=clone:stop_duration=600[v]"
+            )
+        else:
+            vf = f"[0:v]setpts={speed_ratio:.6f}*PTS[v]"
+    else:
+        # Không sync: pad nếu lời dài hơn (cách cũ)
+        vf = "[0:v]tpad=stop_mode=clone:stop_duration=600[v]"
+        sync_note = "không chỉnh nhịp — chỉ ghép tiếng"
+
     cmd = [
         "ffmpeg",
         "-y",
@@ -154,7 +214,7 @@ def merge_audio_video(
         "-i",
         str(audio_path),
         "-filter_complex",
-        "[0:v]tpad=stop_mode=clone:stop_duration=600[v]",
+        vf,
         "-map",
         "[v]",
         "-map",
@@ -177,4 +237,11 @@ def merge_audio_video(
     if result.returncode != 0 or not out_path.exists():
         err = (result.stderr or result.stdout or "")[-800:]
         raise RuntimeError(f"Ghép audio thất bại: {err}")
-    return out_path
+
+    return {
+        "path": out_path,
+        "video_duration": video_dur,
+        "audio_duration": audio_dur,
+        "speed_ratio": speed_ratio,
+        "sync_note": sync_note,
+    }
