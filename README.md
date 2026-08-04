@@ -94,10 +94,14 @@ Luồng tách 3 bước (giống yêu cầu sư phạm):
 2. Nhập đề / tải ảnh → **AI tạo code GeoGebra** (vẽ chuẩn, `SetVisible` ẩn đường phụ)
 3. Chỉnh hình trên GeoGebra cho hoàn chỉnh → **Tạo code Manim bằng AI**
 4. **Tạo video (biên dịch Manim)**
+5. **Lồng tiếng AI (Edge TTS miễn phí)**: AI viết lời thoại → chọn giọng → ghép vào MP4
 
 API:
 - `POST /api/generate-geogebra`
 - `POST /api/generate-manim`
+- `POST /api/generate-script` — Gemini viết lời thoại
+- `GET /api/tts-voices` — danh sách giọng Edge TTS
+- `POST /api/voiceover` — TTS + ghép audio vào video
 
 Tuỳ chọn: đặt `GEMINI_API_KEY` trên Render.
 

@@ -23,6 +23,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from generate import generate_geogebra, generate_manim_from_geogebra
+from voiceover import (
+    generate_script,
+    list_voices,
+    merge_audio_video,
+    synthesize_speech,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("manim-studio")
@@ -126,6 +132,34 @@ class GenerateManimRequest(BaseModel):
         ..., description="Lệnh GeoGebra đã chỉnh hoàn chỉnh"
     )
     geogebra_mode: str = Field(default="geometry")
+
+
+class ScriptRequest(BaseModel):
+    problem_text: str = Field(default="", description="Ngữ cảnh đề bài")
+    manim_code: str = Field(default="", description="Mã Manim để viết lời thoại")
+    scene_name: str = Field(default="", description="Tên scene")
+
+
+class VoiceoverRequest(BaseModel):
+    job_id: str = Field(..., min_length=1, description="Job video đã render")
+    script: str = Field(..., min_length=1, description="Lời thoại cần đọc")
+    voice: str = Field(default="vi-VN-HoaiMyNeural", description="Giọng Edge TTS")
+    rate: str = Field(default="+0%", description="Tốc độ đọc, ví dụ +0% / -10% / +10%")
+
+
+def resolve_video_path(job_id: str) -> Path:
+    """Ưu tiên file voiced mới nhất, không thì video gốc."""
+    candidates = sorted(OUTPUT_DIR.glob(f"{job_id}_*.mp4"), key=lambda p: p.stat().st_mtime)
+    if candidates:
+        # Ưu tiên bản chưa lồng tiếng làm nguồn (tránh lồng chồng)
+        originals = [p for p in candidates if "_voiced" not in p.name]
+        if originals:
+            return originals[-1]
+        return candidates[-1]
+    job = jobs.get(job_id)
+    if job and job.get("video_path") and Path(job["video_path"]).exists():
+        return Path(job["video_path"])
+    raise HTTPException(404, "Chưa có video để lồng tiếng — hãy biên dịch Manim trước")
 
 
 def resolve_gemini_keys(header_key: str | None) -> list[str]:
@@ -353,6 +387,13 @@ def health() -> dict[str, Any]:
     manim_ok = shutil.which("manim") is not None
     latex_ok = shutil.which("latex") is not None or shutil.which("pdflatex") is not None
     ffmpeg_ok = shutil.which("ffmpeg") is not None
+    edge_tts_ok = False
+    try:
+        import edge_tts  # noqa: F401
+
+        edge_tts_ok = True
+    except ImportError:
+        edge_tts_ok = False
     ready = manim_ok and ffmpeg_ok
     return {
         "status": "ok" if ready else "degraded",
@@ -362,6 +403,7 @@ def health() -> dict[str, Any]:
             "manim": manim_ok,
             "latex": latex_ok,
             "ffmpeg": ffmpeg_ok,
+            "edge_tts": edge_tts_ok,
         },
         "gemini_configured": bool(
             os.environ.get("GEMINI_API_KEY", "").strip()
@@ -403,6 +445,93 @@ def list_templates() -> list[dict[str, Any]]:
 def parse_scenes(payload: dict[str, str]) -> dict[str, list[str]]:
     code = payload.get("code", "")
     return {"scenes": extract_scene_names(code)}
+
+
+@app.get("/api/tts-voices")
+def api_tts_voices() -> list[dict[str, str]]:
+    return list_voices()
+
+
+@app.post("/api/generate-script")
+async def api_generate_script(
+    req: ScriptRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """AI viết lời thoại tiếng Việt từ đề + mã Manim."""
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
+    try:
+        return await asyncio.to_thread(
+            generate_script,
+            api_key=api_keys,
+            problem_text=req.problem_text,
+            manim_code=req.manim_code,
+            scene_name=req.scene_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("generate-script failed")
+        raise HTTPException(502, str(exc)) from exc
+
+
+@app.post("/api/voiceover")
+async def api_voiceover(req: VoiceoverRequest) -> dict[str, Any]:
+    """Edge TTS + FFmpeg: ghép lời thoại vào video đã render."""
+    video_path = resolve_video_path(req.job_id)
+    work_dir = JOBS_DIR / req.job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = work_dir / "narration.mp3"
+    scene = (jobs.get(req.job_id) or {}).get("scene") or "scene"
+    out_path = OUTPUT_DIR / f"{req.job_id}_{scene}_voiced.mp4"
+
+    def _run() -> dict[str, Any]:
+        synthesize_speech(req.script, audio_path, voice=req.voice, rate=req.rate)
+        merge_audio_video(video_path, audio_path, out_path)
+        return {
+            "job_id": req.job_id,
+            "status": "done",
+            "video_url": f"/api/video/{req.job_id}",
+            "audio_url": f"/api/audio/{req.job_id}",
+            "voice": req.voice,
+            "message": "Đã lồng tiếng vào video",
+        }
+
+    try:
+        result = await asyncio.to_thread(_run)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("voiceover failed")
+        raise HTTPException(502, str(exc)) from exc
+
+    # Cập nhật job in-memory để /api/video lấy bản voiced
+    if req.job_id in jobs:
+        jobs[req.job_id]["video_path"] = str(out_path)
+        jobs[req.job_id]["video_url"] = result["video_url"]
+        jobs[req.job_id]["status"] = "done"
+        jobs[req.job_id]["has_voiceover"] = True
+    else:
+        jobs[req.job_id] = {
+            "status": "done",
+            "video_path": str(out_path),
+            "video_url": result["video_url"],
+            "has_voiceover": True,
+            "scene": scene,
+        }
+    return result
+
+
+@app.get("/api/audio/{job_id}")
+def get_audio(job_id: str) -> FileResponse:
+    path = JOBS_DIR / job_id / "narration.mp3"
+    if not path.exists():
+        raise HTTPException(404, "Chưa có file âm thanh")
+    return FileResponse(
+        path,
+        media_type="audio/mpeg",
+        filename=f"{job_id}_narration.mp3",
+        headers={"Content-Disposition": f'inline; filename="{job_id}_narration.mp3"'},
+    )
 
 
 @app.post("/api/compile", response_model=CompileResponse)
@@ -469,7 +598,10 @@ def get_job(job_id: str) -> dict[str, Any]:
 
 @app.get("/api/video/{job_id}")
 def get_video(job_id: str) -> FileResponse:
-    candidates = sorted(OUTPUT_DIR.glob(f"{job_id}_*.mp4"))
+    candidates = sorted(
+        OUTPUT_DIR.glob(f"{job_id}_*.mp4"),
+        key=lambda p: p.stat().st_mtime,
+    )
     if not candidates:
         job = jobs.get(job_id)
         if job and job.get("video_path") and Path(job["video_path"]).exists():
@@ -477,7 +609,8 @@ def get_video(job_id: str) -> FileResponse:
         else:
             raise HTTPException(404, "Video chưa sẵn sàng")
     else:
-        path = candidates[-1]
+        voiced = [p for p in candidates if "_voiced" in p.name]
+        path = voiced[-1] if voiced else candidates[-1]
 
     return FileResponse(
         path,
@@ -489,10 +622,14 @@ def get_video(job_id: str) -> FileResponse:
 
 @app.get("/api/video/{job_id}/download")
 def download_video(job_id: str) -> FileResponse:
-    candidates = sorted(OUTPUT_DIR.glob(f"{job_id}_*.mp4"))
+    candidates = sorted(
+        OUTPUT_DIR.glob(f"{job_id}_*.mp4"),
+        key=lambda p: p.stat().st_mtime,
+    )
     if not candidates:
         raise HTTPException(404, "Video chưa sẵn sàng")
-    path = candidates[-1]
+    voiced = [p for p in candidates if "_voiced" in p.name]
+    path = voiced[-1] if voiced else candidates[-1]
     return FileResponse(
         path,
         media_type="video/mp4",
