@@ -112,8 +112,29 @@ geogebra_mode: graphing nếu đồ thị; 3d nếu không gian; còn lại geom
 Không sinh mã Manim ở bước này.
 """
 
+PROBLEM_SOLUTION_PROMPT = """Bạn là giáo viên Toán Việt Nam.
+Nhiệm vụ: từ ảnh đề và/hoặc gợi ý văn bản, tạo ĐỀ BÀI rõ ràng và LỜI GIẢI từng bước để làm video bài giảng.
+
+Trả về ĐÚNG 1 JSON (không markdown):
+{
+  "title": "tiêu đề ngắn",
+  "problem_text": "đề bài đầy đủ, rõ ràng (cho biết gì, hỏi gì)",
+  "solution_text": "lời giải từng bước, mỗi bước một dòng hoặc đoạn ngắn, đánh số 1) 2) 3)...",
+  "solution_steps": ["bước 1...", "bước 2...", "..."],
+  "notes": "ghi chú ngắn (tuỳ chọn)"
+}
+
+YÊU CẦU:
+- Tiếng Việt chuẩn sư phạm.
+- Đề bài tự chứa đủ dữ kiện; nếu chỉ có ảnh thì đọc/diễn đạt lại đề từ ảnh.
+- Lời giải logic, đủ bước để minh họa hình; không nhảy cóc.
+- solution_steps phải khớp solution_text (tách từng ý chính).
+- Không viết mã GeoGebra/Manim ở bước này.
+"""
+
 MANIM_PROMPT = """Bạn là chuyên gia Manim Community cho video bài giảng Toán Việt Nam.
-Nhiệm vụ DUY NHẤT: từ đề bài + HÌNH GEOGEBRA ĐÃ CHỈNH (ảnh chụp) + danh sách lệnh GeoGebra, viết mã Manim dựng ĐÚNG hình đã chỉnh (không phụ thuộc runtime GeoGebra).
+
+Nhiệm vụ: viết mã Manim dựng HÌNH + hiện ĐỀ BÀI + LỜI GIẢI từng dòng, mỗi dòng lời giải đi kèm HIỆU ỨNG HÌNH tương ứng.
 
 Trả về ĐÚNG 1 JSON (không markdown):
 {
@@ -122,27 +143,34 @@ Trả về ĐÚNG 1 JSON (không markdown):
   "notes": "ghi chú ngắn"
 }
 
-QUY TẮC MANIM:
+=== BẮT BUỘC CÓ TRONG VIDEO / CODE ===
+1. Hiện đề bài (Text/MarkupText hoặc Tex tiếng Việt) rồi mới giải.
+2. Hiện lời giải TỪNG BƯỚC: mỗi bước (mỗi dòng) xuất hiện tuần tự.
+3. ĐỒNG BỘ HÌNH ↔ LỜI GIẢI: khi một dòng lời giải xuất hiện, PHẢI có hiệu ứng minh họa tương ứng trên hình
+   (Create/Indicate/FadeIn đoạn thẳng, điểm, đường cao, góc, tô màu, mũi tên...). Không chỉ viết chữ.
+4. Trong manim_code phải có comment tiếng Việt giải thích từng khối/quan trọng, ví dụ:
+   # Hiển thị đề bài
+   # Bước 1: dựng đoạn AB
+   # Bước 2: kẻ đường cao từ A...
+5. BẮT BUỘC có đủ đề bài và lời giải trong scene (không được bỏ lời giải).
+
+=== QUY TẮC MANIM ===
 1. Manim Community Edition; class kế thừa Scene hoặc ThreeDScene.
 2. scene_name khớp tên class trong manim_code.
-3. NẾU CÓ ẢNH HÌNH ĐÃ LƯU: ưu tiên bám theo ảnh (vị trí điểm, đoạn, đường tròn, nhãn) — đây là hình sau khi giáo viên kéo thả/chỉnh trên GeoGebra.
-4. Dùng lệnh GeoGebra kèm theo để lấy tên đối tượng / quan hệ dựng hình; nếu lệch với ảnh thì ưu tiên ảnh cho tọa độ và bố cục.
-5. BỎ qua / không vẽ các đối tượng đã SetVisibleInView(..., false) hoặc SetVisible(..., false) — chỉ animation phần hình hoàn chỉnh (Segment, Circle hiện, điểm có nhãn).
-6. Animation rõ ràng từng bước (Create/Write/FadeIn), có self.wait() hợp lý, không quá dài.
-7. Chữ tiếng Việt: Text(...) hoặc Tex + preamble vietnam:
+3. NẾU CÓ ẢNH GEOGEBRA ĐÃ LƯU: bám bố cục/tọa độ ảnh; lệnh GeoGebra dùng để lấy tên/quan hệ.
+4. Bỏ qua đối tượng SetVisibleInView(..., false).
+5. Layout gợi ý: hình bên trái/giữa; đề + lời giải bên phải hoặc phía dưới (VGroup text, font nhỏ vừa đọc).
+6. Chữ Việt: Text(...) hoặc MarkupText(...); nếu dùng Tex thì:
    config.tex_template.add_to_preamble(r"\\\\usepackage[utf8]{vietnam}")
-8. Chỉ import manim / numpy. Code chạy được ngay, không placeholder.
-9. Không trả về lệnh GeoGebra.
+7. Chỉ import manim / numpy. Code chạy được ngay.
+8. Animation rõ, self.wait() hợp lý giữa các bước.
 
-=== TRÁNH CẮT MẤT HÌNH (BẮT BUỘC) ===
-Khung mặc định Manim (16:9) chỉ khoảng x∈[-7,7], y∈[-4,4]. Tọa độ GeoGebra kiểu bán kính 4 hay điểm y=4 sẽ SÁT/ĐỤNG MÉP → nhãn và phần trên bị cắt.
-Phải làm một trong các cách sau (ưu tiên A):
-A) Gom toàn bộ hình (điểm, đoạn, tròn, nhãn hình) vào một VGroup, rồi:
-   figure = VGroup(...).scale_to_fit_height(5.5).move_to(ORIGIN)
-   (hoặc scale_to_fit_width(11) nếu hình ngang)
-B) Hoặc nhân tọa độ với hệ số scale < 1 (ví dụ 0.7) và dịch hình về gần ORIGIN, chừa lề ≥ 0.6 cho nhãn.
-C) Tiêu đề đặt .to_edge(UP, buff=0.3); không để nhãn điểm nằm ngoài khung (buff nhỏ, hoặc đặt trong VGroup đã scale).
-KHÔNG copy nguyên tọa độ GeoGebra lớn mà không scale/căn giữa.
+=== TRÁNH CẮT MẤT HÌNH ===
+Khung Manim ~ x∈[-7,7], y∈[-4,4]. Gom hình vào VGroup rồi scale_to_fit_height(4.5~5.5).move_to(...) chừa chỗ cho chữ.
+Không copy tọa độ GeoGebra lớn mà không scale.
+
+=== PROMPT HƯỚNG DẪN CỦA NGƯỜI DÙNG ===
+Nếu có mục "HƯỚNG DẪN THÊM", phải ưu tiên tuân theo (đối tượng hiện, hiệu ứng, vị trí sắp xếp).
 """
 
 
@@ -352,7 +380,7 @@ def _normalize_commands(commands: Any) -> list[str]:
     return out
 
 
-def generate_geogebra(
+def generate_problem_solution(
     *,
     api_key: str | list[str],
     problem_text: str = "",
@@ -363,10 +391,69 @@ def generate_geogebra(
     if not keys:
         raise ValueError("Thiếu Gemini API key")
     if not problem_text.strip() and not image_b64:
+        raise ValueError("Cần tải ảnh đề hoặc nhập gợi ý văn bản")
+
+    user_prompt = PROBLEM_SOLUTION_PROMPT + "\n\n--- GỢI Ý / ĐỀ THÔ ---\n"
+    user_prompt += problem_text.strip() or "(Xem ảnh đề bài đính kèm)"
+
+    raw = _gemini_with_fallback(
+        api_key=keys,
+        prompt=user_prompt,
+        image_b64=image_b64,
+        mime_type=mime_type,
+    )
+    data = _extract_json(raw)
+    problem = str(data.get("problem_text") or "").strip()
+    solution = str(data.get("solution_text") or "").strip()
+    steps = data.get("solution_steps") or []
+    if isinstance(steps, str):
+        steps = [s.strip() for s in steps.split("\n") if s.strip()]
+    if not isinstance(steps, list):
+        steps = []
+    steps = [str(s).strip() for s in steps if str(s).strip()]
+    if not problem:
+        raise ValueError("AI không tạo được đề bài")
+    if not solution:
+        if steps:
+            solution = "\n".join(f"{i + 1}) {s}" for i, s in enumerate(steps))
+        else:
+            raise ValueError("AI không tạo được lời giải")
+    if not steps:
+        steps = [
+            ln.strip()
+            for ln in re.split(r"\n+", solution)
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+
+    return {
+        "title": str(data.get("title") or "Đề bài").strip(),
+        "problem_text": problem,
+        "solution_text": solution,
+        "solution_steps": steps,
+        "notes": str(data.get("notes") or ""),
+        "keys_available": len(keys),
+    }
+
+
+def generate_geogebra(
+    *,
+    api_key: str | list[str],
+    problem_text: str = "",
+    image_b64: str | None = None,
+    mime_type: str = "image/png",
+    solution_text: str = "",
+) -> dict[str, Any]:
+    keys = _normalize_api_keys(api_key)
+    if not keys:
+        raise ValueError("Thiếu Gemini API key")
+    if not problem_text.strip() and not image_b64:
         raise ValueError("Cần nhập nội dung đề hoặc tải ảnh đề")
 
     user_prompt = GEOGEBRA_PROMPT + "\n\n--- ĐỀ BÀI ---\n"
     user_prompt += problem_text.strip() or "(Xem hình ảnh đề bài đính kèm)"
+    if solution_text.strip():
+        user_prompt += "\n\n--- LỜI GIẢI (để dựng đúng hình minh họa) ---\n"
+        user_prompt += solution_text.strip()
 
     raw = _gemini_with_fallback(
         api_key=keys,
@@ -397,6 +484,9 @@ def generate_manim_from_geogebra(
     api_key: str | list[str],
     geogebra_commands: list[str] | str,
     problem_text: str = "",
+    solution_text: str = "",
+    solution_steps: list[str] | None = None,
+    user_guidance: str = "",
     geogebra_mode: str = "geometry",
     image_b64: str | None = None,
     mime_type: str = "image/png",
@@ -405,14 +495,36 @@ def generate_manim_from_geogebra(
     if not keys:
         raise ValueError("Thiếu Gemini API key")
 
+    problem = (problem_text or "").strip()
+    solution = (solution_text or "").strip()
+    if not problem:
+        raise ValueError("Thiếu đề bài — hãy dùng AI tạo đề + lời giải trước")
+    if not solution:
+        raise ValueError("Thiếu lời giải — hãy dùng AI tạo đề + lời giải trước")
+
     commands = _normalize_commands(geogebra_commands)
     if not commands and not image_b64:
         raise ValueError("Chưa có lệnh GeoGebra hoặc ảnh hình đã lưu để sinh Manim")
 
+    steps = solution_steps or []
+    if isinstance(steps, str):
+        steps = [s.strip() for s in steps.split("\n") if s.strip()]
+    if not isinstance(steps, list):
+        steps = []
+    steps = [str(s).strip() for s in steps if str(s).strip()]
+
     user_prompt = MANIM_PROMPT
-    user_prompt += "\n\n--- ĐỀ BÀI (ngữ cảnh) ---\n"
-    user_prompt += problem_text.strip() or "(Không có mô tả thêm)"
+    user_prompt += "\n\n--- ĐỀ BÀI (BẮT BUỘC hiện trong video) ---\n"
+    user_prompt += problem
+    user_prompt += "\n\n--- LỜI GIẢI ĐẦY ĐỦ (BẮT BUỘC hiện từng bước) ---\n"
+    user_prompt += solution
+    if steps:
+        user_prompt += "\n\n--- CÁC BƯỚC GIẢI (mỗi bước ↔ một cụm hiệu ứng hình) ---\n"
+        user_prompt += "\n".join(f"{i + 1}. {s}" for i, s in enumerate(steps))
     user_prompt += f"\n\n--- GEOGEBRA MODE ---\n{geogebra_mode}"
+    if user_guidance.strip():
+        user_prompt += "\n\n--- HƯỚNG DẪN THÊM CỦA NGƯỜI DÙNG (ƯU TIÊN) ---\n"
+        user_prompt += user_guidance.strip()
     if image_b64:
         user_prompt += (
             "\n\n--- ẢNH HÌNH GEOGEBRA ĐÃ LƯU (sau kéo thả/chỉnh) ---\n"
@@ -457,7 +569,10 @@ def generate_from_problem(**kwargs: Any) -> dict[str, Any]:
         api_key=kwargs["api_key"],
         geogebra_commands=ggb["geogebra_commands"],
         problem_text=kwargs.get("problem_text") or "",
+        solution_text=kwargs.get("solution_text") or "",
         geogebra_mode=ggb["geogebra_mode"],
+        image_b64=kwargs.get("image_b64"),
+        mime_type=kwargs.get("mime_type") or "image/png",
     )
     return {**ggb, **manim}
 
