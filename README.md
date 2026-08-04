@@ -88,15 +88,19 @@ Repo đã có `Dockerfile` + `render.yaml`. Cách nhanh nhất:
 
 ### Tính năng AI (GeoGebra + Manim)
 
-Luồng tách 3 bước (giống yêu cầu sư phạm):
+Luồng tách bước (sư phạm):
 
 1. **API KEY** → Gemini key từ [Google AI Studio](https://aistudio.google.com/apikey)
-2. Nhập đề / tải ảnh → **AI tạo code GeoGebra** (vẽ chuẩn, `SetVisible` ẩn đường phụ)
-3. Chỉnh hình trên GeoGebra cho hoàn chỉnh → **Tạo code Manim bằng AI**
-4. **Tạo video (biên dịch Manim)**
-5. **Lồng tiếng AI (Edge TTS miễn phí)**: AI viết lời thoại → chọn giọng → ghép vào MP4
+2. Tải ảnh đề / gợi ý → **AI tạo đề bài và lời giải**
+3. **AI tạo code GeoGebra** (dựa đề + lời giải) → chỉnh/kéo thả → **Lưu hình**
+4. (Tuỳ chọn) Prompt hướng dẫn Manim → **Tạo code Manim bằng AI**
+   - Video có đề + lời giải từng bước
+   - Mỗi bước giải kèm hiệu ứng hình tương ứng
+   - Comment tiếng Việt trong code
+5. Biên dịch video + lồng tiếng Edge TTS (tuỳ chọn)
 
 API:
+- `POST /api/generate-problem-solution`
 - `POST /api/generate-geogebra`
 - `POST /api/generate-manim`
 - `POST /api/generate-script` — Gemini viết lời thoại
