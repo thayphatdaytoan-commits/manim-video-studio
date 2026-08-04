@@ -22,7 +22,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from generate import generate_geogebra, generate_manim_from_geogebra
+from generate import (
+    generate_geogebra,
+    generate_manim_from_geogebra,
+    generate_problem_solution,
+)
 from voiceover import (
     generate_script,
     list_voices,
@@ -124,10 +128,17 @@ class GenerateRequest(BaseModel):
         default=None, description="Ảnh đề dạng base64 hoặc data URL"
     )
     mime_type: str = Field(default="image/png")
+    solution_text: str = Field(default="", description="Lời giải (tuỳ chọn, hỗ trợ dựng hình)")
 
 
 class GenerateManimRequest(BaseModel):
-    problem_text: str = Field(default="", description="Ngữ cảnh đề bài")
+    problem_text: str = Field(default="", description="Đề bài (bắt buộc)")
+    solution_text: str = Field(default="", description="Lời giải (bắt buộc)")
+    solution_steps: list[str] = Field(default_factory=list, description="Các bước giải")
+    user_guidance: str = Field(
+        default="",
+        description="Prompt thêm: đối tượng, hiệu ứng, vị trí sắp xếp mong muốn",
+    )
     geogebra_commands: list[str] | str = Field(
         default_factory=list, description="Lệnh GeoGebra đã chỉnh hoàn chỉnh"
     )
@@ -198,12 +209,34 @@ def resolve_gemini_keys(header_key: str | None) -> list[str]:
     return keys
 
 
+@app.post("/api/generate-problem-solution")
+async def api_generate_problem_solution(
+    req: GenerateRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Bước đầu: ảnh/gợi ý -> đề bài + lời giải."""
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
+    try:
+        return await asyncio.to_thread(
+            generate_problem_solution,
+            api_key=api_keys,
+            problem_text=req.problem_text,
+            image_b64=req.image_base64,
+            mime_type=req.mime_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("generate-problem-solution failed")
+        raise HTTPException(502, str(exc)) from exc
+
+
 @app.post("/api/generate-geogebra")
 async def api_generate_geogebra(
     req: GenerateRequest,
     x_gemini_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    """Bước 1: đề/ảnh -> lệnh GeoGebra (ẩn đường phụ)."""
+    """Bước tiếp: đề (+ lời giải) -> lệnh GeoGebra (ẩn đường phụ)."""
     api_keys = resolve_gemini_keys(x_gemini_api_key)
     try:
         return await asyncio.to_thread(
@@ -212,6 +245,7 @@ async def api_generate_geogebra(
             problem_text=req.problem_text,
             image_b64=req.image_base64,
             mime_type=req.mime_type,
+            solution_text=req.solution_text,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -225,7 +259,7 @@ async def api_generate_manim(
     req: GenerateManimRequest,
     x_gemini_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    """Bước 2: GeoGebra đã chỉnh -> mã Manim."""
+    """GeoGebra đã chỉnh + đề/lời giải -> mã Manim (đồng bộ bước giải ↔ hiệu ứng)."""
     api_keys = resolve_gemini_keys(x_gemini_api_key)
     try:
         return await asyncio.to_thread(
@@ -233,6 +267,9 @@ async def api_generate_manim(
             api_key=api_keys,
             geogebra_commands=req.geogebra_commands,
             problem_text=req.problem_text,
+            solution_text=req.solution_text,
+            solution_steps=req.solution_steps,
+            user_guidance=req.user_guidance,
             geogebra_mode=req.geogebra_mode,
             image_b64=req.image_base64,
             mime_type=req.mime_type,
@@ -258,12 +295,14 @@ async def generate_geometry_legacy(
             problem_text=req.problem_text,
             image_b64=req.image_base64,
             mime_type=req.mime_type,
+            solution_text=req.solution_text,
         )
         manim = await asyncio.to_thread(
             generate_manim_from_geogebra,
             api_key=api_keys,
             geogebra_commands=ggb["geogebra_commands"],
             problem_text=req.problem_text,
+            solution_text=req.solution_text or "",
             geogebra_mode=ggb["geogebra_mode"],
         )
         return {**ggb, **manim}

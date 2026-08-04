@@ -103,8 +103,13 @@ export default function App() {
   const [imageName, setImageName] = useState('')
   const [generatingGgb, setGeneratingGgb] = useState(false)
   const [generatingManim, setGeneratingManim] = useState(false)
+  const [generatingProblem, setGeneratingProblem] = useState(false)
   const [ggbReady, setGgbReady] = useState(false)
   const [manimReady, setManimReady] = useState(false)
+  const [problemReady, setProblemReady] = useState(false)
+  const [solutionText, setSolutionText] = useState('')
+  const [solutionSteps, setSolutionSteps] = useState([])
+  const [manimGuidance, setManimGuidance] = useState('')
   const [savedGgbImage, setSavedGgbImage] = useState(null)
   const [savingGgb, setSavingGgb] = useState(false)
   const [ggbCommandsText, setGgbCommandsText] = useState(
@@ -394,9 +399,51 @@ export default function App() {
     ...(apiKeys.length ? { 'X-Gemini-Api-Key': apiKeys.join('\n') } : {}),
   })
 
+  const handleGenerateProblemSolution = async () => {
+    if (!problemText.trim() && !imageDataUrl) {
+      setError('Nhập gợi ý đề hoặc tải ảnh đề trước.')
+      return
+    }
+    if (!requireApiKey()) return
+
+    setGeneratingProblem(true)
+    setError(null)
+    setProblemReady(false)
+    setGgbReady(false)
+    setManimReady(false)
+    try {
+      const data = await api('/api/generate-problem-solution', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          problem_text: problemText,
+          image_base64: imageDataUrl,
+          mime_type: imageDataUrl?.startsWith('data:')
+            ? imageDataUrl.slice(5, imageDataUrl.indexOf(';'))
+            : 'image/png',
+        }),
+      })
+      setAiTitle(data.title || '')
+      setAiNotes(data.notes || '')
+      setProblemText(data.problem_text || '')
+      setSolutionText(data.solution_text || '')
+      setSolutionSteps(Array.isArray(data.solution_steps) ? data.solution_steps : [])
+      setProblemReady(true)
+    } catch (err) {
+      setError(err.message)
+      setProblemReady(false)
+    } finally {
+      setGeneratingProblem(false)
+    }
+  }
+
   const handleGenerateGeogebra = async () => {
     if (!problemText.trim() && !imageDataUrl) {
-      setError('Nhập nội dung đề hoặc tải ảnh đề trước.')
+      setError('Cần đề bài (hoặc ảnh) trước khi tạo GeoGebra.')
+      return
+    }
+    if (!problemReady && !solutionText.trim()) {
+      setError('Hãy bấm “AI tạo đề bài và lời giải” trước, hoặc tự điền lời giải.')
       return
     }
     if (!requireApiKey()) return
@@ -410,6 +457,7 @@ export default function App() {
         headers: authHeaders(),
         body: JSON.stringify({
           problem_text: problemText,
+          solution_text: solutionText,
           image_base64: imageDataUrl,
           mime_type: imageDataUrl?.startsWith('data:')
             ? imageDataUrl.slice(5, imageDataUrl.indexOf(';'))
@@ -417,15 +465,15 @@ export default function App() {
         }),
       })
 
-      setAiTitle(data.title || '')
-      setAiNotes(data.notes || '')
+      setAiTitle(data.title || aiTitle || '')
+      if (data.notes) setAiNotes(data.notes)
       setGgbMode(data.geogebra_mode || 'geometry')
       setGgbCommandsText(sanitizeGgbCommands((data.geogebra_commands || []).join('\n')))
       setGgbRevision((n) => n + 1)
       setGgbReady(true)
       setSavedGgbImage(null)
       setVideoUrl(null)
-      setCode('# Chỉnh xong hình GeoGebra rồi bấm "Tạo code Manim bằng AI"')
+      setCode('# Chỉnh xong hình GeoGebra, lưu hình, rồi tạo Manim')
       setScenes([])
       setScene('')
     } catch (err) {
@@ -448,7 +496,6 @@ export default function App() {
       const snap = await ggbRef.current.saveSnapshot(`geogebra-saved-${Date.now()}.png`)
       const cmds = (snap.commands || []).filter(Boolean)
       if (cmds.length) {
-        // Cập nhật textarea theo hình đã kéo — KHÔNG remount applet
         setGgbCommandsText(sanitizeGgbCommands(cmds.join('\n')))
       }
       setSavedGgbImage(snap.dataUrl)
@@ -462,6 +509,10 @@ export default function App() {
   }
 
   const handleGenerateManim = async () => {
+    if (!problemText.trim() || !solutionText.trim()) {
+      setError('Manim cần đề bài và lời giải. Hãy tạo/điền ở cột 1 trước.')
+      return
+    }
     if (!ggbCommands.length && !savedGgbImage) {
       setError('Chưa có hình GeoGebra. Hãy sinh hình, chỉnh, rồi bấm Lưu hình.')
       return
@@ -480,6 +531,9 @@ export default function App() {
         headers: authHeaders(),
         body: JSON.stringify({
           problem_text: problemText,
+          solution_text: solutionText,
+          solution_steps: solutionSteps,
+          user_guidance: manimGuidance,
           geogebra_commands: ggbCommands,
           geogebra_mode: ggbMode,
           image_base64: savedGgbImage,
@@ -695,7 +749,7 @@ export default function App() {
           </div>
           <div>
             <h1>Manim Video Studio</h1>
-            <p>1) GeoGebra từ đề → 2) chỉnh hình → 3) Manim → 4) video</p>
+            <p>1) Đề+lời giải → 2) GeoGebra → 3) Manim → 4) video</p>
           </div>
         </div>
         <div className="header-actions">
@@ -718,21 +772,13 @@ export default function App() {
       </header>
 
       <main className="layout three">
-        {/* Cột 1: Nhập đề + AI GeoGebra */}
+        {/* Cột 1: Ảnh/đề → AI đề+lời giải → GeoGebra */}
         <section className="panel">
-          <h2 className="panel-title">1. Đề bài → GeoGebra</h2>
+          <h2 className="panel-title">1. Đề bài & lời giải</h2>
           <p className="step-hint">
-            Bước 1: AI chỉ tạo lệnh vẽ GeoGebra (hình chuẩn, ẩn đường phụ). Chưa tạo Manim.
+            Tải ảnh đề (hoặc gõ gợi ý) → <strong>AI tạo đề bài và lời giải</strong> → rồi mới tạo
+            code GeoGebra.
           </p>
-          <label className="field">
-            <span className="field-label">NỘI DUNG ĐỀ (VĂN BẢN)</span>
-            <textarea
-              rows={6}
-              value={problemText}
-              onChange={(e) => setProblemText(e.target.value)}
-              placeholder={'Ví dụ:\nCho tam giác ABC vuông tại A, AB = 3, AC = 4. Vẽ hình minh họa.'}
-            />
-          </label>
 
           <div className="upload-row">
             <button type="button" className="btn secondary" onClick={() => fileRef.current?.click()}>
@@ -769,12 +815,46 @@ export default function App() {
           <button
             className="btn primary"
             type="button"
-            onClick={handleGenerateGeogebra}
-            disabled={generatingGgb}
+            onClick={handleGenerateProblemSolution}
+            disabled={generatingProblem}
           >
-            {generatingGgb ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
-            {generatingGgb ? 'Đang vẽ GeoGebra...' : 'AI tạo code GeoGebra'}
+            {generatingProblem ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
+            {generatingProblem ? 'Đang tạo đề + lời giải...' : 'AI tạo đề bài và lời giải'}
           </button>
+
+          <label className="field">
+            <span className="field-label">ĐỀ BÀI (CHỈNH ĐƯỢC)</span>
+            <textarea
+              rows={5}
+              value={problemText}
+              onChange={(e) => {
+                setProblemText(e.target.value)
+                setProblemReady(Boolean(e.target.value.trim() && solutionText.trim()))
+              }}
+              placeholder={
+                'Có thể gõ gợi ý rồi bấm AI, hoặc để trống nếu đã tải ảnh — AI sẽ điền đề bài vào đây.'
+              }
+            />
+          </label>
+
+          <label className="field">
+            <span className="field-label">LỜI GIẢI TỪNG BƯỚC (CHỈNH ĐƯỢC)</span>
+            <textarea
+              rows={7}
+              value={solutionText}
+              onChange={(e) => {
+                setSolutionText(e.target.value)
+                setSolutionSteps(
+                  e.target.value
+                    .split('\n')
+                    .map((l) => l.trim())
+                    .filter(Boolean),
+                )
+                setProblemReady(Boolean(problemText.trim() && e.target.value.trim()))
+              }}
+              placeholder={'1) ...\n2) ...\n3) ...'}
+            />
+          </label>
 
           {aiTitle && (
             <div className="ai-meta">
@@ -782,6 +862,20 @@ export default function App() {
               {aiNotes && <p>{aiNotes}</p>}
             </div>
           )}
+          {problemReady && (
+            <div className="step-ok">Đã có đề + lời giải — tiếp tục tạo GeoGebra bên dưới.</div>
+          )}
+
+          <button
+            className="btn secondary"
+            type="button"
+            onClick={handleGenerateGeogebra}
+            disabled={generatingGgb || (!problemText.trim() && !imageDataUrl)}
+          >
+            {generatingGgb ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
+            {generatingGgb ? 'Đang vẽ GeoGebra...' : 'AI tạo code GeoGebra'}
+          </button>
+
           {ggbReady && (
             <div className="step-ok">Đã có GeoGebra — sang cột 2 để chỉnh hình cho chuẩn.</div>
           )}
@@ -884,6 +978,18 @@ export default function App() {
             </div>
           )}
 
+          <label className="field">
+            <span className="field-label">PROMPT HƯỚNG DẪN MANIM (TUỲ CHỌN)</span>
+            <textarea
+              rows={4}
+              value={manimGuidance}
+              onChange={(e) => setManimGuidance(e.target.value)}
+              placeholder={
+                'Ví dụ:\n- Hình bên trái, lời giải bên phải\n- Bước 1 hiện đoạn AB rồi tô màu\n- Bước 2 kẻ đường cao AH bằng Create\n- Chữ lời giải cỡ nhỏ, màu trắng'
+              }
+            />
+          </label>
+
           <button
             className="btn primary"
             type="button"
@@ -893,6 +999,9 @@ export default function App() {
             {generatingManim ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
             {generatingManim ? 'Đang tạo Manim...' : 'Tạo code Manim bằng AI'}
           </button>
+          {!problemText.trim() || !solutionText.trim() ? (
+            <div className="export-msg">Manim cần đề bài + lời giải ở cột 1.</div>
+          ) : null}
           {!savedGgbImage && ggbCommands.length > 0 && (
             <div className="export-msg">Chỉnh hình xong hãy bấm “Lưu hình đã chỉnh” trước.</div>
           )}
