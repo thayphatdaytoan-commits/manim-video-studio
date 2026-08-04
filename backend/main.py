@@ -129,9 +129,14 @@ class GenerateRequest(BaseModel):
 class GenerateManimRequest(BaseModel):
     problem_text: str = Field(default="", description="Ngữ cảnh đề bài")
     geogebra_commands: list[str] | str = Field(
-        ..., description="Lệnh GeoGebra đã chỉnh hoàn chỉnh"
+        default_factory=list, description="Lệnh GeoGebra đã chỉnh hoàn chỉnh"
     )
     geogebra_mode: str = Field(default="geometry")
+    image_base64: str | None = Field(
+        default=None,
+        description="Ảnh PNG hình GeoGebra đã lưu sau kéo thả/chỉnh",
+    )
+    mime_type: str = Field(default="image/png")
 
 
 class ScriptRequest(BaseModel):
@@ -225,6 +230,8 @@ async def api_generate_manim(
             geogebra_commands=req.geogebra_commands,
             problem_text=req.problem_text,
             geogebra_mode=req.geogebra_mode,
+            image_b64=req.image_base64,
+            mime_type=req.mime_type,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

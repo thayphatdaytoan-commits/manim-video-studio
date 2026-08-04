@@ -503,6 +503,122 @@ async function captureSvgText(api, hostEl) {
   throw new Error('Không xuất được SVG từ GeoGebra')
 }
 
+function roundCoord(n) {
+  const x = Number(n)
+  if (!Number.isFinite(x)) return 0
+  return Math.round(x * 1000) / 1000
+}
+
+function isFreePointType(type) {
+  return type === 'point' || type === 'point3d'
+}
+
+/**
+ * Xuất lại lệnh GeoGebra từ trạng thái applet hiện tại
+ * (sau kéo thả điểm tự do, tọa độ được cập nhật).
+ */
+export function exportConstructionCommands(api) {
+  if (!api || typeof api.getObjectNumber !== 'function') return []
+
+  const n = api.getObjectNumber()
+  const names = []
+  for (let i = 0; i < n; i++) {
+    try {
+      const name = api.getObjectName(i)
+      if (name) names.push(name)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const commands = []
+  const hideLater = []
+
+  for (const name of names) {
+    let type = ''
+    try {
+      type = String(api.getObjectType(name) || '').toLowerCase()
+    } catch {
+      continue
+    }
+
+    // Bỏ qua đối tượng hệ thống / phụ trợ thường gặp
+    if (!name || name.startsWith('_')) continue
+
+    let cmd = ''
+    try {
+      if (typeof api.getCommandString === 'function') {
+        cmd = String(api.getCommandString(name) || '').trim()
+      }
+    } catch {
+      cmd = ''
+    }
+
+    // Điểm tự do: luôn lấy tọa độ hiện tại sau kéo thả
+    if (isFreePointType(type)) {
+      let independent = true
+      try {
+        if (typeof api.isIndependent === 'function') {
+          independent = !!api.isIndependent(name)
+        } else if (cmd && !/^\s*[A-Za-z_]\w*\s*=\s*\(/.test(cmd)) {
+          independent = false
+        }
+      } catch {
+        /* ignore */
+      }
+      if (independent && typeof api.getXcoord === 'function') {
+        try {
+          const x = roundCoord(api.getXcoord(name))
+          const y = roundCoord(api.getYcoord(name))
+          commands.push(`${name} = (${x}, ${y})`)
+          cmd = '' // đã ghi
+        } catch {
+          /* fall through */
+        }
+      }
+    }
+
+    if (cmd) {
+      // Chuẩn hóa: đảm bảo có "Name = ..." nếu API chỉ trả biểu thức
+      if (!cmd.includes('=') && /^[A-Za-z_]/.test(name)) {
+        commands.push(`${name} = ${cmd}`)
+      } else {
+        commands.push(cmd)
+      }
+    } else if (!isFreePointType(type) && typeof api.getDefinitionString === 'function') {
+      try {
+        const def = String(api.getDefinitionString(name) || '').trim()
+        if (def && def !== name) {
+          commands.push(`${name} = ${def}`)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    // Visibility
+    try {
+      let visible = true
+      if (typeof api.getVisible === 'function') {
+        try {
+          visible = !!api.getVisible(name, 1)
+        } catch {
+          visible = !!api.getVisible(name)
+        }
+      }
+      if (!visible) hideLater.push(name)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  for (const name of hideLater) {
+    commands.push(`SetVisibleInView(${name}, 1, false)`)
+  }
+
+  return commands
+}
+
 export function sanitizeGgbCommands(text) {
   return String(text || '')
     .split('\n')
@@ -532,6 +648,28 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
     getApi: () => apiRef.current,
     applyTheme: () => {
       if (apiRef.current) applyNtsmTheme(apiRef.current)
+    },
+    /** Xuất lệnh từ trạng thái hiện tại (sau kéo thả) */
+    exportCommands: () => {
+      const api = apiRef.current
+      if (!api) throw new Error('Applet chưa sẵn sàng — đợi hình load xong.')
+      return exportConstructionCommands(api)
+    },
+    /** Chụp PNG + xuất lệnh sau khi chỉnh hình */
+    saveSnapshot: async (filename = `geogebra-saved-${Date.now()}.png`) => {
+      const api = apiRef.current
+      if (!api) throw new Error('Applet chưa sẵn sàng — đợi hình load xong.')
+      const commands = exportConstructionCommands(api)
+      const dataUrl = await capturePngDataUrl(api, hostRef.current)
+      const blob = await dataUrlToBlob(dataUrl)
+      return {
+        kind: 'png',
+        filename,
+        dataUrl,
+        blob,
+        mime: 'image/png',
+        commands,
+      }
     },
     /** Trả về { kind, filename, dataUrl?, text?, blob, mime } để UI iPad Share/xem trước */
     capturePNG: async (filename = `geogebra-${Date.now()}.png`) => {
@@ -563,6 +701,10 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
       }
     },
   }))
+
+  // Chỉ remount khi bấm "Áp dụng lệnh" (revision) hoặc đổi mode — không reset khi kéo thả / lưu
+  const commandsRef = useRef(commands)
+  commandsRef.current = commands
 
   useEffect(() => {
     const host = hostRef.current
@@ -597,7 +739,7 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
         setTimeout(() => {
           if (cancelled) return
           try {
-            applyCommands(api, commands)
+            applyCommands(api, commandsRef.current)
             applyNtsmTheme(api)
             onReady?.(api)
           } catch {
@@ -635,7 +777,7 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
       host.innerHTML = ''
       apiRef.current = null
     }
-  }, [commands, mode, revision, onReady])
+  }, [mode, revision, onReady])
 
   return <div className="ggb-host" ref={hostRef} />
 })

@@ -113,7 +113,7 @@ Không sinh mã Manim ở bước này.
 """
 
 MANIM_PROMPT = """Bạn là chuyên gia Manim Community cho video bài giảng Toán Việt Nam.
-Nhiệm vụ DUY NHẤT: từ đề bài + danh sách lệnh GeoGebra ĐÃ CHỈNH SỬA HOÀN CHỈNH, viết mã Manim dựng HÌNH ĐÚNG như GeoGebra (không phụ thuộc runtime GeoGebra).
+Nhiệm vụ DUY NHẤT: từ đề bài + HÌNH GEOGEBRA ĐÃ CHỈNH (ảnh chụp) + danh sách lệnh GeoGebra, viết mã Manim dựng ĐÚNG hình đã chỉnh (không phụ thuộc runtime GeoGebra).
 
 Trả về ĐÚNG 1 JSON (không markdown):
 {
@@ -125,13 +125,14 @@ Trả về ĐÚNG 1 JSON (không markdown):
 QUY TẮC MANIM:
 1. Manim Community Edition; class kế thừa Scene hoặc ThreeDScene.
 2. scene_name khớp tên class trong manim_code.
-3. Tái tạo đúng hình từ lệnh GeoGebra đã cho (tọa độ, đoạn, góc, đường tròn...).
-4. BỎ qua / không vẽ các đối tượng đã SetVisibleInView(..., false) hoặc SetVisible(..., false) — chỉ animation phần hình hoàn chỉnh (Segment, Circle hiện, điểm có nhãn).
-5. Animation rõ ràng từng bước (Create/Write/FadeIn), có self.wait() hợp lý, không quá dài.
-6. Chữ tiếng Việt: Text(...) hoặc Tex + preamble vietnam:
+3. NẾU CÓ ẢNH HÌNH ĐÃ LƯU: ưu tiên bám theo ảnh (vị trí điểm, đoạn, đường tròn, nhãn) — đây là hình sau khi giáo viên kéo thả/chỉnh trên GeoGebra.
+4. Dùng lệnh GeoGebra kèm theo để lấy tên đối tượng / quan hệ dựng hình; nếu lệch với ảnh thì ưu tiên ảnh cho tọa độ và bố cục.
+5. BỎ qua / không vẽ các đối tượng đã SetVisibleInView(..., false) hoặc SetVisible(..., false) — chỉ animation phần hình hoàn chỉnh (Segment, Circle hiện, điểm có nhãn).
+6. Animation rõ ràng từng bước (Create/Write/FadeIn), có self.wait() hợp lý, không quá dài.
+7. Chữ tiếng Việt: Text(...) hoặc Tex + preamble vietnam:
    config.tex_template.add_to_preamble(r"\\\\usepackage[utf8]{vietnam}")
-7. Chỉ import manim / numpy. Code chạy được ngay, không placeholder.
-8. Không trả về lệnh GeoGebra.
+8. Chỉ import manim / numpy. Code chạy được ngay, không placeholder.
+9. Không trả về lệnh GeoGebra.
 """
 
 
@@ -387,23 +388,36 @@ def generate_manim_from_geogebra(
     geogebra_commands: list[str] | str,
     problem_text: str = "",
     geogebra_mode: str = "geometry",
+    image_b64: str | None = None,
+    mime_type: str = "image/png",
 ) -> dict[str, Any]:
     keys = _normalize_api_keys(api_key)
     if not keys:
         raise ValueError("Thiếu Gemini API key")
 
     commands = _normalize_commands(geogebra_commands)
-    if not commands:
-        raise ValueError("Chưa có lệnh GeoGebra để sinh Manim")
+    if not commands and not image_b64:
+        raise ValueError("Chưa có lệnh GeoGebra hoặc ảnh hình đã lưu để sinh Manim")
 
     user_prompt = MANIM_PROMPT
     user_prompt += "\n\n--- ĐỀ BÀI (ngữ cảnh) ---\n"
     user_prompt += problem_text.strip() or "(Không có mô tả thêm)"
     user_prompt += f"\n\n--- GEOGEBRA MODE ---\n{geogebra_mode}"
-    user_prompt += "\n\n--- LỆNH GEOGEBRA ĐÃ CHỈNH (hình hoàn chỉnh) ---\n"
-    user_prompt += "\n".join(commands)
+    if image_b64:
+        user_prompt += (
+            "\n\n--- ẢNH HÌNH GEOGEBRA ĐÃ LƯU (sau kéo thả/chỉnh) ---\n"
+            "Ảnh đính kèm là hình HOÀN CHỈNH cần tái tạo trong Manim. "
+            "Ưu tiên đúng bố cục và vị trí trên ảnh."
+        )
+    user_prompt += "\n\n--- LỆNH GEOGEBRA ĐÃ CHỈNH (tham chiếu tên/quan hệ) ---\n"
+    user_prompt += "\n".join(commands) if commands else "(không có lệnh — bám theo ảnh)"
 
-    raw = _gemini_with_fallback(api_key=keys, prompt=user_prompt)
+    raw = _gemini_with_fallback(
+        api_key=keys,
+        prompt=user_prompt,
+        image_b64=image_b64,
+        mime_type=mime_type,
+    )
     data = _extract_json(raw)
 
     manim_code = str(data.get("manim_code") or "").strip()
@@ -422,6 +436,7 @@ def generate_manim_from_geogebra(
         "manim_code": manim_code,
         "notes": str(data.get("notes") or ""),
         "keys_available": len(keys),
+        "used_saved_image": bool(image_b64),
     }
 
 

@@ -12,6 +12,7 @@ import {
   Loader2,
   Mic,
   RefreshCw,
+  Save,
   Sparkles,
   Upload,
   Volume2,
@@ -104,6 +105,8 @@ export default function App() {
   const [generatingManim, setGeneratingManim] = useState(false)
   const [ggbReady, setGgbReady] = useState(false)
   const [manimReady, setManimReady] = useState(false)
+  const [savedGgbImage, setSavedGgbImage] = useState(null)
+  const [savingGgb, setSavingGgb] = useState(false)
   const [ggbCommandsText, setGgbCommandsText] = useState(
     '# AI sẽ tạo lệnh GeoGebra tại đây\n# Đường phụ phải có SetVisible(..., false)',
   )
@@ -415,6 +418,7 @@ export default function App() {
       setGgbCommandsText(sanitizeGgbCommands((data.geogebra_commands || []).join('\n')))
       setGgbRevision((n) => n + 1)
       setGgbReady(true)
+      setSavedGgbImage(null)
       setVideoUrl(null)
       setCode('# Chỉnh xong hình GeoGebra rồi bấm "Tạo code Manim bằng AI"')
       setScenes([])
@@ -427,9 +431,38 @@ export default function App() {
     }
   }
 
+  const handleSaveGgbFigure = async () => {
+    setExportMsg(null)
+    setError(null)
+    setSavingGgb(true)
+    try {
+      if (!ggbRef.current?.saveSnapshot) {
+        setError('Applet chưa sẵn sàng. Đợi hình load xong.')
+        return
+      }
+      const snap = await ggbRef.current.saveSnapshot(`geogebra-saved-${Date.now()}.png`)
+      const cmds = (snap.commands || []).filter(Boolean)
+      if (cmds.length) {
+        // Cập nhật textarea theo hình đã kéo — KHÔNG remount applet
+        setGgbCommandsText(sanitizeGgbCommands(cmds.join('\n')))
+      }
+      setSavedGgbImage(snap.dataUrl)
+      setManimReady(false)
+      setExportMsg('Đã lưu hình sau chỉnh sửa — có thể tạo code Manim')
+    } catch (err) {
+      setError(err.message || 'Lưu hình thất bại')
+    } finally {
+      setSavingGgb(false)
+    }
+  }
+
   const handleGenerateManim = async () => {
-    if (!ggbCommands.length) {
-      setError('Chưa có lệnh GeoGebra. Hãy sinh/chỉnh hình trước.')
+    if (!ggbCommands.length && !savedGgbImage) {
+      setError('Chưa có hình GeoGebra. Hãy sinh hình, chỉnh, rồi bấm Lưu hình.')
+      return
+    }
+    if (!savedGgbImage) {
+      setError('Hãy kéo thả/chỉnh hình xong rồi bấm “Lưu hình đã chỉnh” trước khi tạo Manim.')
       return
     }
     if (!requireApiKey()) return
@@ -444,6 +477,10 @@ export default function App() {
           problem_text: problemText,
           geogebra_commands: ggbCommands,
           geogebra_mode: ggbMode,
+          image_base64: savedGgbImage,
+          mime_type: savedGgbImage?.startsWith('data:')
+            ? savedGgbImage.slice(5, savedGgbImage.indexOf(';'))
+            : 'image/png',
         }),
       })
 
@@ -749,7 +786,8 @@ export default function App() {
           <p className="step-hint">
             Phong cách NTSM: cạnh dùng <code>Segment</code>; đường dựng dùng{' '}
             <code>Line</code>/<code>PerpendicularLine</code> rồi{' '}
-            <code>SetVisibleInView(tên, 1, false)</code>. Xong hình mới tạo Manim.
+            <code>SetVisibleInView(tên, 1, false)</code>. Chỉnh/kéo thả xong →{' '}
+            <strong>Lưu hình đã chỉnh</strong> → tạo Manim (AI dựa vào ảnh đã lưu).
           </p>
           <label className="field">
             <span className="field-label">CHẾ ĐỘ</span>
@@ -823,14 +861,34 @@ export default function App() {
           </div>
 
           <button
+            type="button"
+            className="btn secondary"
+            onClick={handleSaveGgbFigure}
+            disabled={savingGgb || !ggbCommands.length}
+          >
+            {savingGgb ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+            {savingGgb ? 'Đang lưu hình...' : 'Lưu hình đã chỉnh'}
+          </button>
+
+          {savedGgbImage && (
+            <div className="saved-ggb-preview">
+              <div className="saved-ggb-label">Hình đã lưu (dùng để tạo Manim)</div>
+              <img src={savedGgbImage} alt="GeoGebra đã lưu" />
+            </div>
+          )}
+
+          <button
             className="btn primary"
             type="button"
             onClick={handleGenerateManim}
-            disabled={generatingManim || !ggbCommands.length}
+            disabled={generatingManim || (!ggbCommands.length && !savedGgbImage)}
           >
             {generatingManim ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
             {generatingManim ? 'Đang tạo Manim...' : 'Tạo code Manim bằng AI'}
           </button>
+          {!savedGgbImage && ggbCommands.length > 0 && (
+            <div className="export-msg">Chỉnh hình xong hãy bấm “Lưu hình đã chỉnh” trước.</div>
+          )}
           {manimReady && (
             <div className="step-ok">Đã có Manim — sang cột 3 để biên dịch video.</div>
           )}
