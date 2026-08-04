@@ -133,6 +133,16 @@ QUY TẮC MANIM:
    config.tex_template.add_to_preamble(r"\\\\usepackage[utf8]{vietnam}")
 8. Chỉ import manim / numpy. Code chạy được ngay, không placeholder.
 9. Không trả về lệnh GeoGebra.
+
+=== TRÁNH CẮT MẤT HÌNH (BẮT BUỘC) ===
+Khung mặc định Manim (16:9) chỉ khoảng x∈[-7,7], y∈[-4,4]. Tọa độ GeoGebra kiểu bán kính 4 hay điểm y=4 sẽ SÁT/ĐỤNG MÉP → nhãn và phần trên bị cắt.
+Phải làm một trong các cách sau (ưu tiên A):
+A) Gom toàn bộ hình (điểm, đoạn, tròn, nhãn hình) vào một VGroup, rồi:
+   figure = VGroup(...).scale_to_fit_height(5.5).move_to(ORIGIN)
+   (hoặc scale_to_fit_width(11) nếu hình ngang)
+B) Hoặc nhân tọa độ với hệ số scale < 1 (ví dụ 0.7) và dịch hình về gần ORIGIN, chừa lề ≥ 0.6 cho nhãn.
+C) Tiêu đề đặt .to_edge(UP, buff=0.3); không để nhãn điểm nằm ngoài khung (buff nhỏ, hoặc đặt trong VGroup đã scale).
+KHÔNG copy nguyên tọa độ GeoGebra lớn mà không scale/căn giữa.
 """
 
 

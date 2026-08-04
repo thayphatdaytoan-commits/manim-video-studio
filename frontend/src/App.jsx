@@ -503,6 +503,8 @@ export default function App() {
     const cleaned = sanitizeGgbCommands(ggbCommandsText)
     if (cleaned !== ggbCommandsText) setGgbCommandsText(cleaned)
     setGgbRevision((n) => n + 1)
+    setSavedGgbImage(null)
+    setManimReady(false)
   }
 
   const isIos = () =>
