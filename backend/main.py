@@ -25,7 +25,9 @@ from pydantic import BaseModel, Field
 from generate import (
     generate_geogebra,
     generate_manim_from_geogebra,
+    generate_manim_from_storyboard,
     generate_problem_solution,
+    generate_storyboard,
     revise_manim_code,
 )
 from voiceover import (
@@ -149,6 +151,21 @@ class GenerateManimRequest(BaseModel):
         description="Ảnh PNG hình GeoGebra đã lưu sau kéo thả/chỉnh",
     )
     mime_type: str = Field(default="image/png")
+    storyboard: dict | str | None = Field(
+        default=None,
+        description="Kịch bản video JSON (nếu có thì chỉ sinh code từ kịch bản)",
+    )
+
+
+class StoryboardRequest(BaseModel):
+    problem_text: str = Field(default="")
+    solution_text: str = Field(default="")
+    solution_steps: list[str] = Field(default_factory=list)
+    user_guidance: str = Field(default="")
+    geogebra_commands: list[str] | str = Field(default_factory=list)
+    geogebra_mode: str = Field(default="geometry")
+    image_base64: str | None = Field(default=None)
+    mime_type: str = Field(default="image/png")
 
 
 class ReviseManimRequest(BaseModel):
@@ -266,14 +283,48 @@ async def api_generate_geogebra(
         raise HTTPException(502, str(exc)) from exc
 
 
+@app.post("/api/generate-storyboard")
+async def api_generate_storyboard(
+    req: StoryboardRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Tạo kịch bản video (JSON) trước khi viết code Manim."""
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
+    try:
+        return await asyncio.to_thread(
+            generate_storyboard,
+            api_key=api_keys,
+            geogebra_commands=req.geogebra_commands,
+            problem_text=req.problem_text,
+            solution_text=req.solution_text,
+            solution_steps=req.solution_steps,
+            user_guidance=req.user_guidance,
+            geogebra_mode=req.geogebra_mode,
+            image_b64=req.image_base64,
+            mime_type=req.mime_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("generate-storyboard failed")
+        raise HTTPException(502, str(exc)) from exc
+
+
 @app.post("/api/generate-manim")
 async def api_generate_manim(
     req: GenerateManimRequest,
     x_gemini_api_key: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    """GeoGebra đã chỉnh + đề/lời giải -> mã Manim (đồng bộ bước giải ↔ hiệu ứng)."""
+    """Sinh Manim từ kịch bản (ưu tiên) hoặc tự tạo kịch bản rồi code."""
     api_keys = resolve_gemini_keys(x_gemini_api_key)
     try:
+        if req.storyboard:
+            return await asyncio.to_thread(
+                generate_manim_from_storyboard,
+                api_key=api_keys,
+                storyboard=req.storyboard,
+                user_guidance=req.user_guidance,
+            )
         return await asyncio.to_thread(
             generate_manim_from_geogebra,
             api_key=api_keys,
@@ -285,6 +336,7 @@ async def api_generate_manim(
             geogebra_mode=req.geogebra_mode,
             image_b64=req.image_base64,
             mime_type=req.mime_type,
+            storyboard=None,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

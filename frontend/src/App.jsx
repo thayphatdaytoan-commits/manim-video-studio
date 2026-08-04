@@ -111,6 +111,9 @@ export default function App() {
   const [solutionText, setSolutionText] = useState('')
   const [solutionSteps, setSolutionSteps] = useState([])
   const [manimGuidance, setManimGuidance] = useState('')
+  const [storyboardText, setStoryboardText] = useState('')
+  const [storyboardReady, setStoryboardReady] = useState(false)
+  const [generatingStoryboard, setGeneratingStoryboard] = useState(false)
   const [revisePrompt, setRevisePrompt] = useState('')
   const [useLogForRevise, setUseLogForRevise] = useState(true)
   const [revisingManim, setRevisingManim] = useState(false)
@@ -505,11 +508,61 @@ export default function App() {
       }
       setSavedGgbImage(snap.dataUrl)
       setManimReady(false)
-      setExportMsg('Đã lưu hình sau chỉnh sửa — có thể tạo code Manim')
+      setStoryboardReady(false)
+      setExportMsg('Đã lưu hình sau chỉnh sửa — tiếp theo tạo kịch bản video')
     } catch (err) {
       setError(err.message || 'Lưu hình thất bại')
     } finally {
       setSavingGgb(false)
+    }
+  }
+
+  const handleGenerateStoryboard = async () => {
+    if (!problemText.trim() || !solutionText.trim()) {
+      setError('Cần đề bài + lời giải ở cột 1 trước khi tạo kịch bản.')
+      return
+    }
+    if (!ggbCommands.length && !savedGgbImage) {
+      setError('Chưa có hình GeoGebra. Hãy sinh hình, chỉnh, rồi bấm Lưu hình.')
+      return
+    }
+    if (!savedGgbImage) {
+      setError('Hãy Lưu hình đã chỉnh trước khi tạo kịch bản video.')
+      return
+    }
+    if (!requireApiKey()) return
+
+    setGeneratingStoryboard(true)
+    setError(null)
+    setStoryboardReady(false)
+    setManimReady(false)
+    try {
+      const data = await api('/api/generate-storyboard', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          problem_text: problemText,
+          solution_text: solutionText,
+          solution_steps: solutionSteps,
+          user_guidance: manimGuidance,
+          geogebra_commands: ggbCommands,
+          geogebra_mode: ggbMode,
+          image_base64: savedGgbImage,
+          mime_type: savedGgbImage?.startsWith('data:')
+            ? savedGgbImage.slice(5, savedGgbImage.indexOf(';'))
+            : 'image/png',
+        }),
+      })
+      const sb = data.storyboard || data
+      setStoryboardText(JSON.stringify(sb, null, 2))
+      setStoryboardReady(true)
+      if (data.notes) setAiNotes(data.notes)
+      if (data.title) setAiTitle(data.title)
+    } catch (err) {
+      setError(err.message)
+      setStoryboardReady(false)
+    } finally {
+      setGeneratingStoryboard(false)
     }
   }
 
@@ -518,12 +571,15 @@ export default function App() {
       setError('Manim cần đề bài và lời giải. Hãy tạo/điền ở cột 1 trước.')
       return
     }
-    if (!ggbCommands.length && !savedGgbImage) {
-      setError('Chưa có hình GeoGebra. Hãy sinh hình, chỉnh, rồi bấm Lưu hình.')
+    if (!storyboardText.trim()) {
+      setError('Hãy tạo kịch bản video trước, rồi mới tạo code Manim.')
       return
     }
-    if (!savedGgbImage) {
-      setError('Hãy kéo thả/chỉnh hình xong rồi bấm “Lưu hình đã chỉnh” trước khi tạo Manim.')
+    let storyboard
+    try {
+      storyboard = JSON.parse(storyboardText)
+    } catch {
+      setError('Kịch bản JSON không hợp lệ — hãy kiểm tra lại hoặc tạo lại kịch bản.')
       return
     }
     if (!requireApiKey()) return
@@ -545,6 +601,7 @@ export default function App() {
           mime_type: savedGgbImage?.startsWith('data:')
             ? savedGgbImage.slice(5, savedGgbImage.indexOf(';'))
             : 'image/png',
+          storyboard,
         }),
       })
 
@@ -555,6 +612,10 @@ export default function App() {
       setManimReady(true)
       setVideoUrl(null)
       setReviseNotes('')
+      if (data.storyboard) {
+        setStoryboardText(JSON.stringify(data.storyboard, null, 2))
+        setStoryboardReady(true)
+      }
       if (data.notes) setAiNotes(data.notes)
     } catch (err) {
       setError(err.message)
@@ -800,7 +861,7 @@ export default function App() {
           </div>
           <div>
             <h1>Manim Video Studio</h1>
-            <p>1) Đề+lời giải → 2) GeoGebra → 3) Manim → 4) video</p>
+            <p>1) Đề+lời giải → 2) GeoGebra → kịch bản → Manim → video</p>
           </div>
         </div>
         <div className="header-actions">
@@ -1030,28 +1091,56 @@ export default function App() {
           )}
 
           <label className="field">
-            <span className="field-label">PROMPT HƯỚNG DẪN MANIM (TUỲ CHỌN)</span>
+            <span className="field-label">PROMPT HƯỚNG DẪN (CHO KỊCH BẢN + MANIM)</span>
             <textarea
               rows={4}
               value={manimGuidance}
               onChange={(e) => setManimGuidance(e.target.value)}
               placeholder={
-                'Ví dụ:\n- Hình bên trái, lời giải bên phải\n- Bước 1 hiện đoạn AB rồi tô màu\n- Bước 2 kẻ đường cao AH bằng Create\n- Chữ lời giải cỡ nhỏ, màu trắng'
+                'Ví dụ:\n- Hình bên trái, lời giải bên phải\n- Bước 1 hiện đoạn AB rồi Indicate\n- Chữ lời giải cỡ nhỏ, màu trắng'
               }
             />
           </label>
 
           <button
+            className="btn secondary"
+            type="button"
+            onClick={handleGenerateStoryboard}
+            disabled={generatingStoryboard || !savedGgbImage}
+          >
+            {generatingStoryboard ? <Loader2 className="spin" size={18} /> : <FileText size={18} />}
+            {generatingStoryboard ? 'Đang tạo kịch bản...' : 'AI tạo kịch bản video'}
+          </button>
+
+          <label className="field">
+            <span className="field-label">KỊCH BẢN VIDEO (JSON — CHỈNH ĐƯỢC)</span>
+            <textarea
+              rows={10}
+              className="mono"
+              value={storyboardText}
+              onChange={(e) => {
+                setStoryboardText(e.target.value)
+                setStoryboardReady(Boolean(e.target.value.trim()))
+                setManimReady(false)
+              }}
+              placeholder="Bấm “AI tạo kịch bản video” — mỗi beat = 1 bước lời giải + hiệu ứng hình..."
+            />
+          </label>
+          {storyboardReady && (
+            <div className="step-ok">Đã có kịch bản — có thể chỉnh JSON rồi tạo code Manim.</div>
+          )}
+
+          <button
             className="btn primary"
             type="button"
             onClick={handleGenerateManim}
-            disabled={generatingManim || (!ggbCommands.length && !savedGgbImage)}
+            disabled={generatingManim || !storyboardText.trim()}
           >
             {generatingManim ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
-            {generatingManim ? 'Đang tạo Manim...' : 'Tạo code Manim bằng AI'}
+            {generatingManim ? 'Đang tạo Manim từ kịch bản...' : 'Tạo code Manim từ kịch bản'}
           </button>
           {!problemText.trim() || !solutionText.trim() ? (
-            <div className="export-msg">Manim cần đề bài + lời giải ở cột 1.</div>
+            <div className="export-msg">Cần đề bài + lời giải ở cột 1.</div>
           ) : null}
           {!savedGgbImage && ggbCommands.length > 0 && (
             <div className="export-msg">Chỉnh hình xong hãy bấm “Lưu hình đã chỉnh” trước.</div>

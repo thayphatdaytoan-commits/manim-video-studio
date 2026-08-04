@@ -132,45 +132,96 @@ YÊU CẦU:
 - Không viết mã GeoGebra/Manim ở bước này.
 """
 
-MANIM_PROMPT = """Bạn là chuyên gia Manim Community cho video bài giảng Toán Việt Nam.
+STORYBOARD_PROMPT = """Bạn là đạo diễn video bài giảng Toán (Manim).
+Nhiệm vụ: CHỈ viết KỊCH BẢN VIDEO dạng JSON — chưa viết code Python.
 
-Nhiệm vụ: viết mã Manim dựng HÌNH + hiện ĐỀ BÀI + LỜI GIẢI từng dòng, mỗi dòng lời giải đi kèm HIỆU ỨNG HÌNH tương ứng.
+Trả về ĐÚNG 1 JSON:
+{
+  "scene_name": "TenClassScene",
+  "title": "tiêu đề ngắn",
+  "layout": {
+    "figure_area": "left",
+    "text_area": "right",
+    "figure_fit": "scale_to_fit_height_5_then_shift_left"
+  },
+  "figure_objects": [
+    {"id": "A", "kind": "dot", "x": 0.0, "y": 0.0, "label": "A", "color": "RED"},
+    {"id": "B", "kind": "dot", "x": 3.0, "y": 0.0, "label": "B", "color": "RED"},
+    {"id": "AB", "kind": "segment", "from": "A", "to": "B", "color": "BLUE", "label": ""}
+  ],
+  "beats": [
+    {
+      "id": 1,
+      "comment_vi": "Hiện đề bài",
+      "text_lines": ["Đề: ..."],
+      "actions": [
+        {"op": "write_text", "target": "problem_block"},
+        {"op": "wait", "seconds": 1.0}
+      ],
+      "reveal_objects": []
+    },
+    {
+      "id": 2,
+      "comment_vi": "Bước 1: dựng đoạn AB",
+      "text_lines": ["1) Dựng đoạn AB"],
+      "actions": [
+        {"op": "create", "targets": ["A", "B", "AB"]},
+        {"op": "indicate", "targets": ["AB"]},
+        {"op": "wait", "seconds": 0.8}
+      ],
+      "reveal_objects": ["A", "B", "AB"]
+    }
+  ],
+  "notes": "ghi chú"
+}
 
-Trả về ĐÚNG 1 JSON (không markdown):
+=== QUY TẮC KỊCH BẢN ===
+1. Tọa độ figure_objects phải NẰM TRONG khoảng x∈[-3.5,3.5], y∈[-2.5,2.5] (đã scale sẵn, KHÔNG dùng tọa độ GeoGebra lớn như bán kính 4).
+2. kind chỉ dùng: dot | segment | line | circle | polygon | label | angle_mark
+3. op chỉ dùng: write_text | create | fade_in | indicate | set_color | wait
+4. Beat 1 phải hiện đề bài; các beat sau = từng bước lời giải + reveal_objects tương ứng.
+5. Mỗi bước lời giải = 1 beat; text_lines ngắn, dễ đọc (≤ 2 dòng/beat).
+6. Không viết code Manim/Python ở bước này.
+7. Nếu có hướng dẫn người dùng: ưu tiên bố cục/hiệu ứng theo đó.
+8. Bỏ các đối tượng GeoGebra đã ẩn (SetVisibleInView false).
+"""
+
+MANIM_FROM_STORYBOARD_PROMPT = """Bạn là lập trình viên Manim Community.
+Nhiệm vụ: chuyển KỊCH BẢN JSON thành mã Python Manim AN TOÀN, DỄ CHẠY, DỄ SỬA.
+
+Trả về ĐÚNG 1 JSON:
 {
   "scene_name": "TenClassScene",
   "manim_code": "from manim import *\\n...",
-  "notes": "ghi chú ngắn"
+  "notes": "tóm tắt"
 }
 
-=== BẮT BUỘC CÓ TRONG VIDEO / CODE ===
-1. Hiện đề bài (Text/MarkupText hoặc Tex tiếng Việt) rồi mới giải.
-2. Hiện lời giải TỪNG BƯỚC: mỗi bước (mỗi dòng) xuất hiện tuần tự.
-3. ĐỒNG BỘ HÌNH ↔ LỜI GIẢI: khi một dòng lời giải xuất hiện, PHẢI có hiệu ứng minh họa tương ứng trên hình
-   (Create/Indicate/FadeIn đoạn thẳng, điểm, đường cao, góc, tô màu, mũi tên...). Không chỉ viết chữ.
-4. Trong manim_code phải có comment tiếng Việt giải thích từng khối/quan trọng, ví dụ:
-   # Hiển thị đề bài
-   # Bước 1: dựng đoạn AB
-   # Bước 2: kẻ đường cao từ A...
-5. BẮT BUỘC có đủ đề bài và lời giải trong scene (không được bỏ lời giải).
+=== SYSTEM / KIẾN TRÚC CODE (BẮT BUỘC) ===
+Viết code theo khung cố định:
 
-=== QUY TẮC MANIM ===
-1. Manim Community Edition; class kế thừa Scene hoặc ThreeDScene.
-2. scene_name khớp tên class trong manim_code.
-3. NẾU CÓ ẢNH GEOGEBRA ĐÃ LƯU: bám bố cục/tọa độ ảnh; lệnh GeoGebra dùng để lấy tên/quan hệ.
-4. Bỏ qua đối tượng SetVisibleInView(..., false).
-5. Layout gợi ý: hình bên trái/giữa; đề + lời giải bên phải hoặc phía dưới (VGroup text, font nhỏ vừa đọc).
-6. Chữ Việt: Text(...) hoặc MarkupText(...); nếu dùng Tex thì:
-   config.tex_template.add_to_preamble(r"\\\\usepackage[utf8]{vietnam}")
-7. Chỉ import manim / numpy. Code chạy được ngay.
-8. Animation rõ, self.wait() hợp lý giữa các bước.
+from manim import *
 
-=== TRÁNH CẮT MẤT HÌNH ===
-Khung Manim ~ x∈[-7,7], y∈[-4,4]. Gom hình vào VGroup rồi scale_to_fit_height(4.5~5.5).move_to(...) chừa chỗ cho chữ.
-Không copy tọa độ GeoGebra lớn mà không scale.
+class TenClassScene(Scene):
+    def construct(self):
+        # 1) Text/MarkupText cho đề + lời giải (ƯU TIÊN — tránh Tex/MathTex)
+        # 2) Dot/Line/Circle/Polygon từ figure_objects
+        # 3) figure = VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
+        # 4) text_panel = VGroup(...).scale(0.45).to_edge(RIGHT, buff=0.3)
+        # 5) từng beat: comment tiếng Việt + animation + self.wait()
 
-=== PROMPT HƯỚNG DẪN CỦA NGƯỜI DÙNG ===
-Nếu có mục "HƯỚNG DẪN THÊM", phải ưu tiên tuân theo (đối tượng hiện, hiệu ứng, vị trí sắp xếp).
+=== API ĐƯỢC PHÉP ===
+Dot, Line, Circle, Polygon, VGroup, Text, MarkupText,
+Create, FadeIn, Write, Indicate, self.wait,
+scale_to_fit_height, move_to, to_edge, next_to,
+RED, BLUE, GREEN, YELLOW, WHITE, ORANGE
+
+=== CẤM ===
+Tex/MathTex/preamble LaTeX; import ngoài manim; placeholder/TODO; code cắt cụt;
+tọa độ ngoài khung; quên scale VGroup; API lạ ngoài danh sách trên.
+
+=== ĐỒNG BỘ ===
+Mỗi beat = comment # tiếng Việt + hiện text_lines + create/indicate objects + wait.
+scene_name khớp class.
 """
 
 
@@ -479,7 +530,7 @@ def generate_geogebra(
     }
 
 
-def generate_manim_from_geogebra(
+def generate_storyboard(
     *,
     api_key: str | list[str],
     geogebra_commands: list[str] | str,
@@ -504,7 +555,7 @@ def generate_manim_from_geogebra(
 
     commands = _normalize_commands(geogebra_commands)
     if not commands and not image_b64:
-        raise ValueError("Chưa có lệnh GeoGebra hoặc ảnh hình đã lưu để sinh Manim")
+        raise ValueError("Chưa có lệnh GeoGebra hoặc ảnh hình đã lưu để lập kịch bản")
 
     steps = solution_steps or []
     if isinstance(steps, str):
@@ -513,13 +564,11 @@ def generate_manim_from_geogebra(
         steps = []
     steps = [str(s).strip() for s in steps if str(s).strip()]
 
-    user_prompt = MANIM_PROMPT
-    user_prompt += "\n\n--- ĐỀ BÀI (BẮT BUỘC hiện trong video) ---\n"
-    user_prompt += problem
-    user_prompt += "\n\n--- LỜI GIẢI ĐẦY ĐỦ (BẮT BUỘC hiện từng bước) ---\n"
-    user_prompt += solution
+    user_prompt = STORYBOARD_PROMPT
+    user_prompt += "\n\n--- ĐỀ BÀI ---\n" + problem
+    user_prompt += "\n\n--- LỜI GIẢI ---\n" + solution
     if steps:
-        user_prompt += "\n\n--- CÁC BƯỚC GIẢI (mỗi bước ↔ một cụm hiệu ứng hình) ---\n"
+        user_prompt += "\n\n--- CÁC BƯỚC GIẢI ---\n"
         user_prompt += "\n".join(f"{i + 1}. {s}" for i, s in enumerate(steps))
     user_prompt += f"\n\n--- GEOGEBRA MODE ---\n{geogebra_mode}"
     if user_guidance.strip():
@@ -527,11 +576,10 @@ def generate_manim_from_geogebra(
         user_prompt += user_guidance.strip()
     if image_b64:
         user_prompt += (
-            "\n\n--- ẢNH HÌNH GEOGEBRA ĐÃ LƯU (sau kéo thả/chỉnh) ---\n"
-            "Ảnh đính kèm là hình HOÀN CHỈNH cần tái tạo trong Manim. "
-            "Ưu tiên đúng bố cục và vị trí trên ảnh."
+            "\n\n--- ẢNH HÌNH GEOGEBRA ĐÃ LƯU ---\n"
+            "Dùng ảnh để chọn đối tượng/hướng bố cục; nhớ scale tọa độ vào [-3.5,3.5]×[-2.5,2.5]."
         )
-    user_prompt += "\n\n--- LỆNH GEOGEBRA ĐÃ CHỈNH (tham chiếu tên/quan hệ) ---\n"
+    user_prompt += "\n\n--- LỆNH GEOGEBRA (tham chiếu; bỏ object ẩn) ---\n"
     user_prompt += "\n".join(commands) if commands else "(không có lệnh — bám theo ảnh)"
 
     raw = _gemini_with_fallback(
@@ -541,25 +589,109 @@ def generate_manim_from_geogebra(
         mime_type=mime_type,
     )
     data = _extract_json(raw)
-
-    manim_code = str(data.get("manim_code") or "").strip()
-    scene_name = str(data.get("scene_name") or "GeometryScene").strip()
-    if not manim_code:
-        raise ValueError("AI không sinh được mã Manim")
-    if "class " not in manim_code:
-        raise ValueError("Mã Manim thiếu class Scene")
-
-    m = re.search(r"class\s+(\w+)\s*\([^)]*Scene", manim_code)
-    if m:
-        scene_name = m.group(1)
-
+    if not isinstance(data.get("beats"), list) or not data["beats"]:
+        raise ValueError("Kịch bản thiếu beats")
+    if not isinstance(data.get("figure_objects"), list):
+        data["figure_objects"] = []
+    scene_name = str(data.get("scene_name") or "GeometryScene").strip() or "GeometryScene"
+    data["scene_name"] = scene_name
     return {
+        "storyboard": data,
         "scene_name": scene_name,
-        "manim_code": manim_code,
+        "title": str(data.get("title") or "Kịch bản video"),
         "notes": str(data.get("notes") or ""),
         "keys_available": len(keys),
         "used_saved_image": bool(image_b64),
     }
+
+
+def generate_manim_from_storyboard(
+    *,
+    api_key: str | list[str],
+    storyboard: dict[str, Any] | str,
+    user_guidance: str = "",
+) -> dict[str, Any]:
+    keys = _normalize_api_keys(api_key)
+    if not keys:
+        raise ValueError("Thiếu Gemini API key")
+
+    if isinstance(storyboard, str):
+        storyboard = _extract_json(storyboard)
+    if not isinstance(storyboard, dict) or not storyboard.get("beats"):
+        raise ValueError("Kịch bản video không hợp lệ — hãy tạo kịch bản trước")
+
+    user_prompt = MANIM_FROM_STORYBOARD_PROMPT
+    if user_guidance.strip():
+        user_prompt += "\n\n--- HƯỚNG DẪN THÊM (ƯU TIÊN KHI VIẾT CODE) ---\n"
+        user_prompt += user_guidance.strip()
+    user_prompt += "\n\n--- KỊCH BẢN JSON ---\n"
+    user_prompt += json.dumps(storyboard, ensure_ascii=False, indent=2)[:20000]
+
+    raw = _gemini_with_fallback(api_key=keys, prompt=user_prompt)
+    data = _extract_json(raw)
+    manim_code = str(data.get("manim_code") or "").strip()
+    scene_name = str(
+        data.get("scene_name") or storyboard.get("scene_name") or "GeometryScene"
+    ).strip()
+    if not manim_code:
+        raise ValueError("AI không sinh được mã Manim từ kịch bản")
+    if "class " not in manim_code:
+        raise ValueError("Mã Manim thiếu class Scene")
+    # Soft-check: discourage Tex in generated code notes only; still allow if present
+    m = re.search(r"class\s+(\w+)\s*\([^)]*Scene", manim_code)
+    if m:
+        scene_name = m.group(1)
+    return {
+        "scene_name": scene_name,
+        "manim_code": manim_code,
+        "notes": str(data.get("notes") or ""),
+        "storyboard": storyboard,
+        "keys_available": len(keys),
+    }
+
+
+def generate_manim_from_geogebra(
+    *,
+    api_key: str | list[str],
+    geogebra_commands: list[str] | str,
+    problem_text: str = "",
+    solution_text: str = "",
+    solution_steps: list[str] | None = None,
+    user_guidance: str = "",
+    geogebra_mode: str = "geometry",
+    image_b64: str | None = None,
+    mime_type: str = "image/png",
+    storyboard: dict[str, Any] | str | None = None,
+) -> dict[str, Any]:
+    """Nếu đã có storyboard thì chỉ codegen; không thì tạo storyboard rồi codegen."""
+    keys = _normalize_api_keys(api_key)
+    if not keys:
+        raise ValueError("Thiếu Gemini API key")
+
+    sb = storyboard
+    if isinstance(sb, str) and sb.strip():
+        sb = _extract_json(sb)
+    if not isinstance(sb, dict) or not sb.get("beats"):
+        sb_pack = generate_storyboard(
+            api_key=keys,
+            geogebra_commands=geogebra_commands,
+            problem_text=problem_text,
+            solution_text=solution_text,
+            solution_steps=solution_steps,
+            user_guidance=user_guidance,
+            geogebra_mode=geogebra_mode,
+            image_b64=image_b64,
+            mime_type=mime_type,
+        )
+        sb = sb_pack["storyboard"]
+
+    result = generate_manim_from_storyboard(
+        api_key=keys,
+        storyboard=sb,
+        user_guidance=user_guidance,
+    )
+    result["used_saved_image"] = bool(image_b64)
+    return result
 
 
 REVISE_MANIM_PROMPT = """Bạn là chuyên gia sửa mã Manim Community (Python) cho bài giảng Toán Việt Nam.
@@ -577,11 +709,12 @@ Trả về ĐÚNG 1 JSON (không markdown):
 QUY TẮC:
 1. Trả về TOÀN BỘ file Python đã sửa (không truncation, không diff).
 2. scene_name khớp tên class Scene trong code.
-3. Ưu tiên sửa lỗi trong nhật ký biên dịch (SyntaxError, NameError, TypeError, LaTeX, object out of frame...).
-4. Nếu có yêu cầu chỉnh sửa của người dùng: thực hiện đúng ý (vị trí, hiệu ứng, chữ, màu, timing...).
-5. Giữ comment tiếng Việt; thêm comment ngắn nơi đã sửa nếu hợp lý.
-6. Code chạy được với Manim Community; chỉ import manim/numpy.
-7. Tránh cắt mất hình: scale/căn VGroup trong khung ~ x∈[-7,7], y∈[-4,4].
+3. Ưu tiên sửa lỗi trong nhật ký biên dịch (SyntaxError, NameError, TypeError, LaTeX...).
+4. Nếu lỗi liên quan Tex/MathTex/LaTeX: ĐỔI sang Text/MarkupText tiếng Việt.
+5. Chỉ dùng API an toàn: Dot, Line, Circle, Polygon, VGroup, Text, MarkupText, Create, FadeIn, Write, Indicate, wait.
+6. Giữ comment tiếng Việt; thêm comment ngắn nơi đã sửa.
+7. Tránh cắt mất hình: VGroup.scale_to_fit_height(5).move_to(...).
+8. Không import ngoài manim.
 """
 
 
