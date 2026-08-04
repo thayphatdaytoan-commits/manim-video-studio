@@ -31,33 +31,40 @@ VI_VOICES: list[dict[str, str]] = [
     },
 ]
 
-SCRIPT_PROMPT = """Bạn là giáo viên Toán Việt Nam. Viết LỜI THOẠI đọc khi chiếu video Manim.
+SCRIPT_PROMPT = """Bạn là giáo viên Toán Việt Nam. Viết LỜI THOẠI để đọc khi chiếu video bài toán.
 
-Yêu cầu:
-- Tiếng Việt tự nhiên, rõ ràng, dễ nghe khi Text-to-speech.
-- Ngắn gọn: khoảng 45–90 giây khi đọc (khoảng 120–220 từ).
-- Câu ngắn, tránh ký hiệu LaTeX thô (viết "góc A" thay vì "\\angle A").
-- Không dùng markdown, không đánh số bước kiểu "1." dài dòng; có thể dùng "Thứ nhất,".
-- Nội dung bám đề bài / hình / ý chính của scene Manim.
-- Không chào hỏi dài; vào bài luôn.
+Cấu trúc BẮT BUỘC của lời thoại (liền mạch, một đoạn đọc):
+1) ĐỀ BÀI: Đọc rõ đề toán (cho biết gì, hỏi gì). Nếu đề có hình, mô tả ngắn các điểm/đoạn chính trên hình.
+2) HƯỚNG DẪN GIẢI: Hướng dẫn học sinh giải từng bước, logic rõ, dễ theo dõi cùng hình động trên video.
+   - Nêu ý tưởng chính trước (dùng định lý/tính chất gì).
+   - Lần lượt các bước lập luận / tính toán.
+   - Kết luận đáp án hoặc kết quả cần chứng minh.
+
+Yêu cầu trình bày:
+- Tiếng Việt tự nhiên, rõ ràng, phù hợp text-to-speech (Edge TTS).
+- Độ dài khoảng 60–150 giây khi đọc (khoảng 150–350 từ); bài khó có thể dài hơn một chút nhưng không lang mang.
+- Câu ngắn; đọc được thành tiếng: viết "góc A", "đoạn AB", "tam giác ABC"; KHÔNG dùng LaTeX thô (\\angle, ^2, \\frac...).
+- Số và công thức viết dạng nói được: ví dụ "a bình phương cộng b bình phương bằng c bình phương", "tỉ số một phần hai".
+- Không markdown, không gạch đầu dòng ký tự đặc biệt; dùng "Thứ nhất,", "Tiếp theo,", "Cuối cùng,".
+- Không chào hỏi dài, không kết thúc bằng "cảm ơn các em đã theo dõi".
+- Bám sát đề bài và mã Manim/hình minh họa được cung cấp; không bịa dữ kiện không có trong đề.
 
 Trả về ĐÚNG JSON:
 {{
-  "script": "toàn bộ lời thoại liền mạch",
-  "title": "tiêu đề ngắn"
+  "script": "toàn bộ lời thoại: đề bài rồi hướng dẫn giải, liền mạch",
+  "title": "tiêu đề ngắn của bài"
 }}
 
-Ngữ cảnh đề bài:
+Ngữ cảnh đề bài (ưu tiên dùng đúng nội dung này):
 {problem}
 
 Tên scene Manim: {scene}
 
-Mã Manim (tham khảo ý hình/animation):
+Mã Manim (tham khảo hình / animation để khớp lời giải):
 ```python
 {code}
 ```
 """
-
 
 def list_voices() -> list[dict[str, str]]:
     return list(VI_VOICES)

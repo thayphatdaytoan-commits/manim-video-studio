@@ -941,7 +941,8 @@ export default function App() {
               <Mic size={16} /> Lồng tiếng AI (Edge TTS — miễn phí)
             </h3>
             <p className="step-hint">
-              Tạo video xong → AI viết lời thoại (Gemini) → Edge TTS đọc → ghép vào MP4.
+              AI viết lời thoại gồm <strong>đề bài</strong> + <strong>hướng dẫn giải</strong>, rồi Edge
+              TTS đọc và ghép vào MP4.
             </p>
 
             <label className="field">
@@ -980,7 +981,7 @@ export default function App() {
                 rows={5}
                 value={voiceScript}
                 onChange={(e) => setVoiceScript(e.target.value)}
-                placeholder="Bấm “AI viết lời thoại” hoặc tự gõ đoạn cần đọc..."
+                placeholder="Bấm “AI viết lời thoại” để tạo đề bài + hướng dẫn giải, hoặc tự gõ..."
               />
             </label>
 
@@ -992,7 +993,7 @@ export default function App() {
                 disabled={generatingScript || !code.trim()}
               >
                 {generatingScript ? <Loader2 className="spin" size={15} /> : <Wand2 size={15} />}
-                AI viết lời thoại
+                AI viết đề + lời giải
               </button>
               <button
                 type="button"
