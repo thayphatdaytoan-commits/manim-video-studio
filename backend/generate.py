@@ -132,13 +132,26 @@ YÊU CẦU:
 - Không viết mã GeoGebra/Manim ở bước này.
 """
 
-STORYBOARD_PROMPT = """Bạn là đạo diễn video bài giảng Toán (Manim).
+STORYBOARD_PROMPT = """Bạn là đạo diễn video bài giảng Toán theo phong cách Math-To-Manim.
 Nhiệm vụ: CHỈ viết KỊCH BẢN VIDEO dạng JSON — chưa viết code Python.
+Suy nghĩ theo pipeline: hiểu học sinh → kiến thức cần trước → chuỗi giảng → chọn toán → kế hoạch hình/camera → beats.
 
 Trả về ĐÚNG 1 JSON:
 {
   "scene_name": "TenClassScene",
   "title": "tiêu đề ngắn",
+  "learner": {
+    "level": "THCS/THPT/...",
+    "assume_knows": ["kiến thức đã biết"],
+    "goal": "học sinh hiểu được gì sau video"
+  },
+  "prerequisites": ["ý cần ôn trước khi vào bài"],
+  "teaching_order": ["bước dạy 1", "bước dạy 2", "bước dạy 3"],
+  "check_question": "1 câu hỏi kiểm tra cuối (ngắn)",
+  "camera": {
+    "focus": "figure_then_text",
+    "notes": "hình trái, chữ phải; không zoom phức tạp"
+  },
   "layout": {
     "figure_area": "left",
     "text_area": "right",
@@ -152,38 +165,59 @@ Trả về ĐÚNG 1 JSON:
   "beats": [
     {
       "id": 1,
+      "phase": "problem",
       "comment_vi": "Hiện đề bài",
+      "teach_point": "nêu đề",
       "text_lines": ["Đề: ..."],
       "actions": [
         {"op": "write_text", "target": "problem_block"},
         {"op": "wait", "seconds": 1.0}
       ],
-      "reveal_objects": []
+      "reveal_objects": [],
+      "camera_hint": "nhìn toàn cảnh"
     },
     {
       "id": 2,
+      "phase": "solution",
       "comment_vi": "Bước 1: dựng đoạn AB",
+      "teach_point": "xác định cạnh AB",
       "text_lines": ["1) Dựng đoạn AB"],
       "actions": [
         {"op": "create", "targets": ["A", "B", "AB"]},
         {"op": "indicate", "targets": ["AB"]},
         {"op": "wait", "seconds": 0.8}
       ],
-      "reveal_objects": ["A", "B", "AB"]
+      "reveal_objects": ["A", "B", "AB"],
+      "camera_hint": "nhấn mạnh AB"
+    },
+    {
+      "id": 99,
+      "phase": "check",
+      "comment_vi": "Câu hỏi kiểm tra",
+      "teach_point": "kiểm tra hiểu bài",
+      "text_lines": ["Hỏi: ...?"],
+      "actions": [
+        {"op": "write_text", "target": "check_block"},
+        {"op": "wait", "seconds": 1.2}
+      ],
+      "reveal_objects": [],
+      "camera_hint": "nhìn chữ kiểm tra"
     }
   ],
   "notes": "ghi chú"
 }
 
 === QUY TẮC KỊCH BẢN ===
-1. Tọa độ figure_objects phải NẰM TRONG khoảng x∈[-3.5,3.5], y∈[-2.5,2.5] (đã scale sẵn, KHÔNG dùng tọa độ GeoGebra lớn như bán kính 4).
-2. kind chỉ dùng: dot | segment | line | circle | polygon | label | angle_mark
-3. op chỉ dùng: write_text | create | fade_in | indicate | set_color | wait
-4. Beat 1 phải hiện đề bài; các beat sau = từng bước lời giải + reveal_objects tương ứng.
-5. Mỗi bước lời giải = 1 beat; text_lines ngắn, dễ đọc (≤ 2 dòng/beat).
-6. Không viết code Manim/Python ở bước này.
-7. Nếu có hướng dẫn người dùng: ưu tiên bố cục/hiệu ứng theo đó.
-8. Bỏ các đối tượng GeoGebra đã ẩn (SetVisibleInView false).
+1. learner / prerequisites / teaching_order / check_question: BẮT BUỘC có (ngắn gọn tiếng Việt).
+2. Tọa độ figure_objects trong x∈[-3.5,3.5], y∈[-2.5,2.5] (đã scale; KHÔNG copy tọa độ GeoGebra lớn).
+3. kind chỉ: dot | segment | line | circle | polygon | label | angle_mark
+4. op chỉ: write_text | create | fade_in | indicate | set_color | wait
+5. Beat đầu phase=problem; giữa = solution theo teaching_order; beat cuối phase=check.
+6. Mỗi bước lời giải = 1 beat; text_lines ≤ 2 dòng.
+7. camera.focus + camera_hint từng beat (đơn giản, không yêu cầu MovingCamera phức tạp trừ khi thật cần).
+8. Không viết code Manim/Python.
+9. Hướng dẫn người dùng: ưu tiên bố cục/hiệu ứng theo đó.
+10. Bỏ object GeoGebra đã ẩn (SetVisibleInView false).
 """
 
 MANIM_FROM_STORYBOARD_PROMPT = """Bạn là lập trình viên Manim Community.
@@ -624,6 +658,11 @@ def generate_manim_from_storyboard(
     if user_guidance.strip():
         user_prompt += "\n\n--- HƯỚNG DẪN THÊM (ƯU TIÊN KHI VIẾT CODE) ---\n"
         user_prompt += user_guidance.strip()
+    # Pass teaching metadata if present (Math-To-Manim style)
+    for key in ("learner", "prerequisites", "teaching_order", "check_question", "camera"):
+        if storyboard.get(key):
+            user_prompt += f"\n\n--- {key.upper()} ---\n"
+            user_prompt += json.dumps(storyboard[key], ensure_ascii=False)
     user_prompt += "\n\n--- KỊCH BẢN JSON ---\n"
     user_prompt += json.dumps(storyboard, ensure_ascii=False, indent=2)[:20000]
 
@@ -637,16 +676,114 @@ def generate_manim_from_storyboard(
         raise ValueError("AI không sinh được mã Manim từ kịch bản")
     if "class " not in manim_code:
         raise ValueError("Mã Manim thiếu class Scene")
-    # Soft-check: discourage Tex in generated code notes only; still allow if present
     m = re.search(r"class\s+(\w+)\s*\([^)]*Scene", manim_code)
     if m:
         scene_name = m.group(1)
+
+    from validate_manim import validate_manim_code
+
+    validation = validate_manim_code(manim_code)
     return {
         "scene_name": scene_name,
         "manim_code": manim_code,
         "notes": str(data.get("notes") or ""),
         "storyboard": storyboard,
+        "validation": validation,
         "keys_available": len(keys),
+    }
+
+
+def repair_manim_loop(
+    *,
+    api_key: str | list[str],
+    manim_code: str,
+    compile_log: str = "",
+    revision_prompt: str = "",
+    problem_text: str = "",
+    solution_text: str = "",
+    max_rounds: int = 2,
+) -> dict[str, Any]:
+    """Validate → revise from errors/log → re-validate (Math-To-Manim repair loop)."""
+    from validate_manim import validate_manim_code, validation_as_log
+
+    keys = _normalize_api_keys(api_key)
+    if not keys:
+        raise ValueError("Thiếu Gemini API key")
+    code = (manim_code or "").strip()
+    if not code:
+        raise ValueError("Chưa có mã Manim")
+
+    rounds: list[dict[str, Any]] = []
+    notes_all: list[str] = []
+    scene_name = "GeometryScene"
+
+    for i in range(max(1, min(int(max_rounds), 3))):
+        validation = validate_manim_code(code)
+        # If already ok and no compile log to fix, stop
+        if validation["ok"] and not (compile_log or "").strip() and i == 0 and not revision_prompt:
+            return {
+                "scene_name": (validation.get("scene_names") or [scene_name])[0],
+                "manim_code": code,
+                "notes": "Mã đã đạt validate — không cần sửa",
+                "validation": validation,
+                "rounds": rounds,
+                "repaired": False,
+            }
+
+        log_blob = ""
+        if not validation["ok"]:
+            log_blob += validation_as_log(validation) + "\n\n"
+        if (compile_log or "").strip():
+            log_blob += (compile_log or "")[-12000:]
+
+        prompt = (revision_prompt or "").strip()
+        if not prompt:
+            prompt = (
+                "Sửa mã để PASS validate và/hoặc hết lỗi biên dịch. "
+                "Đổi Tex/MathTex sang Text/MarkupText. Giữ ý đồ bài giảng."
+            )
+
+        revised = revise_manim_code(
+            api_key=keys,
+            manim_code=code,
+            revision_prompt=prompt,
+            compile_log=log_blob,
+            problem_text=problem_text,
+            solution_text=solution_text,
+        )
+        code = revised["manim_code"]
+        scene_name = revised["scene_name"]
+        notes_all.append(revised.get("notes") or f"Vòng {i + 1}")
+        post = validate_manim_code(code)
+        rounds.append(
+            {
+                "round": i + 1,
+                "notes": revised.get("notes") or "",
+                "validation_before": validation,
+                "validation_after": post,
+            }
+        )
+        # Clear compile_log after first repair attempt (already applied)
+        compile_log = ""
+        revision_prompt = ""
+        if post["ok"]:
+            return {
+                "scene_name": scene_name,
+                "manim_code": code,
+                "notes": " | ".join(notes_all),
+                "validation": post,
+                "rounds": rounds,
+                "repaired": True,
+            }
+
+    final_v = validate_manim_code(code)
+    return {
+        "scene_name": scene_name,
+        "manim_code": code,
+        "notes": " | ".join(notes_all) or "Đã thử sửa nhưng vẫn còn cảnh báo/lỗi",
+        "validation": final_v,
+        "rounds": rounds,
+        "repaired": True,
     }
 
 
@@ -764,10 +901,14 @@ def revise_manim_code(
     m = re.search(r"class\s+(\w+)\s*\([^)]*Scene", new_code)
     if m:
         scene_name = m.group(1)
+    from validate_manim import validate_manim_code
+
+    validation = validate_manim_code(new_code)
     return {
         "scene_name": scene_name,
         "manim_code": new_code,
         "notes": str(data.get("notes") or ""),
+        "validation": validation,
         "keys_available": len(keys),
     }
 

@@ -88,21 +88,23 @@ Repo đã có `Dockerfile` + `render.yaml`. Cách nhanh nhất:
 
 ### Tính năng AI (GeoGebra + Manim)
 
-Luồng tách bước (sư phạm):
+Luồng kiểu **Math-To-Manim** (học kiến trúc, AI vẫn dùng Gemini — không nhúng Claude/Codex CLI):
 
 1. **API KEY** → Gemini key từ [Google AI Studio](https://aistudio.google.com/apikey)
 2. Tải ảnh đề / gợi ý → **AI tạo đề bài và lời giải**
-3. **AI tạo code GeoGebra** (dựa đề + lời giải) → chỉnh/kéo thả → **Lưu hình**
-4. (Tuỳ chọn) Prompt hướng dẫn Manim → **Tạo code Manim bằng AI**
-   - Video có đề + lời giải từng bước
-   - Mỗi bước giải kèm hiệu ứng hình tương ứng
-   - Comment tiếng Việt trong code
-5. Biên dịch video + lồng tiếng Edge TTS (tuỳ chọn)
+3. **AI tạo code GeoGebra** → chỉnh/kéo thả → **Lưu hình**
+4. **AI tạo kịch bản video (JSON)** — learner, prerequisites, teaching_order, camera, beats (problem → solution → check)
+5. **Tạo code Manim từ kịch bản** → **Validate** (cấm Tex/MathTex, bắt Scene + import an toàn)
+6. Biên dịch video; nếu lỗi → **Repair loop** (validate → AI sửa theo log → validate lại)
+7. Lồng tiếng Edge TTS (tuỳ chọn)
 
 API:
 - `POST /api/generate-problem-solution`
 - `POST /api/generate-geogebra`
+- `POST /api/generate-storyboard`
 - `POST /api/generate-manim`
+- `POST /api/validate-manim`
+- `POST /api/revise-manim` / `POST /api/repair-manim`
 - `POST /api/generate-script` — Gemini viết lời thoại
 - `GET /api/tts-voices` — danh sách giọng Edge TTS
 - `POST /api/voiceover` — TTS + ghép audio vào video
@@ -123,7 +125,7 @@ docker run --rm -p 8000:8000 manim-video-studio
 | GET | `/api/health` | Trạng thái backend & phụ thuộc |
 | GET | `/api/templates` | Danh sách mẫu + mã nguồn |
 | GET | `/api/qualities` | Preset chất lượng |
-| POST | `/api/compile` | Biên dịch `{ code, scene, quality }` |
+| POST | `/api/compile` | Biên dịch `{ code, scene, quality, validate_first? }` |
 | GET | `/api/jobs/{id}` | Trạng thái / log job |
 | GET | `/api/video/{id}` | Xem video |
 | GET | `/api/video/{id}/download` | Tải MP4 |
@@ -134,6 +136,9 @@ docker run --rm -p 8000:8000 manim-video-studio
 manim-video-studio/
 ├── backend/
 │   ├── main.py              # FastAPI
+│   ├── generate.py          # Gemini prompts + storyboard / repair
+│   ├── validate_manim.py    # Kiểm tra trước render
+│   ├── voiceover.py         # Edge TTS
 │   ├── requirements.txt
 │   └── examples/            # Mẫu Manim
 ├── frontend/                # React + Vite + Monaco
@@ -144,10 +149,5 @@ manim-video-studio/
 ## Ghi chú Manim
 
 - Class Scene phải kế thừa `Scene` (hoặc biến thể như `ThreeDScene`)
-- Với tiếng Việt trong `Tex`, thêm:
-
-```python
-config.tex_template.add_to_preamble(r"\usepackage[utf8]{vietnam}")
-```
-
-- Render lần đầu có thể chậm vì LaTeX biên dịch công thức
+- Pipeline AI ưu tiên `Text` / `MarkupText` — **không** dùng `Tex` / `MathTex` trên Render Free (thiếu LaTeX dễ lỗi)
+- Render lần đầu có thể chậm

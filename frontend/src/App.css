@@ -373,6 +373,34 @@
   gap: 10px;
 }
 
+.validation-box {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.validation-box.ok {
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.validation-box.bad {
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.validation-box ul {
+  margin: 6px 0 0;
+  padding-left: 1.1rem;
+}
+
+.validation-box .validation-warn {
+  opacity: 0.85;
+  font-size: 0.82rem;
+}
+
 .voiceover-title {
   margin: 0;
   font-size: 0.95rem;
