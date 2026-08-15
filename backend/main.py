@@ -28,8 +28,10 @@ from generate import (
     generate_manim_from_storyboard,
     generate_problem_solution,
     generate_storyboard,
+    repair_manim_loop,
     revise_manim_code,
 )
+from validate_manim import validate_manim_code
 from voiceover import (
     generate_script,
     list_voices,
@@ -117,6 +119,10 @@ class CompileRequest(BaseModel):
     code: str = Field(..., min_length=1, description="Mã nguồn Manim (scene.py)")
     scene: str = Field(..., min_length=1, description="Tên class Scene cần chạy")
     quality: str = Field(default="480p15", description="Preset chất lượng")
+    validate_first: bool = Field(
+        default=True,
+        description="Chặn biên dịch nếu validate Manim fail (cấm Tex, thiếu Scene...)",
+    )
 
 
 class CompileResponse(BaseModel):
@@ -177,6 +183,11 @@ class ReviseManimRequest(BaseModel):
     include_compile_log: bool = Field(
         default=True, description="Có dùng nhật ký lỗi khi sửa không"
     )
+    max_rounds: int = Field(default=2, ge=1, le=3, description="Số vòng repair")
+
+
+class ValidateManimRequest(BaseModel):
+    manim_code: str = Field(..., min_length=1)
 
 
 class ScriptRequest(BaseModel):
@@ -367,6 +378,38 @@ async def api_revise_manim(
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception("revise-manim failed")
+        raise HTTPException(502, str(exc)) from exc
+
+
+@app.post("/api/validate-manim")
+async def api_validate_manim(req: ValidateManimRequest) -> dict[str, Any]:
+    """Kiểm tra mã Manim trước khi render (cấm Tex, Scene, import...)."""
+    return validate_manim_code(req.manim_code)
+
+
+@app.post("/api/repair-manim")
+async def api_repair_manim(
+    req: ReviseManimRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """Vòng repair kiểu Math-To-Manim: validate → sửa theo lỗi/log → validate lại."""
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
+    log = req.compile_log if req.include_compile_log else ""
+    try:
+        return await asyncio.to_thread(
+            repair_manim_loop,
+            api_key=api_keys,
+            manim_code=req.manim_code,
+            compile_log=log,
+            revision_prompt=req.revision_prompt,
+            problem_text=req.problem_text,
+            solution_text=req.solution_text,
+            max_rounds=req.max_rounds,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("repair-manim failed")
         raise HTTPException(502, str(exc)) from exc
 
 
@@ -687,6 +730,16 @@ def get_audio(job_id: str) -> FileResponse:
 async def compile_video(req: CompileRequest) -> CompileResponse:
     if req.quality not in QUALITY_PRESETS:
         raise HTTPException(400, f"Chất lượng không hợp lệ: {req.quality}")
+
+    if req.validate_first:
+        validation = validate_manim_code(req.code)
+        if not validation["ok"]:
+            detail = {
+                "message": "Mã Manim chưa đạt kiểm tra trước khi render",
+                "validation": validation,
+                "hint": "Dùng AI sửa code / Repair loop, hoặc tắt validate_first",
+            }
+            raise HTTPException(400, detail)
 
     scenes = extract_scene_names(req.code)
     if req.scene not in scenes:

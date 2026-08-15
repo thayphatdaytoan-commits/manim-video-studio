@@ -65,8 +65,21 @@ async function api(path, options = {}) {
     try {
       const data = await res.json()
       detail = data.detail || JSON.stringify(data)
-    } catch {
-      /* ignore */
+      if (detail && typeof detail === 'object') {
+        const msg = detail.message || 'Yêu cầu thất bại'
+        const errs = detail.validation?.errors
+        if (Array.isArray(errs) && errs.length) {
+          detail = `${msg}\n- ${errs.join('\n- ')}`
+        } else {
+          detail = msg
+        }
+        const err = new Error(detail)
+        err.payload = data.detail
+        throw err
+      }
+    } catch (e) {
+      if (e instanceof Error && e.payload) throw e
+      /* ignore parse errors */
     }
     throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
   }
@@ -118,6 +131,9 @@ export default function App() {
   const [useLogForRevise, setUseLogForRevise] = useState(true)
   const [revisingManim, setRevisingManim] = useState(false)
   const [reviseNotes, setReviseNotes] = useState('')
+  const [manimValidation, setManimValidation] = useState(null)
+  const [repairingManim, setRepairingManim] = useState(false)
+  const [repairRounds, setRepairRounds] = useState(2)
   const [savedGgbImage, setSavedGgbImage] = useState(null)
   const [savingGgb, setSavingGgb] = useState(false)
   const [ggbCommandsText, setGgbCommandsText] = useState(
@@ -290,13 +306,23 @@ export default function App() {
       const res = await api('/api/compile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, scene, quality }),
+        body: JSON.stringify({ code, scene, quality, validate_first: true }),
       })
       setJobId(res.job_id)
       setLog((prev) => prev + `Job ${res.job_id} đã bắt đầu.\n`)
       pollJob(res.job_id)
     } catch (err) {
       setCompiling(false)
+      if (err.payload?.validation) {
+        setManimValidation(err.payload.validation)
+        setShowLog(true)
+        setLog(
+          (err.payload.validation.errors || [])
+            .map((e) => `VALIDATE ERROR: ${e}`)
+            .concat((err.payload.validation.warnings || []).map((w) => `VALIDATE WARN: ${w}`))
+            .join('\n') + '\n',
+        )
+      }
       setError(err.message)
     }
   }
@@ -445,13 +471,39 @@ export default function App() {
     }
   }
 
+  const handleUseManualProblemSolution = () => {
+    const problem = problemText.trim()
+    const solution = solutionText.trim()
+    if (!problem) {
+      setError('Hãy nhập đề bài vào ô ĐỀ BÀI trước.')
+      return
+    }
+    if (!solution) {
+      setError('Hãy nhập lời giải vào ô LỜI GIẢI trước.')
+      return
+    }
+    setError(null)
+    setSolutionSteps(
+      solution
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean),
+    )
+    setProblemReady(true)
+    setAiTitle((t) => t || 'Đề + lời giải thủ công')
+    setAiNotes('Đã xác nhận đề và lời giải nhập tay — không cần AI ở bước này.')
+    setGgbReady(false)
+    setManimReady(false)
+    setStoryboardReady(false)
+  }
+
   const handleGenerateGeogebra = async () => {
     if (!problemText.trim() && !imageDataUrl) {
       setError('Cần đề bài (hoặc ảnh) trước khi tạo GeoGebra.')
       return
     }
-    if (!problemReady && !solutionText.trim()) {
-      setError('Hãy bấm “AI tạo đề bài và lời giải” trước, hoặc tự điền lời giải.')
+    if (!problemText.trim() || !solutionText.trim()) {
+      setError('Cần đủ đề bài + lời giải. Nhập tay rồi bấm «Dùng đề + lời giải thủ công», hoặc dùng AI.')
       return
     }
     if (!requireApiKey()) return
@@ -479,6 +531,7 @@ export default function App() {
       setGgbCommandsText(sanitizeGgbCommands((data.geogebra_commands || []).join('\n')))
       setGgbRevision((n) => n + 1)
       setGgbReady(true)
+      setProblemReady(true)
       setSavedGgbImage(null)
       setVideoUrl(null)
       setCode('# Chỉnh xong hình GeoGebra, lưu hình, rồi tạo Manim')
@@ -612,16 +665,42 @@ export default function App() {
       setManimReady(true)
       setVideoUrl(null)
       setReviseNotes('')
+      if (data.validation) setManimValidation(data.validation)
       if (data.storyboard) {
         setStoryboardText(JSON.stringify(data.storyboard, null, 2))
         setStoryboardReady(true)
       }
       if (data.notes) setAiNotes(data.notes)
+      if (data.validation && !data.validation.ok) {
+        setError('Mã Manim đã tạo nhưng chưa qua validate — dùng Repair loop hoặc sửa tay.')
+      }
     } catch (err) {
       setError(err.message)
       setManimReady(false)
     } finally {
       setGeneratingManim(false)
+    }
+  }
+
+  const handleValidateManim = async () => {
+    if (!code.trim() || code.trim().startsWith('#')) {
+      setError('Chưa có mã Manim để kiểm tra.')
+      return
+    }
+    setError(null)
+    try {
+      const data = await api('/api/validate-manim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manim_code: code }),
+      })
+      setManimValidation(data)
+      if (data.scene_names?.length) {
+        setScenes(data.scene_names)
+        if (!data.scene_names.includes(scene)) setScene(data.scene_names[0])
+      }
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -662,11 +741,63 @@ export default function App() {
       setTemplateId('')
       setManimReady(true)
       setVideoUrl(null)
+      if (data.validation) setManimValidation(data.validation)
       setReviseNotes(data.notes || 'Đã cập nhật mã Manim')
     } catch (err) {
       setError(err.message)
     } finally {
       setRevisingManim(false)
+    }
+  }
+
+  const handleRepairManim = async () => {
+    if (!code.trim() || code.trim().startsWith('#')) {
+      setError('Chưa có mã Manim để repair.')
+      return
+    }
+    if (!requireApiKey()) return
+
+    setRepairingManim(true)
+    setError(null)
+    setReviseNotes('')
+    try {
+      const data = await api('/api/repair-manim', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          manim_code: code,
+          revision_prompt: revisePrompt.trim(),
+          compile_log: useLogForRevise ? log : '',
+          include_compile_log: useLogForRevise,
+          problem_text: problemText,
+          solution_text: solutionText,
+          max_rounds: repairRounds,
+        }),
+      })
+      setCode(data.manim_code || code)
+      if (data.scene_name) {
+        setScenes([data.scene_name])
+        setScene(data.scene_name)
+      }
+      setTemplateId('')
+      setManimReady(true)
+      setVideoUrl(null)
+      if (data.validation) setManimValidation(data.validation)
+      const n = (data.rounds || []).length
+      const ok = data.validation?.ok
+      setReviseNotes(
+        data.notes ||
+          (ok
+            ? `Repair xong sau ${n} vòng — validate OK`
+            : `Đã thử ${n} vòng repair — vẫn còn lỗi validate`),
+      )
+      if (!ok) {
+        setError('Repair chưa đủ — xem validate / nhật ký, sửa tay hoặc chạy lại.')
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRepairingManim(false)
     }
   }
 
@@ -888,8 +1019,8 @@ export default function App() {
         <section className="panel">
           <h2 className="panel-title">1. Đề bài & lời giải</h2>
           <p className="step-hint">
-            Tải ảnh đề (hoặc gõ gợi ý) → <strong>AI tạo đề bài và lời giải</strong> → rồi mới tạo
-            code GeoGebra.
+            Nhập <strong>đề + lời giải thủ công</strong> (khuyến nghị nếu Gemini lỗi), hoặc tải ảnh /
+            gợi ý rồi nhờ AI. Sau đó mới tạo GeoGebra.
           </p>
 
           <div className="upload-row">
@@ -924,16 +1055,6 @@ export default function App() {
             </div>
           )}
 
-          <button
-            className="btn primary"
-            type="button"
-            onClick={handleGenerateProblemSolution}
-            disabled={generatingProblem}
-          >
-            {generatingProblem ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
-            {generatingProblem ? 'Đang tạo đề + lời giải...' : 'AI tạo đề bài và lời giải'}
-          </button>
-
           <label className="field">
             <span className="field-label">ĐỀ BÀI (CHỈNH ĐƯỢC)</span>
             <textarea
@@ -941,11 +1062,9 @@ export default function App() {
               value={problemText}
               onChange={(e) => {
                 setProblemText(e.target.value)
-                setProblemReady(Boolean(e.target.value.trim() && solutionText.trim()))
+                setProblemReady(false)
               }}
-              placeholder={
-                'Có thể gõ gợi ý rồi bấm AI, hoặc để trống nếu đã tải ảnh — AI sẽ điền đề bài vào đây.'
-              }
+              placeholder={'Ví dụ: Cho tam giác ABC vuông tại A, AB = 3, AC = 4. Tính BC.'}
             />
           </label>
 
@@ -962,11 +1081,32 @@ export default function App() {
                     .map((l) => l.trim())
                     .filter(Boolean),
                 )
-                setProblemReady(Boolean(problemText.trim() && e.target.value.trim()))
+                setProblemReady(false)
               }}
               placeholder={'1) ...\n2) ...\n3) ...'}
             />
           </label>
+
+          <div className="export-row">
+            <button
+              className="btn primary"
+              type="button"
+              onClick={handleUseManualProblemSolution}
+              disabled={!problemText.trim() || !solutionText.trim()}
+            >
+              <Save size={18} />
+              Dùng đề + lời giải thủ công
+            </button>
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={handleGenerateProblemSolution}
+              disabled={generatingProblem}
+            >
+              {generatingProblem ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
+              {generatingProblem ? 'Đang tạo đề + lời giải...' : 'AI tạo đề + lời giải'}
+            </button>
+          </div>
 
           {aiTitle && (
             <div className="ai-meta">
@@ -982,7 +1122,9 @@ export default function App() {
             className="btn secondary"
             type="button"
             onClick={handleGenerateGeogebra}
-            disabled={generatingGgb || (!problemText.trim() && !imageDataUrl)}
+            disabled={
+              generatingGgb || !problemText.trim() || !solutionText.trim()
+            }
           >
             {generatingGgb ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
             {generatingGgb ? 'Đang vẽ GeoGebra...' : 'AI tạo code GeoGebra'}
@@ -1114,6 +1256,10 @@ export default function App() {
 
           <label className="field">
             <span className="field-label">KỊCH BẢN VIDEO (JSON — CHỈNH ĐƯỢC)</span>
+            <p className="step-hint">
+              Kiểu Math-To-Manim: learner → prerequisites → teaching_order → đối tượng/camera → beats
+              (problem → solution → check). Chưa viết code ở bước này.
+            </p>
             <textarea
               rows={10}
               className="mono"
@@ -1146,7 +1292,7 @@ export default function App() {
             <div className="export-msg">Chỉnh hình xong hãy bấm “Lưu hình đã chỉnh” trước.</div>
           )}
           {manimReady && (
-            <div className="step-ok">Đã có Manim — sang cột 3 để biên dịch video.</div>
+            <div className="step-ok">Đã có Manim — sang cột 3 để validate / biên dịch video.</div>
           )}
         </section>
 
@@ -1154,7 +1300,7 @@ export default function App() {
         <section className="panel">
           <h2 className="panel-title">3. Manim → video</h2>
           <p className="step-hint">
-            Chỉ biên dịch sau khi đã có mã Manim. Chọn 480p trên Render Free.
+            Validate trước khi render (cấm Tex, bắt Scene). Chọn 480p trên Render Free.
           </p>
 
           <label className="field">
@@ -1216,13 +1362,33 @@ export default function App() {
             />
           </div>
 
+          {manimValidation && (
+            <div className={`validation-box ${manimValidation.ok ? 'ok' : 'bad'}`}>
+              <strong>{manimValidation.ok ? 'Validate OK' : 'Validate có lỗi'}</strong>
+              {(manimValidation.errors || []).length > 0 && (
+                <ul>
+                  {manimValidation.errors.map((err, i) => (
+                    <li key={`ve-${i}`}>{err}</li>
+                  ))}
+                </ul>
+              )}
+              {(manimValidation.warnings || []).length > 0 && (
+                <ul className="validation-warn">
+                  {manimValidation.warnings.map((w, i) => (
+                    <li key={`vw-${i}`}>{w}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           <div className="revise-box">
             <h3 className="voiceover-title">
-              <Wrench size={16} /> AI chỉnh sửa code Manim
+              <Wrench size={16} /> AI sửa / repair (Math-To-Manim)
             </h3>
             <p className="step-hint">
-              Nhập chỗ muốn sửa, hoặc bật dùng <strong>nhật ký biên dịch</strong> để AI sửa lỗi khiến
-              không xuất được video.
+              Validate chặn Tex &amp; import nguy hiểm trước khi render. Repair loop: validate → AI
+              sửa theo lỗi/log → validate lại (1–3 vòng).
             </p>
             <label className="field">
               <span className="field-label">PROMPT CHỈNH SỬA</span>
@@ -1231,7 +1397,7 @@ export default function App() {
                 value={revisePrompt}
                 onChange={(e) => setRevisePrompt(e.target.value)}
                 placeholder={
-                  'Ví dụ:\n- Chữ lời giải nhỏ hơn, đặt bên phải\n- Bước 2 hãy Indicate đoạn AH\n- Sửa lỗi theo nhật ký (nếu biên dịch fail)'
+                  'Ví dụ:\n- Chữ lời giải nhỏ hơn, đặt bên phải\n- Bước 2 hãy Indicate đoạn AH\n- Đổi Tex sang Text; sửa lỗi theo nhật ký'
                 }
               />
             </label>
@@ -1241,17 +1407,48 @@ export default function App() {
                 checked={useLogForRevise}
                 onChange={(e) => setUseLogForRevise(e.target.checked)}
               />
-              <span>Dùng nhật ký biên dịch / lỗi để sửa ({log?.trim() ? 'đã có log' : 'chưa có log'})</span>
+              <span>
+                Dùng nhật ký biên dịch / lỗi để sửa ({log?.trim() ? 'đã có log' : 'chưa có log'})
+              </span>
+            </label>
+            <label className="field">
+              <span className="field-label">SỐ VÒNG REPAIR</span>
+              <select
+                value={repairRounds}
+                onChange={(e) => setRepairRounds(Number(e.target.value))}
+                disabled={repairingManim}
+              >
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+              </select>
             </label>
             <div className="export-row">
               <button
                 type="button"
+                className="btn ghost export-btn"
+                onClick={handleValidateManim}
+                disabled={!code.trim() || revisingManim || repairingManim}
+              >
+                <FileText size={15} /> Validate
+              </button>
+              <button
+                type="button"
                 className="btn secondary export-btn"
                 onClick={handleReviseManim}
-                disabled={revisingManim || !code.trim()}
+                disabled={revisingManim || repairingManim || !code.trim()}
               >
                 {revisingManim ? <Loader2 className="spin" size={15} /> : <Wand2 size={15} />}
-                {revisingManim ? 'Đang sửa code...' : 'AI sửa code Manim'}
+                {revisingManim ? 'Đang sửa...' : 'AI sửa 1 lần'}
+              </button>
+              <button
+                type="button"
+                className="btn primary export-btn"
+                onClick={handleRepairManim}
+                disabled={revisingManim || repairingManim || !code.trim()}
+              >
+                {repairingManim ? <Loader2 className="spin" size={15} /> : <RefreshCw size={15} />}
+                {repairingManim ? 'Đang repair...' : 'Repair loop'}
               </button>
               <button
                 type="button"
