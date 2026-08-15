@@ -93,9 +93,9 @@ Luồng kiểu **Math-To-Manim** (học kiến trúc, AI vẫn dùng Gemini — 
 1. **API KEY** → Gemini key từ [Google AI Studio](https://aistudio.google.com/apikey)
 2. **Nhập đề + lời giải thủ công** (nút xác nhận) — hoặc tải ảnh / gợi ý → **AI tạo đề + lời giải**
 3. **AI tạo code GeoGebra** → chỉnh/kéo thả → **Lưu hình**
-4. **AI tạo kịch bản video (JSON)** — learner, prerequisites, teaching_order, camera, beats (problem → solution → check)
-5. **Tạo code Manim từ kịch bản** → **Validate** (cấm Tex/MathTex, bắt Scene + import an toàn)
-6. Biên dịch video; nếu lỗi → **Repair loop** (validate → AI sửa theo log → validate lại)
+4. **Gemini Pro (khuyến nghị):** copy prompt mẫu trên web → Pro chat → dán code → **Validate CE** → biên dịch
+5. (Tuỳ chọn) **AI tạo kịch bản + Manim** trong web bằng Gemini Free
+6. Biên dịch video; nếu lỗi → **Repair loop** / dán lại code đã sửa từ Pro
 7. Lồng tiếng Edge TTS (tuỳ chọn)
 
 API:
