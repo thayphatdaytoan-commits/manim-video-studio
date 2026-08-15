@@ -471,13 +471,39 @@ export default function App() {
     }
   }
 
+  const handleUseManualProblemSolution = () => {
+    const problem = problemText.trim()
+    const solution = solutionText.trim()
+    if (!problem) {
+      setError('Hãy nhập đề bài vào ô ĐỀ BÀI trước.')
+      return
+    }
+    if (!solution) {
+      setError('Hãy nhập lời giải vào ô LỜI GIẢI trước.')
+      return
+    }
+    setError(null)
+    setSolutionSteps(
+      solution
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean),
+    )
+    setProblemReady(true)
+    setAiTitle((t) => t || 'Đề + lời giải thủ công')
+    setAiNotes('Đã xác nhận đề và lời giải nhập tay — không cần AI ở bước này.')
+    setGgbReady(false)
+    setManimReady(false)
+    setStoryboardReady(false)
+  }
+
   const handleGenerateGeogebra = async () => {
     if (!problemText.trim() && !imageDataUrl) {
       setError('Cần đề bài (hoặc ảnh) trước khi tạo GeoGebra.')
       return
     }
-    if (!problemReady && !solutionText.trim()) {
-      setError('Hãy bấm “AI tạo đề bài và lời giải” trước, hoặc tự điền lời giải.')
+    if (!problemText.trim() || !solutionText.trim()) {
+      setError('Cần đủ đề bài + lời giải. Nhập tay rồi bấm «Dùng đề + lời giải thủ công», hoặc dùng AI.')
       return
     }
     if (!requireApiKey()) return
@@ -505,6 +531,7 @@ export default function App() {
       setGgbCommandsText(sanitizeGgbCommands((data.geogebra_commands || []).join('\n')))
       setGgbRevision((n) => n + 1)
       setGgbReady(true)
+      setProblemReady(true)
       setSavedGgbImage(null)
       setVideoUrl(null)
       setCode('# Chỉnh xong hình GeoGebra, lưu hình, rồi tạo Manim')
@@ -992,8 +1019,8 @@ export default function App() {
         <section className="panel">
           <h2 className="panel-title">1. Đề bài & lời giải</h2>
           <p className="step-hint">
-            Tải ảnh đề (hoặc gõ gợi ý) → <strong>AI tạo đề bài và lời giải</strong> → rồi mới tạo
-            code GeoGebra.
+            Nhập <strong>đề + lời giải thủ công</strong> (khuyến nghị nếu Gemini lỗi), hoặc tải ảnh /
+            gợi ý rồi nhờ AI. Sau đó mới tạo GeoGebra.
           </p>
 
           <div className="upload-row">
@@ -1028,16 +1055,6 @@ export default function App() {
             </div>
           )}
 
-          <button
-            className="btn primary"
-            type="button"
-            onClick={handleGenerateProblemSolution}
-            disabled={generatingProblem}
-          >
-            {generatingProblem ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
-            {generatingProblem ? 'Đang tạo đề + lời giải...' : 'AI tạo đề bài và lời giải'}
-          </button>
-
           <label className="field">
             <span className="field-label">ĐỀ BÀI (CHỈNH ĐƯỢC)</span>
             <textarea
@@ -1045,11 +1062,9 @@ export default function App() {
               value={problemText}
               onChange={(e) => {
                 setProblemText(e.target.value)
-                setProblemReady(Boolean(e.target.value.trim() && solutionText.trim()))
+                setProblemReady(false)
               }}
-              placeholder={
-                'Có thể gõ gợi ý rồi bấm AI, hoặc để trống nếu đã tải ảnh — AI sẽ điền đề bài vào đây.'
-              }
+              placeholder={'Ví dụ: Cho tam giác ABC vuông tại A, AB = 3, AC = 4. Tính BC.'}
             />
           </label>
 
@@ -1066,11 +1081,32 @@ export default function App() {
                     .map((l) => l.trim())
                     .filter(Boolean),
                 )
-                setProblemReady(Boolean(problemText.trim() && e.target.value.trim()))
+                setProblemReady(false)
               }}
               placeholder={'1) ...\n2) ...\n3) ...'}
             />
           </label>
+
+          <div className="export-row">
+            <button
+              className="btn primary"
+              type="button"
+              onClick={handleUseManualProblemSolution}
+              disabled={!problemText.trim() || !solutionText.trim()}
+            >
+              <Save size={18} />
+              Dùng đề + lời giải thủ công
+            </button>
+            <button
+              className="btn secondary"
+              type="button"
+              onClick={handleGenerateProblemSolution}
+              disabled={generatingProblem}
+            >
+              {generatingProblem ? <Loader2 className="spin" size={18} /> : <Wand2 size={18} />}
+              {generatingProblem ? 'Đang tạo đề + lời giải...' : 'AI tạo đề + lời giải'}
+            </button>
+          </div>
 
           {aiTitle && (
             <div className="ai-meta">
@@ -1086,7 +1122,9 @@ export default function App() {
             className="btn secondary"
             type="button"
             onClick={handleGenerateGeogebra}
-            disabled={generatingGgb || (!problemText.trim() && !imageDataUrl)}
+            disabled={
+              generatingGgb || !problemText.trim() || !solutionText.trim()
+            }
           >
             {generatingGgb ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
             {generatingGgb ? 'Đang vẽ GeoGebra...' : 'AI tạo code GeoGebra'}

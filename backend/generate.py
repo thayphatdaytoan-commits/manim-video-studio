@@ -12,10 +12,13 @@ from typing import Any
 
 logger = logging.getLogger("manim-studio.generate")
 
+# Model mới trước; bỏ 1.5 / 2.0 (đã shutdown → 404 trên nhiều key).
 GEMINI_MODELS = (
-    "gemini-2.0-flash",
+    "gemini-3.5-flash",
     "gemini-2.5-flash",
-    "gemini-1.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
 )
 
 GEOGEBRA_PROMPT = """Bạn là chuyên gia dựng hình GeoGebra theo PHONG CÁCH NTSM (sách giáo khoa sạch sẽ).
@@ -305,7 +308,7 @@ def _call_gemini(
     prompt: str,
     image_b64: str | None = None,
     mime_type: str = "image/png",
-    model: str = "gemini-2.0-flash",
+    model: str = "gemini-2.5-flash",
 ) -> str:
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -373,6 +376,13 @@ def _normalize_api_keys(api_key: str | list[str] | None) -> list[str]:
     return keys
 
 
+def _is_model_not_found(exc: BaseException, code: int | None = None, body: str = "") -> bool:
+    text = f"{exc} {body}".lower()
+    if code == 404:
+        return True
+    return "not_found" in text or "is not found" in text or "not found for api version" in text
+
+
 def _gemini_with_fallback(
     api_key: str | list[str],
     prompt: str,
@@ -384,6 +394,7 @@ def _gemini_with_fallback(
         raise ValueError("Thiếu Gemini API key")
 
     last_err: Exception | None = None
+    not_found_models: list[str] = []
     for idx, key in enumerate(keys):
         for model in GEMINI_MODELS:
             try:
@@ -405,13 +416,24 @@ def _gemini_with_fallback(
                     model,
                     exc,
                 )
-                # Limit: thử model khác cùng key, rồi key kế
                 continue
             except Exception as exc:  # noqa: BLE001
                 last_err = exc
-                logger.info("Key #%s model %s lỗi: %s", idx + 1, model, exc)
-                # Lỗi khác (auth sai, model 404...): thử model khác; nếu hết model thì key tiếp
+                err_text = str(exc)
+                if _is_model_not_found(exc, body=err_text):
+                    not_found_models.append(model)
+                    logger.info("Key #%s model %s không tồn tại (404) → thử model khác", idx + 1, model)
+                else:
+                    logger.info("Key #%s model %s lỗi: %s", idx + 1, model, exc)
                 continue
+
+    if not_found_models and last_err and _is_model_not_found(last_err, body=str(last_err)):
+        raise RuntimeError(
+            "Không gọi được Gemini: các model đã thử không còn hỗ trợ "
+            f"({', '.join(dict.fromkeys(not_found_models))}). "
+            "Hãy dùng nút «Dùng đề + lời giải thủ công» hoặc tạo API key mới trên Google AI Studio."
+        ) from last_err
+
     raise RuntimeError(
         str(last_err)
         if last_err
@@ -583,9 +605,9 @@ def generate_storyboard(
     problem = (problem_text or "").strip()
     solution = (solution_text or "").strip()
     if not problem:
-        raise ValueError("Thiếu đề bài — hãy dùng AI tạo đề + lời giải trước")
+        raise ValueError("Thiếu đề bài — hãy điền thủ công hoặc dùng AI tạo đề + lời giải")
     if not solution:
-        raise ValueError("Thiếu lời giải — hãy dùng AI tạo đề + lời giải trước")
+        raise ValueError("Thiếu lời giải — hãy điền thủ công hoặc dùng AI tạo đề + lời giải")
 
     commands = _normalize_commands(geogebra_commands)
     if not commands and not image_b64:
