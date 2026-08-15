@@ -122,13 +122,14 @@ Trả về ĐÚNG 1 JSON (không markdown):
 {
   "title": "tiêu đề ngắn",
   "problem_text": "đề bài đầy đủ, rõ ràng (cho biết gì, hỏi gì)",
-  "solution_text": "lời giải từng bước, mỗi bước một dòng hoặc đoạn ngắn, đánh số 1) 2) 3)...",
+  "solution_text": "lời giải từng bước; trong JSON dùng \\\\n để xuống dòng, KHÔNG xuống dòng thật trong chuỗi",
   "solution_steps": ["bước 1...", "bước 2...", "..."],
   "notes": "ghi chú ngắn (tuỳ chọn)"
 }
 
 YÊU CẦU:
 - Tiếng Việt chuẩn sư phạm.
+- JSON hợp lệ: mọi xuống dòng trong chuỗi phải là \\n; không cắt JSON giữa chừng.
 - Đề bài tự chứa đủ dữ kiện; nếu chỉ có ảnh thì đọc/diễn đạt lại đề từ ảnh.
 - Lời giải logic, đủ bước để minh họa hình; không nhảy cóc.
 - solution_steps phải khớp solution_text (tách từng ý chính).
