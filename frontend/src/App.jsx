@@ -29,6 +29,47 @@ const API_BASE = import.meta.env.VITE_API_BASE || ''
 const KEY_STORAGE = 'mvs_gemini_api_keys'
 const KEY_STORAGE_LEGACY = 'mvs_gemini_api_key'
 
+const CE_CHECKLIST = [
+  { id: 'scene', label: 'class kế thừa Scene (không MovingCamera / 3D)' },
+  { id: 'text', label: 'Text / MarkupText tiếng Việt (disable_ligatures=True)' },
+  { id: 'notex', label: 'Không Tex / MathTex / Label("A") / Typst' },
+  { id: 'geom', label: 'Dot, Line, Circle, Polygon, Angle, VGroup, ImageMobject' },
+  { id: 'layout', label: 'Hình trái / chữ phải + scale_to_fit_height' },
+  { id: 'wait', label: 'Mỗi bước lời giải có animation + self.wait()' },
+]
+
+function buildGeminiProPrompt(problem, solution) {
+  const p = (problem || '').trim() || '(dán đề bài đầy đủ vào đây)'
+  const s = (solution || '').trim() || '(dán lời giải từng bước vào đây)'
+  return `Bạn là lập trình viên Manim Community Edition (ManimCE).
+Tôi đưa ĐỀ + LỜI GIẢI hoàn chỉnh. CHỈ viết 1 file Python Manim CE để làm video bài giảng.
+
+RÀNG BUỘC (Render Free / Docker):
+- class kế thừa Scene (KHÔNG MovingCameraScene / ThreeDScene / ZoomedScene)
+- Text/MarkupText tiếng Việt, disable_ligatures=True
+- CẤM: Tex, MathTex, SingleStringMathTex, Label("A"), Typst, MathTypst
+- Nhãn điểm: Text("A", font_size=28) — không Label("A")
+- Hình trái / chữ phải; VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
+- API: Dot, Line, Circle, Polygon, Angle, RightAngle, Create, Write, FadeIn, Indicate, ReplacementTransform, self.wait
+- Comment tiếng Việt từng bước; mỗi bước lời giải = 1 đoạn animation + wait
+- Trả về DUY NHẤT code trong khối \`\`\`python ... \`\`\`
+
+ĐỀ BÀI:
+${p}
+
+LỜI GIẢI:
+${s}
+`
+}
+
+function extractPythonFromPaste(raw) {
+  const text = (raw || '').trim()
+  if (!text) return ''
+  const fence = text.match(/```(?:python)?\s*([\s\S]*?)```/i)
+  if (fence?.[1]) return fence[1].trim()
+  return text
+}
+
 function loadStoredApiKeys() {
   try {
     const multi = localStorage.getItem(KEY_STORAGE)
@@ -134,6 +175,9 @@ export default function App() {
   const [manimValidation, setManimValidation] = useState(null)
   const [repairingManim, setRepairingManim] = useState(false)
   const [repairRounds, setRepairRounds] = useState(2)
+  const [proPaste, setProPaste] = useState('')
+  const [proPromptMsg, setProPromptMsg] = useState('')
+  const [showProPrompt, setShowProPrompt] = useState(true)
   const [savedGgbImage, setSavedGgbImage] = useState(null)
   const [savingGgb, setSavingGgb] = useState(false)
   const [ggbCommandsText, setGgbCommandsText] = useState(
@@ -698,6 +742,58 @@ export default function App() {
       if (data.scene_names?.length) {
         setScenes(data.scene_names)
         if (!data.scene_names.includes(scene)) setScene(data.scene_names[0])
+      }
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const geminiProPrompt = useMemo(
+    () => buildGeminiProPrompt(problemText, solutionText),
+    [problemText, solutionText],
+  )
+
+  const handleCopyGeminiProPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(geminiProPrompt)
+      setProPromptMsg('Đã copy prompt — dán vào Gemini Pro chat, rồi copy code trả về vào ô bên dưới.')
+    } catch {
+      setProPromptMsg('Không copy được — hãy chọn toàn bộ prompt và Ctrl+C.')
+    }
+  }
+
+  const handleApplyProPaste = async () => {
+    const extracted = extractPythonFromPaste(proPaste)
+    if (!extracted || !extracted.includes('class ')) {
+      setError('Dán code Python Manim (hoặc khối ```python). Cần có class Scene.')
+      return
+    }
+    setError(null)
+    setCode(extracted)
+    setTemplateId('')
+    setManimReady(true)
+    setVideoUrl(null)
+    setProPromptMsg('Đã đưa code vào editor — bấm Validate CE rồi Biên dịch.')
+    try {
+      const data = await api('/api/validate-manim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ manim_code: extracted }),
+      })
+      setManimValidation(data)
+      if (data.scene_names?.length) {
+        setScenes(data.scene_names)
+        setScene(data.scene_names[0])
+      } else {
+        const parsed = await api('/api/parse-scenes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: extracted }),
+        })
+        if (parsed.scenes?.length) {
+          setScenes(parsed.scenes)
+          setScene(parsed.scenes[0])
+        }
       }
     } catch (err) {
       setError(err.message)
@@ -1300,8 +1396,82 @@ export default function App() {
         <section className="panel">
           <h2 className="panel-title">3. Manim → video</h2>
           <p className="step-hint">
-            Validate trước khi render (cấm Tex, bắt Scene). Chọn 480p trên Render Free.
+            Luồng Pro: copy prompt → Gemini Pro → dán code → Validate CE → Biên dịch 480p. Hoặc dùng
+            AI trong web / Repair khi có log lỗi.
           </p>
+
+          <div className="pro-workflow-box">
+            <h3 className="voiceover-title">
+              <Code2 size={16} /> Dán code từ Gemini Pro
+            </h3>
+            <ol className="ce-checklist">
+              {CE_CHECKLIST.map((item) => (
+                <li key={item.id}>{item.label}</li>
+              ))}
+            </ol>
+
+            <div className="export-row">
+              <button
+                type="button"
+                className="btn secondary export-btn"
+                onClick={() => setShowProPrompt((v) => !v)}
+              >
+                <FileText size={15} /> {showProPrompt ? 'Ẩn prompt mẫu' : 'Hiện prompt mẫu'}
+              </button>
+              <button
+                type="button"
+                className="btn primary export-btn"
+                onClick={handleCopyGeminiProPrompt}
+              >
+                <Copy size={15} /> Copy prompt (kèm đề + lời giải)
+              </button>
+            </div>
+
+            {showProPrompt && (
+              <label className="field">
+                <span className="field-label">PROMPT MẪU (CHỈNH ĐƯỢC TRƯỚC KHI COPY)</span>
+                <textarea
+                  rows={8}
+                  className="mono"
+                  readOnly
+                  value={geminiProPrompt}
+                />
+              </label>
+            )}
+
+            <label className="field">
+              <span className="field-label">DÁN CODE MANIM TỪ GEMINI PRO</span>
+              <textarea
+                rows={6}
+                className="mono"
+                value={proPaste}
+                onChange={(e) => setProPaste(e.target.value)}
+                placeholder={'Dán toàn bộ file .py hoặc khối ```python ... ``` từ Gemini Pro'}
+              />
+            </label>
+            <div className="export-row">
+              <button
+                type="button"
+                className="btn primary export-btn"
+                onClick={handleApplyProPaste}
+                disabled={!proPaste.trim()}
+              >
+                <Upload size={15} /> Áp dụng vào editor + Validate CE
+              </button>
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={() => {
+                  setProPaste('')
+                  setProPromptMsg('')
+                }}
+                disabled={!proPaste.trim()}
+              >
+                <X size={15} /> Xóa ô dán
+              </button>
+            </div>
+            {proPromptMsg && <div className="step-ok">{proPromptMsg}</div>}
+          </div>
 
           <label className="field">
             <span className="field-label">MẪU MANIM SẴN (TÙY CHỌN)</span>
