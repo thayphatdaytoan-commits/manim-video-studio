@@ -218,14 +218,14 @@ Trả về ĐÚNG 1 JSON:
 4. op chỉ: write_text | create | fade_in | indicate | set_color | wait
 5. Beat đầu phase=problem; giữa = solution theo teaching_order; beat cuối phase=check.
 6. Mỗi bước lời giải = 1 beat; text_lines ≤ 2 dòng.
-7. camera.focus + camera_hint từng beat (đơn giản, không yêu cầu MovingCamera phức tạp trừ khi thật cần).
+7. camera.focus + camera_hint từng beat — CHỈ gợi ý bố cục (không MovingCameraScene).
 8. Không viết code Manim/Python.
 9. Hướng dẫn người dùng: ưu tiên bố cục/hiệu ứng theo đó.
 10. Bỏ object GeoGebra đã ẩn (SetVisibleInView false).
 """
 
-MANIM_FROM_STORYBOARD_PROMPT = """Bạn là lập trình viên Manim Community.
-Nhiệm vụ: chuyển KỊCH BẢN JSON thành mã Python Manim AN TOÀN, DỄ CHẠY, DỄ SỬA.
+MANIM_FROM_STORYBOARD_PROMPT = """Bạn là lập trình viên Manim Community Edition (ManimCE).
+Nhiệm vụ: chuyển KỊCH BẢN JSON thành mã Python Manim AN TOÀN cho Docker/Render Free.
 
 Trả về ĐÚNG 1 JSON:
 {
@@ -235,31 +235,38 @@ Trả về ĐÚNG 1 JSON:
 }
 
 === SYSTEM / KIẾN TRÚC CODE (BẮT BUỘC) ===
-Viết code theo khung cố định:
-
 from manim import *
 
-class TenClassScene(Scene):
+class TenClassScene(Scene):  # CHỈ Scene — không MovingCameraScene/ThreeDScene
     def construct(self):
-        # 1) Text/MarkupText cho đề + lời giải (ƯU TIÊN — tránh Tex/MathTex)
-        # 2) Dot/Line/Circle/Polygon từ figure_objects
-        # 3) figure = VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
-        # 4) text_panel = VGroup(...).scale(0.45).to_edge(RIGHT, buff=0.3)
-        # 5) từng beat: comment tiếng Việt + animation + self.wait()
+        # 1) Text/MarkupText tiếng Việt (font mặc định OK; disable_ligatures=True)
+        # 2) Dot/Line/Circle/Polygon/Angle từ figure_objects
+        # 3) Có thể ImageMobject(path) nếu có ảnh GeoGebra
+        # 4) figure = VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
+        # 5) text_panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT).scale(0.45).to_edge(RIGHT, buff=0.3)
+        # 6) từng beat: comment tiếng Việt + Create/Write/Indicate + self.wait()
 
-=== API ĐƯỢC PHÉP ===
-Dot, Line, Circle, Polygon, VGroup, Text, MarkupText,
-Create, FadeIn, Write, Indicate, self.wait,
-scale_to_fit_height, move_to, to_edge, next_to,
-RED, BLUE, GREEN, YELLOW, WHITE, ORANGE
+=== API ƯU TIÊN (Manim CE) ===
+Text, MarkupText, Paragraph,
+Dot, Line, DashedLine, Circle, Arc, Polygon, Triangle, Square, Rectangle,
+Angle, RightAngle, VGroup, ImageMobject,
+SurroundingRectangle, BackgroundRectangle,
+Create, Write, FadeIn, FadeOut, Indicate, ReplacementTransform,
+self.wait, scale_to_fit_height, move_to, to_edge, next_to, arrange,
+RED, BLUE, GREEN, YELLOW, WHITE, ORANGE, LEFT, RIGHT, UP, DOWN
 
-=== CẤM ===
-Tex/MathTex/preamble LaTeX; import ngoài manim; placeholder/TODO; code cắt cụt;
-tọa độ ngoài khung; quên scale VGroup; API lạ ngoài danh sách trên.
+Nhãn điểm: Text("A", font_size=28, disable_ligatures=True) — KHÔNG Label("A").
+
+=== CẤM (Render Free / CE traps) ===
+Tex, MathTex, SingleStringMathTex, tex_template, add_to_preamble, Typst, MathTypst;
+Label("chuỗi"), LabeledLine với chuỗi trần (mặc định MathTex);
+MovingCameraScene, ThreeDScene, ZoomedScene, OpenGL*;
+Brace.get_tex / DecimalNumber mặc định nếu kéo LaTeX;
+import ngoài manim/numpy/math; placeholder/TODO; code cắt cụt.
 
 === ĐỒNG BỘ ===
-Mỗi beat = comment # tiếng Việt + hiện text_lines + create/indicate objects + wait.
-scene_name khớp class.
+Mỗi beat = comment # tiếng Việt + text_lines + create/indicate + wait.
+scene_name khớp class. JSON manim_code: xuống dòng là \\n.
 """
 
 
@@ -869,8 +876,9 @@ def repair_manim_loop(
         prompt = (revision_prompt or "").strip()
         if not prompt:
             prompt = (
-                "Sửa mã để PASS validate và/hoặc hết lỗi biên dịch. "
-                "Đổi Tex/MathTex sang Text/MarkupText. Giữ ý đồ bài giảng."
+                "Sửa mã để PASS validate Manim CE và/hoặc hết lỗi biên dịch. "
+                "Đổi Tex/MathTex/Label(\"...\") sang Text/MarkupText(disable_ligatures=True). "
+                "Chỉ dùng Scene (không MovingCameraScene/ThreeDScene). Giữ ý đồ bài giảng."
             )
 
         revised = revise_manim_code(
@@ -961,9 +969,9 @@ def generate_manim_from_geogebra(
     return result
 
 
-REVISE_MANIM_PROMPT = """Bạn là chuyên gia sửa mã Manim Community (Python) cho bài giảng Toán Việt Nam.
+REVISE_MANIM_PROMPT = """Bạn là chuyên gia sửa mã Manim Community Edition (ManimCE) cho bài giảng Toán Việt Nam trên Render Free.
 
-Nhiệm vụ: chỉnh SỬA mã Manim hiện có theo yêu cầu người dùng và/hoặc nhật ký biên dịch lỗi.
+Nhiệm vụ: chỉnh SỬA mã Manim hiện có theo yêu cầu người dùng và/hoặc nhật ký biên dịch / validate.
 Giữ nguyên ý đồ video (đề bài, lời giải từng bước, hiệu ứng hình) trừ khi yêu cầu bảo thay đổi.
 
 Trả về ĐÚNG 1 JSON (không markdown):
@@ -973,15 +981,15 @@ Trả về ĐÚNG 1 JSON (không markdown):
   "notes": "tóm tắt đã sửa gì (tiếng Việt)"
 }
 
-QUY TẮC:
+QUY TẮC MANIM CE:
 1. Trả về TOÀN BỘ file Python đã sửa (không truncation, không diff).
-2. scene_name khớp tên class Scene trong code.
-3. Ưu tiên sửa lỗi trong nhật ký biên dịch (SyntaxError, NameError, TypeError, LaTeX...).
-4. Nếu lỗi liên quan Tex/MathTex/LaTeX: ĐỔI sang Text/MarkupText tiếng Việt.
-5. Chỉ dùng API an toàn: Dot, Line, Circle, Polygon, VGroup, Text, MarkupText, Create, FadeIn, Write, Indicate, wait.
-6. Giữ comment tiếng Việt; thêm comment ngắn nơi đã sửa.
-7. Tránh cắt mất hình: VGroup.scale_to_fit_height(5).move_to(...).
-8. Không import ngoài manim.
+2. scene_name khớp class; class CHỈ kế thừa Scene (không MovingCameraScene/ThreeDScene).
+3. Ưu tiên sửa lỗi trong nhật ký / validate (SyntaxError, NameError, Tex, Label...).
+4. Tex/MathTex/Label(\"...\") → Text/MarkupText(..., disable_ligatures=True).
+5. API an toàn: Text, MarkupText, Dot, Line, Circle, Polygon, Angle, RightAngle, VGroup,
+   ImageMobject, SurroundingRectangle, Create, FadeIn, Write, Indicate, ReplacementTransform, wait.
+6. Giữ comment tiếng Việt; scale_to_fit_height để tránh cắt hình.
+7. Không import ngoài manim/numpy/math; không Typst/MathTypst.
 """
 
 

@@ -149,5 +149,6 @@ manim-video-studio/
 ## Ghi chú Manim
 
 - Class Scene phải kế thừa `Scene` (hoặc biến thể như `ThreeDScene`)
-- Pipeline AI ưu tiên `Text` / `MarkupText` — **không** dùng `Tex` / `MathTex` trên Render Free (thiếu LaTeX dễ lỗi)
+- Pipeline AI ưu tiên `Text` / `MarkupText` — **không** dùng `Tex` / `MathTex` trên Render Free
+- Validate CE: cấm `Label("...")` (mặc định MathTex), `MovingCameraScene`, `ThreeDScene`, Typst chưa cài
 - Render lần đầu có thể chậm
