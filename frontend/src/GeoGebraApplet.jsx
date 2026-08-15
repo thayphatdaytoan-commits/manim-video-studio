@@ -716,10 +716,18 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
     const appName =
       mode === '3d' ? '3d' : mode === 'graphing' ? 'graphing' : 'geometry'
 
+    const measure = () => {
+      const w = Math.max(320, Math.floor(host.clientWidth || host.parentElement?.clientWidth || 640))
+      const h = Math.max(320, Math.floor(host.clientHeight || 420))
+      return { width: w, height: h }
+    }
+
+    const { width, height } = measure()
+
     const params = {
       appName,
-      width: host.clientWidth || 640,
-      height: Math.max(320, host.clientHeight || 360),
+      width,
+      height,
       showToolBar: true,
       showAlgebraInput: true,
       showMenuBar: false,
@@ -736,6 +744,20 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
         } catch {
           /* ignore */
         }
+        // Fit full container after layout settles
+        const fit = () => {
+          if (cancelled || !apiRef.current) return
+          const size = measure()
+          try {
+            apiRef.current.setSize?.(size.width, size.height)
+          } catch {
+            /* ignore */
+          }
+        }
+        requestAnimationFrame(fit)
+        setTimeout(fit, 120)
+        setTimeout(fit, 400)
+
         setTimeout(() => {
           if (cancelled) return
           try {
@@ -755,6 +777,25 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
       applet.inject(host)
     }
 
+    let resizeTimer = null
+    const onResize = () => {
+      if (cancelled) return
+      clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(() => {
+        const api = apiRef.current
+        if (!api) return
+        const size = measure()
+        try {
+          api.setSize?.(size.width, size.height)
+        } catch {
+          /* ignore */
+        }
+      }, 80)
+    }
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null
+    ro?.observe(host)
+    window.addEventListener('resize', onResize)
+
     if (typeof window.GGBApplet !== 'undefined') {
       start()
     } else {
@@ -767,6 +808,9 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
       return () => {
         cancelled = true
         clearInterval(timer)
+        clearTimeout(resizeTimer)
+        ro?.disconnect()
+        window.removeEventListener('resize', onResize)
         host.innerHTML = ''
         apiRef.current = null
       }
@@ -774,6 +818,9 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
 
     return () => {
       cancelled = true
+      clearTimeout(resizeTimer)
+      ro?.disconnect()
+      window.removeEventListener('resize', onResize)
       host.innerHTML = ''
       apiRef.current = null
     }
