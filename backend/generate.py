@@ -262,18 +262,121 @@ scene_name khớp class.
 """
 
 
-def _extract_json(text: str) -> dict[str, Any]:
+def _strip_code_fence(text: str) -> str:
     text = text.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
+    return text.strip()
+
+
+def _repair_json_string_escapes(text: str) -> str:
+    """Escape raw control chars inside JSON strings; close dangling quote if truncated."""
+    out: list[str] = []
+    in_str = False
+    escape = False
+    for ch in text:
+        if in_str:
+            if escape:
+                out.append(ch)
+                escape = False
+                continue
+            if ch == "\\":
+                out.append(ch)
+                escape = True
+                continue
+            if ch == '"':
+                out.append(ch)
+                in_str = False
+                continue
+            if ch == "\n":
+                out.append("\\n")
+                continue
+            if ch == "\r":
+                out.append("\\r")
+                continue
+            if ch == "\t":
+                out.append("\\t")
+                continue
+            if ord(ch) < 32:
+                out.append(f"\\u{ord(ch):04x}")
+                continue
+            out.append(ch)
+            continue
+        if ch == '"':
+            in_str = True
+        out.append(ch)
+    if in_str:
+        out.append('"')
+    return "".join(out)
+
+
+def _balance_json_brackets(text: str) -> str:
+    """Append missing } / ] after truncation (best-effort)."""
+    stack: list[str] = []
+    in_str = False
+    escape = False
+    for ch in text:
+        if in_str:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch in "{[":
+            stack.append("}" if ch == "{" else "]")
+        elif ch in "}]":
+            if stack and stack[-1] == ch:
+                stack.pop()
+    return text + "".join(reversed(stack))
+
+
+def _loads_json_lenient(text: str) -> dict[str, Any]:
+    """Parse JSON with repairs for Gemini quirks (newlines in strings, truncation)."""
+    candidates = [text]
+    repaired = _repair_json_string_escapes(text)
+    if repaired != text:
+        candidates.append(repaired)
+    # trailing commas before } or ]
+    no_trail = re.sub(r",\s*([}\]])", r"\1", repaired)
+    if no_trail not in candidates:
+        candidates.append(no_trail)
+    balanced = _balance_json_brackets(no_trail)
+    if balanced not in candidates:
+        candidates.append(balanced)
+
+    last_err: Exception | None = None
+    for cand in candidates:
+        try:
+            data = json.loads(cand)
+            if isinstance(data, dict):
+                return data
+            raise ValueError("JSON không phải object {}")
+        except (json.JSONDecodeError, ValueError) as exc:
+            last_err = exc
+            continue
+    raise ValueError(
+        "AI trả JSON lỗi (chuỗi bị cắt hoặc sai escape). "
+        "Thử lại, rút gọn đề/lời giải, hoặc dùng «Đề + lời giải thủ công». "
+        f"Chi tiết: {last_err}"
+    ) from last_err
+
+
+def _extract_json(text: str) -> dict[str, Any]:
+    text = _strip_code_fence(text or "")
+    if not text:
+        raise ValueError("AI trả về rỗng (không có JSON)")
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
+        return _loads_json_lenient(text)
+    except ValueError:
         match = re.search(r"\{[\s\S]*\}", text)
         if not match:
-            raise ValueError("AI không trả về JSON hợp lệ")
-        return json.loads(match.group(0))
+            raise
+        return _loads_json_lenient(match.group(0))
 
 
 class GeminiRateLimitError(RuntimeError):
@@ -326,7 +429,8 @@ def _call_gemini(
     body = {
         "contents": [{"role": "user", "parts": parts}],
         "generationConfig": {
-            "temperature": 0.25,
+            "temperature": 0.2,
+            "maxOutputTokens": 8192,
             "responseMimeType": "application/json",
         },
     }
@@ -350,6 +454,9 @@ def _call_gemini(
     candidates = payload.get("candidates") or []
     if not candidates:
         raise RuntimeError(f"Gemini không trả candidate: {payload}")
+    finish = str(candidates[0].get("finishReason") or "")
+    if finish and finish.upper() not in {"STOP", "FINISH_REASON_UNSPECIFIED", ""}:
+        logger.warning("Gemini finishReason=%s (có thể JSON bị cắt)", finish)
     parts_out = candidates[0].get("content", {}).get("parts") or []
     texts = [p.get("text", "") for p in parts_out if p.get("text")]
     if not texts:
