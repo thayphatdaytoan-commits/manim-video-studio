@@ -91,7 +91,7 @@ Repo đã có `Dockerfile` + `render.yaml`. Cách nhanh nhất:
 Luồng kiểu **Math-To-Manim** (học kiến trúc, AI vẫn dùng Gemini — không nhúng Claude/Codex CLI):
 
 1. **API KEY** → Gemini key từ [Google AI Studio](https://aistudio.google.com/apikey)
-2. Tải ảnh đề / gợi ý → **AI tạo đề bài và lời giải**
+2. **Nhập đề + lời giải thủ công** (nút xác nhận) — hoặc tải ảnh / gợi ý → **AI tạo đề + lời giải**
 3. **AI tạo code GeoGebra** → chỉnh/kéo thả → **Lưu hình**
 4. **AI tạo kịch bản video (JSON)** — learner, prerequisites, teaching_order, camera, beats (problem → solution → check)
 5. **Tạo code Manim từ kịch bản** → **Validate** (cấm Tex/MathTex, bắt Scene + import an toàn)
