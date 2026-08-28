@@ -989,8 +989,9 @@ QUY TẮC MANIM CE:
 1. Trả về TOÀN BỘ file Python đã sửa (không truncation, không diff).
 2. scene_name khớp class; class CHỈ kế thừa Scene (không MovingCameraScene/ThreeDScene).
 3. Ưu tiên sửa lỗi trong nhật ký / validate (SyntaxError, NameError, Tex, Label...).
-4. Tex/MathTex/Label(\"...\") → Text/MarkupText(..., disable_ligatures=True).
-5. API an toàn: Text, MarkupText, Dot, Line, Circle, Polygon, Angle, RightAngle, VGroup,
+4. Tex/MathTex/Label(\"...\") → Text/MarkupText(font=\"Arial\", disable_ligatures=True).
+5. Ô vuông □ thay chữ có dấu: tách tiếng Việt ra Text(font=\"Arial\"); MathTex chỉ công thức.
+6. API an toàn: Text, MarkupText, Dot, Line, Circle, Polygon, Angle, RightAngle, VGroup,
    ImageMobject, SurroundingRectangle, Create, FadeIn, Write, Indicate, ReplacementTransform, wait.
 6. Giữ comment tiếng Việt; scale_to_fit_height để tránh cắt hình.
 7. Không import ngoài manim/numpy/math; không Typst/MathTypst.
