@@ -41,7 +41,51 @@ pip install -r backend/requirements.txt
 cd frontend && npm install && cd ..
 ```
 
-## Chạy phát triển
+## Windows (máy giáo viên)
+
+### Mở Studio nhanh
+
+Trong **PowerShell**, bắt buộc có `.\` ở đầu:
+
+```powershell
+cd C:\Users\ADMIN\manim-video-studio
+.\Mo-Manim-Studio.bat
+```
+
+(Nếu gõ `Mo-Manim-Studio.bat` không có `.\` thì PowerShell báo *not recognized*.)
+
+### Mở thủ công (2 cửa sổ)
+
+**Cửa sổ 1 — Backend:**
+```powershell
+cd C:\Users\ADMIN\manim-video-studio
+.\.venv\Scripts\Activate.ps1
+cd backend
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Cửa sổ 2 — Frontend:**
+```powershell
+cd C:\Users\ADMIN\manim-video-studio\frontend
+npm run dev
+```
+
+Mở trình duyệt: http://localhost:5173
+
+### Cập nhật code từ GitHub
+
+```powershell
+cd C:\Users\ADMIN\manim-video-studio
+git pull origin main
+```
+
+Kiểm tra phiên bản: `git log -1 --oneline`  
+- `0d84b97` = đã có font fix + Gemini guide  
+- `9e5eecd` = thêm **Gemini Pro 3 bước** + canh khung (hình không tràn, chữ không đè)
+
+---
+
+## Chạy phát triển (Linux / macOS)
 
 Terminal 1 — API:
 
