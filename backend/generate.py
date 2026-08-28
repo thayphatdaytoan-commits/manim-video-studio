@@ -237,7 +237,7 @@ from manim import *
 STYLE_VN = {_STYLE_VN_JSON}
 
 def vn(s, size=28, color=None):
-    return Text(s, font_size=size, color=color or STYLE_VN["text"], disable_ligatures=True)
+    return Text(s, font_size=size, font="Arial", color=color or STYLE_VN["text"], disable_ligatures=True)
 
 class TenClassScene(Scene):
     def construct(self):

@@ -213,19 +213,35 @@ def validate_manim_code(
         if "MathTex(" in text and not re.search(r"MathTex\s*\(\s*r[\"']", text):
             warnings.append("MathTex: dùng chuỗi thô r\"...\" cho công thức LaTeX")
 
-    if "Text(" in text and "disable_ligatures" not in text:
+    has_vn = bool(_VN_DIACRITIC.search(text))
+
+    if has_vn and ("Text(" in text or "MarkupText(" in text):
+        if "disable_ligatures" not in text:
+            errors.append(
+                "Text tiếng Việt cần disable_ligatures=True — tránh lỗi tô màu / font"
+            )
+        if not re.search(r'\bfont\s*=\s*["\']', text):
+            errors.append(
+                'Text tiếng Việt cần font="Arial" (Windows) hoặc font="DejaVu Sans" — '
+                "thiếu font gây ô vuông □ thay chữ có dấu"
+            )
+
+    if "Text(" in text and "disable_ligatures" not in text and not has_vn:
         warnings.append("Nên Text(..., disable_ligatures=True) cho tiếng Việt / tô màu substring")
 
     if "MarkupText(" in text and ("<" in text) and ("&lt;" not in text and "&amp;" not in text):
         if re.search(r"MarkupText\s*\(\s*[f]?[\"'][^\"']*<[^/]", text):
             warnings.append("MarkupText: escape < > & thành &lt; &gt; &amp; nếu cần")
 
-    # Heuristic: Vietnamese prose inside MathTex
-    for m in re.finditer(r"MathTex\s*\(\s*([rf]?)([\"'])(.*?)\2", text, re.S):
+    # Chữ tiếng Việt trong MathTex/Tex → ô vuông hoặc lỗi LaTeX
+    for m in re.finditer(
+        r"(?:MathTex|Tex)\s*\(\s*([rf]?)([\"'])(.*?)\2", text, re.S
+    ):
         inner = m.group(3)
-        if _VN_DIACRITIC.search(inner) and len(inner) > 12:
-            warnings.append(
-                "MathTex có vẻ chứa câu tiếng Việt — tách: Text cho chữ, MathTex cho công thức"
+        if _VN_DIACRITIC.search(inner):
+            errors.append(
+                "MathTex/Tex chứa tiếng Việt có dấu — tách: vn()/Text(font='Arial') "
+                "+ MathTex chỉ công thức (gây ô vuông □)"
             )
             break
 

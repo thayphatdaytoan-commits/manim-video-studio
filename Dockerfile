@@ -30,6 +30,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-extra \
     texlive-science \
     texlive-lang-other \
+    fonts-dejavu-core \
+    fonts-liberation \
+    fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+# Font có dấu tiếng Việt — bắt buộc cho Text/MarkupText (tránh ô vuông □)
+VN_FONT_WINDOWS = "Arial"
+VN_FONT_LINUX = "DejaVu Sans"
+VN_FONT = VN_FONT_WINDOWS  # mặc định prompt; Render/Docker dùng DejaVu Sans
+
 STYLE_VN: dict[str, str] = {
     "bg": "#0d1117",
     "bg_alt": "#0a0e1a",
@@ -74,6 +79,15 @@ video_format: "shorts" | "landscape"
 - shorts (9:16): 1 khung tập trung giữa; 3–5 beats; text tối thiểu; config pixel 1080×1920
 - landscape (16:9): figure trái + text_panel phải; 8–15 beats; subtitle nhỏ; có check_question
 
+=== FONT TIẾNG VIỆT (BẮT BUỘC — tránh ô vuông □) ===
+- Text/MarkupText: font="Arial", disable_ligatures=True (Windows local)
+- Docker/Render: font="DejaVu Sans" hoặc cài Noto Sans
+- CẤM nhét chữ tiếng Việt (có dấu) vào MathTex/Tex — chỉ ký hiệu toán trong MathTex
+- Tách dòng: vn("Ta có CK") + MathTex(r"CK \perp AE") + vn("nên") — KHÔNG gộp chữ Việt vào MathTex
+
+def vn(text, size=28, color=None):
+    return Text(text, font_size=size, font="Arial", color=color or "#FFFFFF", disable_ligatures=True)
+
 === KỊCH BẢN median ===
 - Câu hỏi gợi mở TRƯỚC, đáp án SAU (không vào thẳng kết quả)
 - Hình minh họa dẫn trước lời giải chữ
@@ -95,6 +109,7 @@ STYLE_VN = {
 def vn(text, size=28, color=None):
     return Text(
         text,
+        font="Arial",
         font_size=size,
         color=color or STYLE_VN["text"],
         disable_ligatures=True,

@@ -42,7 +42,7 @@ const CE_CHECKLIST_RENDER_FREE = [
 const CE_CHECKLIST_LOCAL = [
   { id: 'scene', label: 'class Scene (2D) — không MovingCamera / 3D' },
   { id: 'hybrid', label: 'Text tiếng Việt + MathTex(r"...") cho công thức' },
-  { id: 'font', label: 'Text(..., disable_ligatures=True) — KHÔNG Tex cho câu tiếng Việt' },
+  { id: 'font', label: 'Text: font="Arial" + disable_ligatures=True (tránh ô vuông □)' },
   { id: 'latex', label: 'MathTex dùng chuỗi thô r"..."; LaTeX đã cài (MiKTeX)' },
   { id: 'geom', label: 'Dot, Line, Circle, Polygon, Angle, TransformMatchingTex' },
   { id: 'layout', label: 'Hình trái / chữ phải + scale_to_fit_height + self.wait()' },
@@ -67,9 +67,8 @@ function buildGeminiProPrompt(problem, solution, mode = 'local_latex') {
     ? `RÀNG BUỘC (máy LOCAL — Manim CE + MiKTeX/LaTeX):
 - class kế thừa Scene (KHÔNG MovingCameraScene / ThreeDScene)
 - CHIẾN LƯỢC HYBRID (bắt buộc):
-  • Tiếng Việt (đề, lời giải, nhãn): Text("...", font_size=28, disable_ligatures=True)
-  • Công thức toán: MathTex(r"...") hoặc MathTex(r"{{ }}") — LUÔN chuỗi thô r"..."
-  • KHÔNG nhét câu tiếng Việt vào Tex/MathTex
+  • Tiếng Việt: Text("...", font="Arial", font_size=28, disable_ligatures=True)
+  • CÔNG THỨC ONLY trong MathTex(r"...") — KHÔNG nhét "Ta có", "Chứng minh", "tứ giác" vào MathTex (gây ô vuông □)
 - Nhãn điểm hình học: Text("A", font_size=28, disable_ligatures=True)
 - Biến đổi công thức: TransformMatchingTex(eq1, eq2) hoặc ReplacementTransform
 - Bố cục: figure = VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)

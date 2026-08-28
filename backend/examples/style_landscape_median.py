@@ -14,7 +14,10 @@ STYLE_VN = {
 
 
 def vn(text, size=26, color=None):
-    return Text(text, font_size=size, color=color or STYLE_VN["text"], disable_ligatures=True)
+    return Text(
+        text, font="Arial", font_size=size,
+        color=color or STYLE_VN["text"], disable_ligatures=True,
+    )
 
 
 class LandscapeMedianDemo(Scene):
