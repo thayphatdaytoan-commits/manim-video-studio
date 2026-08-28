@@ -28,8 +28,9 @@ import './App.css'
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 const KEY_STORAGE = 'mvs_gemini_api_keys'
 const KEY_STORAGE_LEGACY = 'mvs_gemini_api_key'
+const VALIDATION_MODE_STORAGE = 'mvs_validation_mode'
 
-const CE_CHECKLIST = [
+const CE_CHECKLIST_RENDER_FREE = [
   { id: 'scene', label: 'class kế thừa Scene (không MovingCamera / 3D)' },
   { id: 'text', label: 'Text / MarkupText tiếng Việt (disable_ligatures=True)' },
   { id: 'notex', label: 'Không Tex / MathTex / Label("A") / Typst' },
@@ -38,21 +39,62 @@ const CE_CHECKLIST = [
   { id: 'wait', label: 'Mỗi bước lời giải có animation + self.wait()' },
 ]
 
-function buildGeminiProPrompt(problem, solution) {
+const CE_CHECKLIST_LOCAL = [
+  { id: 'scene', label: 'class Scene (2D) — không MovingCamera / 3D' },
+  { id: 'hybrid', label: 'Text tiếng Việt + MathTex(r"...") cho công thức' },
+  { id: 'font', label: 'Text(..., disable_ligatures=True) — KHÔNG Tex cho câu tiếng Việt' },
+  { id: 'latex', label: 'MathTex dùng chuỗi thô r"..."; LaTeX đã cài (MiKTeX)' },
+  { id: 'geom', label: 'Dot, Line, Circle, Polygon, Angle, TransformMatchingTex' },
+  { id: 'layout', label: 'Hình trái / chữ phải + scale_to_fit_height + self.wait()' },
+]
+
+function loadValidationMode() {
+  try {
+    const saved = localStorage.getItem(VALIDATION_MODE_STORAGE)
+    if (saved === 'local_latex' || saved === 'render_free') return saved
+  } catch {
+    /* ignore */
+  }
+  return 'auto'
+}
+
+function buildGeminiProPrompt(problem, solution, mode = 'local_latex') {
   const p = (problem || '').trim() || '(dán đề bài đầy đủ vào đây)'
   const s = (solution || '').trim() || '(dán lời giải từng bước vào đây)'
-  return `Bạn là lập trình viên Manim Community Edition (ManimCE).
-Tôi đưa ĐỀ + LỜI GIẢI hoàn chỉnh. CHỈ viết 1 file Python Manim CE để làm video bài giảng.
+  const local = mode === 'local_latex'
 
-RÀNG BUỘC (Render Free / Docker):
+  const constraints = local
+    ? `RÀNG BUỘC (máy LOCAL — Manim CE + MiKTeX/LaTeX):
+- class kế thừa Scene (KHÔNG MovingCameraScene / ThreeDScene)
+- CHIẾN LƯỢC HYBRID (bắt buộc):
+  • Tiếng Việt (đề, lời giải, nhãn): Text("...", font_size=28, disable_ligatures=True)
+  • Công thức toán: MathTex(r"...") hoặc MathTex(r"{{ }}") — LUÔN chuỗi thô r"..."
+  • KHÔNG nhét câu tiếng Việt vào Tex/MathTex
+- Nhãn điểm hình học: Text("A", font_size=28, disable_ligatures=True)
+- Biến đổi công thức: TransformMatchingTex(eq1, eq2) hoặc ReplacementTransform
+- Bố cục: figure = VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
+  text_panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT, buff=0.2).scale(0.42).to_edge(RIGHT, buff=0.35)
+- Màu: nền đen (#111), chữ trắng/vàng; điểm YELLOW, đường BLUE, kết luận GREEN
+- Animation: Create/Write/FadeIn/Indicate + self.wait(0.8~1.5) mỗi bước lời giải
+- Comment tiếng Việt trước mỗi bước; không TODO/placeholder
+- API: Dot, Line, DashedLine, Circle, Arc, Polygon, Angle, RightAngle, VGroup, SurroundingRectangle`
+    : `RÀNG BUỘC (Render Free / Docker):
 - class kế thừa Scene (KHÔNG MovingCameraScene / ThreeDScene / ZoomedScene)
 - Text/MarkupText tiếng Việt, disable_ligatures=True
 - CẤM: Tex, MathTex, SingleStringMathTex, Label("A"), Typst, MathTypst
 - Nhãn điểm: Text("A", font_size=28) — không Label("A")
 - Hình trái / chữ phải; VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
-- API: Dot, Line, Circle, Polygon, Angle, RightAngle, Create, Write, FadeIn, Indicate, ReplacementTransform, self.wait
-- Comment tiếng Việt từng bước; mỗi bước lời giải = 1 đoạn animation + wait
+- API: Dot, Line, Circle, Polygon, Angle, RightAngle, Create, Write, FadeIn, Indicate, ReplacementTransform, self.wait`
+
+  return `Bạn là lập trình viên Manim Community Edition (ManimCE) — video bài giảng Toán Việt Nam.
+Tôi đưa ĐỀ + LỜI GIẢI hoàn chỉnh. CHỈ viết 1 file Python Manim CE (1 class Scene).
+
+${constraints}
+
+OUTPUT:
 - Trả về DUY NHẤT code trong khối \`\`\`python ... \`\`\`
+- scene_name = tên class Scene
+- Mỗi bước lời giải = 1 khối animation + self.wait()
 
 ĐỀ BÀI:
 ${p}
@@ -145,6 +187,7 @@ export default function App() {
   const [code, setCode] = useState('')
   const [quality, setQuality] = useState('480p15')
   const [backend, setBackend] = useState({ ready: false, message: 'Đang kết nối...' })
+  const [validationMode, setValidationMode] = useState(loadValidationMode)
   const [compiling, setCompiling] = useState(false)
   const [jobId, setJobId] = useState(null)
   const [log, setLog] = useState('')
@@ -226,12 +269,44 @@ export default function App() {
     [templates, templateId],
   )
 
+  const persistValidationMode = useCallback((mode) => {
+    setValidationMode(mode)
+    try {
+      localStorage.setItem(VALIDATION_MODE_STORAGE, mode)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const effectiveValidationMode = useMemo(() => {
+    if (validationMode === 'auto') {
+      return backend.default_validation_mode || 'render_free'
+    }
+    return validationMode
+  }, [validationMode, backend.default_validation_mode])
+
+  const ceChecklist = useMemo(
+    () =>
+      effectiveValidationMode === 'local_latex'
+        ? CE_CHECKLIST_LOCAL
+        : CE_CHECKLIST_RENDER_FREE,
+    [effectiveValidationMode],
+  )
+
   useEffect(() => {
     let cancelled = false
     const check = async () => {
       try {
         const data = await api('/api/health')
-        if (!cancelled) setBackend(data)
+        if (!cancelled) {
+          setBackend(data)
+          if (
+            validationMode === 'auto' &&
+            data.default_validation_mode === 'local_latex'
+          ) {
+            persistValidationMode('local_latex')
+          }
+        }
       } catch {
         if (!cancelled) setBackend({ ready: false, message: 'Backend không phản hồi' })
       }
@@ -242,7 +317,7 @@ export default function App() {
       cancelled = true
       clearInterval(id)
     }
-  }, [])
+  }, [validationMode, persistValidationMode])
 
   useEffect(() => {
     ;(async () => {
@@ -350,7 +425,13 @@ export default function App() {
       const res = await api('/api/compile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, scene, quality, validate_first: true }),
+        body: JSON.stringify({
+          code,
+          scene,
+          quality,
+          validate_first: true,
+          validation_mode: effectiveValidationMode,
+        }),
       })
       setJobId(res.job_id)
       setLog((prev) => prev + `Job ${res.job_id} đã bắt đầu.\n`)
@@ -736,7 +817,7 @@ export default function App() {
       const data = await api('/api/validate-manim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manim_code: code }),
+        body: JSON.stringify({ manim_code: code, validation_mode: effectiveValidationMode }),
       })
       setManimValidation(data)
       if (data.scene_names?.length) {
@@ -749,8 +830,8 @@ export default function App() {
   }
 
   const geminiProPrompt = useMemo(
-    () => buildGeminiProPrompt(problemText, solutionText),
-    [problemText, solutionText],
+    () => buildGeminiProPrompt(problemText, solutionText, effectiveValidationMode),
+    [problemText, solutionText, effectiveValidationMode],
   )
 
   const handleCopyGeminiProPrompt = async () => {
@@ -778,7 +859,7 @@ export default function App() {
       const data = await api('/api/validate-manim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manim_code: extracted }),
+        body: JSON.stringify({ manim_code: extracted, validation_mode: effectiveValidationMode }),
       })
       setManimValidation(data)
       if (data.scene_names?.length) {
@@ -1396,16 +1477,39 @@ export default function App() {
         <section className="panel">
           <h2 className="panel-title">3. Manim → video</h2>
           <p className="step-hint">
-            Luồng Pro: copy prompt → Gemini Pro → dán code → Validate CE → Biên dịch 480p. Hoặc dùng
-            AI trong web / Repair khi có log lỗi.
+            Luồng Pro: copy prompt → Gemini Pro → dán code → Validate → Biên dịch 480p. Chế độ{' '}
+            <strong>{effectiveValidationMode === 'local_latex' ? 'Local + LaTeX' : 'Render Free'}</strong>
+            {backend.deps?.latex ? ' (LaTeX OK)' : ' (chưa có LaTeX)'}.
           </p>
+
+          <div className="validation-mode-row">
+            <span className="field-label">CHẾ ĐỘ KIỂM TRA CODE</span>
+            <div className="export-row">
+              <button
+                type="button"
+                className={`btn secondary export-btn ${effectiveValidationMode === 'local_latex' ? 'active-mode' : ''}`}
+                onClick={() => persistValidationMode('local_latex')}
+                disabled={!backend.deps?.latex}
+                title={backend.deps?.latex ? 'Cho phép MathTex' : 'Cài MiKTeX trước'}
+              >
+                Local + LaTeX
+              </button>
+              <button
+                type="button"
+                className={`btn secondary export-btn ${effectiveValidationMode === 'render_free' ? 'active-mode' : ''}`}
+                onClick={() => persistValidationMode('render_free')}
+              >
+                Render Free
+              </button>
+            </div>
+          </div>
 
           <div className="pro-workflow-box">
             <h3 className="voiceover-title">
               <Code2 size={16} /> Dán code từ Gemini Pro
             </h3>
             <ol className="ce-checklist">
-              {CE_CHECKLIST.map((item) => (
+              {ceChecklist.map((item) => (
                 <li key={item.id}>{item.label}</li>
               ))}
             </ol>

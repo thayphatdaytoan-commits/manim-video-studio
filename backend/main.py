@@ -31,7 +31,11 @@ from generate import (
     repair_manim_loop,
     revise_manim_code,
 )
-from validate_manim import validate_manim_code
+from validate_manim import (
+    default_validation_mode,
+    normalize_validation_mode,
+    validate_manim_code,
+)
 from voiceover import (
     generate_script,
     list_voices,
@@ -123,6 +127,10 @@ class CompileRequest(BaseModel):
         default=True,
         description="Chặn biên dịch nếu validate Manim fail (cấm Tex, thiếu Scene...)",
     )
+    validation_mode: str = Field(
+        default="auto",
+        description="auto | render_free | local_latex — local cho phép MathTex khi đã cài LaTeX",
+    )
 
 
 class CompileResponse(BaseModel):
@@ -188,6 +196,10 @@ class ReviseManimRequest(BaseModel):
 
 class ValidateManimRequest(BaseModel):
     manim_code: str = Field(..., min_length=1)
+    validation_mode: str = Field(
+        default="auto",
+        description="auto | render_free | local_latex",
+    )
 
 
 class ScriptRequest(BaseModel):
@@ -381,10 +393,19 @@ async def api_revise_manim(
         raise HTTPException(502, str(exc)) from exc
 
 
+def _resolve_validation_mode(mode: str | None) -> str:
+    if not mode or mode == "auto":
+        return default_validation_mode()
+    return normalize_validation_mode(mode)
+
+
 @app.post("/api/validate-manim")
 async def api_validate_manim(req: ValidateManimRequest) -> dict[str, Any]:
-    """Kiểm tra mã Manim trước khi render (cấm Tex, Scene, import...)."""
-    return validate_manim_code(req.manim_code)
+    """Kiểm tra mã Manim trước khi render."""
+    return validate_manim_code(
+        req.manim_code,
+        mode=_resolve_validation_mode(req.validation_mode),
+    )
 
 
 @app.post("/api/repair-manim")
@@ -591,6 +612,8 @@ def health() -> dict[str, Any]:
             os.environ.get("GEMINI_API_KEY", "").strip()
             or os.environ.get("GEMINI_API_KEYS", "").strip()
         ),
+        "default_validation_mode": default_validation_mode(),
+        "latex_available": latex_ok,
     }
 
 
@@ -732,7 +755,10 @@ async def compile_video(req: CompileRequest) -> CompileResponse:
         raise HTTPException(400, f"Chất lượng không hợp lệ: {req.quality}")
 
     if req.validate_first:
-        validation = validate_manim_code(req.code)
+        validation = validate_manim_code(
+            req.code,
+            mode=_resolve_validation_mode(req.validation_mode),
+        )
         if not validation["ok"]:
             detail = {
                 "message": "Mã Manim chưa đạt kiểm tra trước khi render",

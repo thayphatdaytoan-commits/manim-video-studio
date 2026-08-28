@@ -149,6 +149,9 @@ manim-video-studio/
 ## Ghi chú Manim
 
 - Class Scene phải kế thừa `Scene` (hoặc biến thể như `ThreeDScene`)
-- Pipeline AI ưu tiên `Text` / `MarkupText` — **không** dùng `Tex` / `MathTex` trên Render Free
-- Validate CE: cấm `Label("...")` (mặc định MathTex), `MovingCameraScene`, `ThreeDScene`, Typst chưa cài
+- **Local + LaTeX:** bật chế độ trên web → cho phép `MathTex` (cần MiKTeX); tiếng Việt vẫn dùng `Text`
+- **Render Free:** ưu tiên `Text` / `MarkupText` — không `Tex` / `MathTex`
+- Hướng dẫn Gemini Pro / Gem: [`docs/HUONG-DAN-GEMINI-PRO-MANIM.md`](docs/HUONG-DAN-GEMINI-PRO-MANIM.md)
+- Windows: double-click `Mo-Manim-Studio.bat` để mở backend + frontend
+- Validate CE: cấm scene nặng, import lạ; chế độ local cho phép LaTeX
 - Render lần đầu có thể chậm
