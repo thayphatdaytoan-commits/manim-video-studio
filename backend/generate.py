@@ -10,7 +10,13 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from manim_style import BEAT_ORDER, STYLE_VN, STYLE_VN_PROMPT, VIDEO_FORMATS
+from manim_style import (
+    BEAT_ORDER,
+    LAYOUT_SAFE_RULES,
+    STYLE_VN,
+    STYLE_VN_PROMPT,
+    VIDEO_FORMATS,
+)
 
 _STYLE_VN_JSON = json.dumps(STYLE_VN, ensure_ascii=False)
 _BEAT_ORDER_TEXT = ", ".join(BEAT_ORDER)
@@ -176,7 +182,7 @@ Trả về ĐÚNG 1 JSON:
     "mode": "two_panel",
     "figure_area": "left",
     "text_area": "right",
-    "figure_fit": "scale_to_fit_height_5_then_shift_left",
+    "figure_fit": "scale_to_fit_height_4_then_shift_left_2.8",
     "shorts_single_frame": false
   }},
   "figure_objects": [
@@ -213,7 +219,9 @@ Trả về ĐÚNG 1 JSON:
 9. op: write_text | create | fade_in | indicate | set_color | surround_rect | transform | wait
 10. Mỗi bước lời giải = 1 beat phase=solution_steps; wait ≥ 0.8s.
 11. Không viết code Manim/Python. Bỏ object GeoGebra đã ẩn.
+12. layout JSON phải có title_zone, figure_area, text_area, safe_margins.
 """
+    + LAYOUT_SAFE_RULES
 )
 
 MANIM_FROM_STORYBOARD_PROMPT = (
@@ -247,9 +255,12 @@ class TenClassScene(Scene):
         # Mỗi beat: comment # phase + animation + self.wait(≥0.8)
 
 === FORMAT ===
-- video_format "shorts": VGroup tập trung ORIGIN; text lớn, ít dòng
-- video_format "landscape": figure.scale_to_fit_height(5).move_to(LEFT*3); panel.to_edge(RIGHT)
+- video_format "shorts": VGroup tập trung ORIGIN; text lớn, ít dòng; scale_to_fit_height(6.5)
+- video_format "landscape": figure.scale_to_fit_height(4.0).move_to(LEFT*2.8); panel.to_edge(RIGHT, buff=0.4).scale(0.38)
 - median: TransformMatchingTex / ReplacementTransform — không FadeOut cả khung đột ngột
+"""
+    + LAYOUT_SAFE_RULES
+    + """
 
 === API ===
 Text, MathTex(r"..."), Dot, Line, Circle, Polygon, Angle, VGroup, SurroundingRectangle,
@@ -973,7 +984,8 @@ def generate_manim_from_geogebra(
     return result
 
 
-REVISE_MANIM_PROMPT = """Bạn là chuyên gia sửa mã Manim Community Edition (ManimCE) cho bài giảng Toán Việt Nam trên Render Free.
+REVISE_MANIM_PROMPT = (
+    """Bạn là chuyên gia sửa mã Manim Community Edition (ManimCE) cho bài giảng Toán Việt Nam trên Render Free.
 
 Nhiệm vụ: chỉnh SỬA mã Manim hiện có theo yêu cầu người dùng và/hoặc nhật ký biên dịch / validate.
 Giữ nguyên ý đồ video (đề bài, lời giải từng bước, hiệu ứng hình) trừ khi yêu cầu bảo thay đổi.
@@ -993,9 +1005,12 @@ QUY TẮC MANIM CE:
 5. Ô vuông □ thay chữ có dấu: tách tiếng Việt ra Text(font=\"Arial\"); MathTex chỉ công thức.
 6. API an toàn: Text, MarkupText, Dot, Line, Circle, Polygon, Angle, RightAngle, VGroup,
    ImageMobject, SurroundingRectangle, Create, FadeIn, Write, Indicate, ReplacementTransform, wait.
-6. Giữ comment tiếng Việt; scale_to_fit_height để tránh cắt hình.
-7. Không import ngoài manim/numpy/math; không Typst/MathTypst.
+7. Giữ comment tiếng Việt; scale_to_fit_height(4.0) + move_to(LEFT*2.8) để tránh cắt hình.
+8. Không import ngoài manim/numpy/math; không Typst/MathTypst.
+9. Không để title/hình/text đè lên nhau — FadeOut panel cũ trước beat mới.
 """
+    + LAYOUT_SAFE_RULES
+)
 
 
 def revise_manim_code(

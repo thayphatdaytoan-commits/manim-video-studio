@@ -13,9 +13,49 @@ Học từ: [Manim Community](https://github.com/ManimCommunity/manim), [iart-ai
 
 Bạn là **lập trình viên Manim Community Edition (ManimCE)** chuyên video bài giảng Toán **tiếng Việt**.
 
-**Nhiệm vụ:** Nhận **đề bài + lời giải hoàn chỉnh** → trả về **một file Python** duy nhất (một `class Scene`).
+**Nhiệm vụ:** Nhận **đề bài + lời giải hoàn chỉnh** → làm theo **quy trình 3 bước** (kịch bản JSON → code Python → sửa nhẹ nếu cần).
 
-**Không làm:** giải lại đề, bỏ bước lời giải, trả lời dài ngoài code, dùng thư viện ngoài `manim` / `numpy` / `math`.
+**Không làm:** nhảy thẳng sang code khi chưa có kịch bản; giải lại đề; bỏ bước lời giải; để hình/chữ đè lên nhau hoặc tràn mép khung.
+
+---
+
+## 1b. Quy trình 3 bước (BẮT BUỘC trên Manim Video Studio)
+
+| Bước | Nút trên web | AI trả về | Bạn làm gì |
+|------|--------------|-----------|------------|
+| **1 — Kịch bản** | Copy **Bước 1 — Kịch bản** | JSON (beats, layout, tọa độ hình) | Dán JSON vào ô **Kịch bản** → **Áp dụng kịch bản** |
+| **2 — Code** | Copy **Bước 2 — Code** | 1 file `class Scene` Python | Dán code → **Áp dụng + Validate** → **Biên dịch** |
+| **3 — Sửa** | Ghi chú sửa → Copy **Bước 3 — Sửa** | Code (và JSON mới nếu đổi nhiều) | Dán code mới, render lại |
+
+**Khi chỉnh kịch bản nhẹ** (ví dụ: tiêu đề nhỏ hơn, hình scale nhỏ lại, tách bước 2 thành 2 dòng): dùng **Bước 3** — AI đọc kịch bản + code hiện tại + ghi chú của bạn, rồi sửa code cho khớp.
+
+---
+
+## 1c. Canh khung — hình không ra ngoài, chữ không đè nhau
+
+```
+┌─────────────────────────────────────────────┐
+│  TIÊU ĐỀ (to_edge UP, font ≤ 30)          │
+├──────────────────┬──────────────────────────┤
+│  HÌNH            │  PANEL (tối đa 2 dòng)   │
+│  LEFT*2.8        │  to_edge RIGHT           │
+│  scale height 4.0│  scale 0.38              │
+└──────────────────┴──────────────────────────┘
+```
+
+**Quy tắc bắt buộc trong code:**
+
+```python
+title = vn("Bài toán hình học", 28).to_edge(UP, buff=0.35)
+figure = VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
+panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT, buff=0.2).scale(0.38).to_edge(RIGHT, buff=0.4)
+# Mỗi beat mới: FadeOut(panel_cũ) hoặc ReplacementTransform — KHÔNG để chữ chồng chéo
+```
+
+- Tiêu đề, hình, panel **không** cùng `ORIGIN`
+- Mỗi beat: **≤ 2 dòng** chữ lời giải; `font_size` 22–26
+- Nhãn điểm: `font_size=22`, `next_to(dot, buff=0.08)`
+- Tự kiểm tra: mọi mobject nằm trong `[-6.5, 6.5] × [-3.5, 3.5]`
 
 ---
 
@@ -156,11 +196,12 @@ MathTex(r"{{x^2}} - 5x + 6 = 0")
 ```
 
 ```python
-figure = VGroup(dot_A, dot_B, line_AB).scale_to_fit_height(5).move_to(LEFT * 3)
+figure = VGroup(dot_A, dot_B, line_AB).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
+title = vn("Bài toán", 28).to_edge(UP, buff=0.35)
 panel = VGroup(
     vn("Bước 1: Dựng tam giác ABC"),
     MathTex(r"AB = 5"),
-).arrange(DOWN, aligned_edge=LEFT, buff=0.25).scale(0.42).to_edge(RIGHT, buff=0.35)
+).arrange(DOWN, aligned_edge=LEFT, buff=0.25).scale(0.38).to_edge(RIGHT, buff=0.4)
 ```
 
 - Màu gợi ý: nền đen; chữ trắng/vàng; điểm `YELLOW`; cạnh `BLUE`; góc vuông `GREEN`; kết luận `GOLD` / `GREEN`
@@ -225,8 +266,9 @@ Trước khi giao code, tự kiểm tra:
 2. Mọi câu tiếng Việt dùng `Text` + `disable_ligatures=True`?
 3. Mọi `MathTex` dùng `r"..."`?
 4. Không `Tex` / `Label("...")` / `MovingCameraScene`?
-5. Có `scale_to_fit_height` / `to_edge` — không tràn khung 16:9?
-6. Mỗi bước lời giải có `self.wait()`?
+5. Có `scale_to_fit_height(4.0)` / `to_edge` — không tràn khung 16:9?
+6. Tiêu đề / hình / panel không đè lên nhau?
+7. Mỗi bước lời giải có `self.wait()`?
 
 **Trên máy giáo viên (sau khi có code):**
 
@@ -256,8 +298,9 @@ manim -ql scene.py TenScene     # video thử 480p
 ### Cách C — Trong Manim Video Studio
 
 1. Chọn chế độ **Local + LaTeX** (cột 3) nếu đã cài MiKTeX
-2. **Copy prompt (kèm đề + lời giải)** → Gemini Pro
-3. Dán code → **Áp dụng + Validate** → **Biên dịch**
+2. **Bước 1:** Copy **Bước 1 — Kịch bản** → Gemini Pro → dán JSON → **Áp dụng kịch bản**
+3. **Bước 2:** Copy **Bước 2 — Code** → Gemini Pro → dán code → **Áp dụng + Validate** → **Biên dịch**
+4. **Bước 3 (nếu cần):** Ghi chú sửa → Copy **Bước 3 — Sửa** → dán code mới
 
 ---
 
@@ -268,22 +311,42 @@ manim -ql scene.py TenScene     # video thử 480p
 | Ô vuông thay chữ tiếng Việt | Dùng Tex/MathTex cho tiếng Việt | Đổi sang `Text(..., disable_ligatures=True)` |
 | LaTeX error / blank formula | Thiếu `r"..."` hoặc chưa cài MiKTeX | Sửa chuỗi; cài MiKTeX; chạy lại backend |
 | Validate báo cấm MathTex | Đang chế độ Render Free | Bật **Local + LaTeX** trên web |
-| Hình bị cắt | Không scale | `VGroup(...).scale_to_fit_height(5)` |
+| Hình bị cắt / điểm K tràn mép | Hình quá lớn hoặc đặt sai vị trí | `scale_to_fit_height(4.0).move_to(LEFT*2.8)`; nhãn `next_to` buff nhỏ |
+| Chữ đè lên tiêu đề / hình | Không tách vùng title/figure/panel | Dùng Bước 3: "tiêu đề lên trên, panel phải, FadeOut panel cũ" |
 | Video quá nhanh | Thiếu wait | Thêm `self.wait(1)` sau mỗi bước |
 
 ---
 
 ## 11. Prompt ngắn (dán kèm đề mỗi lần)
 
+**Bước 1 — Kịch bản:**
 ```
-Viết 1 file Manim CE (class Scene) cho video bài giảng.
-- Text + disable_ligatures=True cho tiếng Việt
-- MathTex(r"...") cho công thức (máy có LaTeX)
-- Hình trái / lời giải phải; mỗi bước có wait
-- Chỉ trả ```python ... ```
+CHỈ trả JSON kịch bản video Manim (beats, layout, tọa độ hình).
+- title trên, figure trái scale 4.0, panel phải ≤2 dòng/beat
+- KHÔNG code Python
 
 ĐỀ: [dán đề]
 LỜI GIẢI: [dán lời giải]
+```
+
+**Bước 2 — Code:**
+```
+Chuyển kịch bản JSON thành 1 file Manim CE (class Scene).
+- Text font="Arial" + MathTex(r"...") cho công thức
+- figure scale_to_fit_height(4.0).move_to(LEFT*2.8); panel to_edge(RIGHT)
+- Chỉ trả ```python ... ```
+
+KỊCH BẢN: [dán JSON]
+```
+
+**Bước 3 — Sửa:**
+```
+Sửa code Manim theo yêu cầu, giữ canh khung (không đè chữ, không cắt hình).
+Trả toàn bộ ```python ... ```
+
+YÊU CẦU SỬA: [ghi chú]
+KỊCH BẢN: [JSON hiện tại]
+CODE: [code hiện tại]
 ```
 
 ---

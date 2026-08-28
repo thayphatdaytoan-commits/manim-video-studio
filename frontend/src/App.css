@@ -413,6 +413,14 @@
   gap: 10px;
 }
 
+.pro-step-buttons {
+  flex-wrap: wrap;
+}
+
+.ce-checklist.pro-steps li {
+  margin: 4px 0;
+}
+
 .ce-checklist {
   margin: 0;
   padding-left: 1.2rem;

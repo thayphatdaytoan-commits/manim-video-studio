@@ -94,6 +94,33 @@ def vn(text, size=28, color=None):
 - Transform/ReplacementTransform khi cập nhật — không FadeOut/FadeIn đột ngột cả khung
 """
 
+LAYOUT_SAFE_RULES = """
+=== CANH KHUNG & KHÔNG ĐÈ CHỮ (BẮT BUỘC) ===
+Khung 16:9 Manim: rộng ~14, cao ~8 (từ -7 đến 7, -4 đến 4).
+
+1) VÙNG BỐ CỤC (không chồng nhau):
+   - title_block: to_edge(UP, buff=0.35) — chỉ tiêu đề ngắn, font_size ≤ 30
+   - figure_zone: move_to(LEFT * 2.8), scale_to_fit_height(4.0) — KHÔNG vượt mép trái/trên
+   - text_panel: to_edge(RIGHT, buff=0.4).scale(0.38) — tối đa 2 dòng / beat
+   - KHÔNG đặt title + hình + text cùng tọa độ ORIGIN
+
+2) MỖI BEAT — tránh đè chữ:
+   - Trước beat mới: FadeOut(text_panel_cũ) hoặc ReplacementTransform(panel, panel_mới)
+   - Hoặc dùng 1 VGroup panel cố định bên phải, chỉ đổi nội dung bên trong
+   - text_lines ≤ 2 dòng; font_size lời giải 22–26
+
+3) HÌNH KHÔNG RA NGOÀI:
+   - Luôn: figure = VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
+   - Nhãn điểm: font_size 22, next_to(dot, buff=0.08) — không để nhãn tràn mép
+   - Sau khi code xong: tự kiểm tra mọi mobject trong [-6.5, 6.5] x [-3.5, 3.5]
+
+4) CODE MẪU KHUNG:
+   title = vn("Bài toán hình học", 28).to_edge(UP, buff=0.35)
+   figure = VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
+   panel = VGroup().to_edge(RIGHT, buff=0.4).align_to(title, UP)
+   # mỗi bước: self.play(FadeOut(old_panel)) rồi Write(new_panel) nếu cần
+"""
+
 MANIM_STYLE_CODE_SNIPPET = '''
 # --- Style VN (copy vào đầu construct hoặc module) ---
 STYLE_VN = {

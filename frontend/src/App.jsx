@@ -45,7 +45,7 @@ const CE_CHECKLIST_LOCAL = [
   { id: 'font', label: 'Text: font="Arial" + disable_ligatures=True (tránh ô vuông □)' },
   { id: 'latex', label: 'MathTex dùng chuỗi thô r"..."; LaTeX đã cài (MiKTeX)' },
   { id: 'geom', label: 'Dot, Line, Circle, Polygon, Angle, TransformMatchingTex' },
-  { id: 'layout', label: 'Hình trái / chữ phải + scale_to_fit_height + self.wait()' },
+  { id: 'layout', label: 'Hình trái scale≤4.0 / chữ phải — không chồng, không tràn mép' },
 ]
 
 function loadValidationMode() {
@@ -56,6 +56,133 @@ function loadValidationMode() {
     /* ignore */
   }
   return 'auto'
+}
+
+const LAYOUT_SAFE_RULES = `
+=== CANH KHUNG & KHÔNG ĐÈ CHỮ (BẮT BUỘC) ===
+Khung 16:9 Manim: rộng ~14, cao ~8 (từ -7 đến 7, -4 đến 4).
+
+1) VÙNG BỐ CỤC (không chồng nhau):
+   - title_block: to_edge(UP, buff=0.35) — chỉ tiêu đề ngắn, font_size ≤ 30
+   - figure_zone: move_to(LEFT * 2.8), scale_to_fit_height(4.0) — KHÔNG vượt mép trái/trên
+   - text_panel: to_edge(RIGHT, buff=0.4).scale(0.38) — tối đa 2 dòng / beat
+   - KHÔNG đặt title + hình + text cùng tọa độ ORIGIN
+
+2) MỖI BEAT — tránh đè chữ:
+   - Trước beat mới: FadeOut(text_panel_cũ) hoặc ReplacementTransform(panel, panel_mới)
+   - Hoặc dùng 1 VGroup panel cố định bên phải, chỉ đổi nội dung bên trong
+   - text_lines ≤ 2 dòng; font_size lời giải 22–26
+
+3) HÌNH KHÔNG RA NGOÀI:
+   - Luôn: figure = VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
+   - Nhãn điểm: font_size 22, next_to(dot, buff=0.08) — không để nhãn tràn mép
+   - Sau khi code xong: tự kiểm tra mọi mobject trong [-6.5, 6.5] x [-3.5, 3.5]
+
+4) CODE MẪU KHUNG:
+   title = vn("Bài toán hình học", 28).to_edge(UP, buff=0.35)
+   figure = VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
+   panel = VGroup().to_edge(RIGHT, buff=0.4).align_to(title, UP)
+   # mỗi bước: self.play(FadeOut(old_panel)) rồi Write(new_panel) nếu cần
+`
+
+function buildGeminiProStoryboardPrompt(problem, solution, videoFormat = 'landscape') {
+  const p = (problem || '').trim() || '(dán đề bài đầy đủ vào đây)'
+  const s = (solution || '').trim() || '(dán lời giải từng bước vào đây)'
+  const fmt = videoFormat === 'shorts' ? 'shorts (9:16, 1 khung giữa)' : 'landscape (16:9, hình trái + chữ phải)'
+
+  return `Bạn là đạo diễn video Toán Manim CE (Math-To-Manim).
+Nhiệm vụ BƯỚC 1: CHỈ viết KỊCH BẢN JSON — CHƯA viết code Python.
+
+ĐỊNH DẠNG: ${fmt}
+
+${LAYOUT_SAFE_RULES}
+
+BEAT_ORDER: title → problem → construction → solution_steps → conclusion → check_question
+STYLE_VN: nền #0d1117; điểm #8b1a1a; cạnh #1e40af; tròn #3d6b2f; highlight #FFD700
+
+Trả về ĐÚNG 1 JSON (không markdown) gồm:
+- scene_name, title, video_format
+- layout: { figure_area, text_area, title_zone, safe_margins }
+- figure_objects (tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5])
+- beats[]: mỗi beat có phase, comment_vi, text_lines (≤2 dòng), actions, camera_hint
+- Ghi rõ vùng title / figure / panel để code không chồng chéo
+
+OUTPUT: chỉ JSON. KHÔNG code Python.
+
+ĐỀ BÀI:
+${p}
+
+LỜI GIẢI:
+${s}
+`
+}
+
+function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_latex') {
+  const p = (problem || '').trim() || '(dán đề bài)'
+  const s = (solution || '').trim() || '(dán lời giải)'
+  const sb = (storyboard || '').trim() || '(dán kịch bản JSON từ Bước 1 vào đây)'
+  const local = mode === 'local_latex'
+
+  const constraints = local
+    ? `RÀNG BUỘC CODE (Local + LaTeX):
+- Bám ĐÚNG kịch bản JSON — không đổi thứ tự beat trừ khi JSON ghi khác
+- Tiếng Việt: Text(..., font="Arial", disable_ligatures=True)
+- Công thức: MathTex(r"...") — KHÔNG tiếng Việt trong MathTex
+- class Scene; self.camera.background_color = "#0d1117"
+${LAYOUT_SAFE_RULES}`
+    : `RÀNG BUỘC CODE (Render Free):
+- Bám kịch bản JSON; chỉ Text/MarkupText, không MathTex
+${LAYOUT_SAFE_RULES}`
+
+  return `Bạn là lập trình viên Manim CE.
+Nhiệm vụ BƯỚC 2: chuyển KỊCH BẢN JSON thành 1 file Python (1 class Scene).
+
+${constraints}
+
+OUTPUT: DUY NHẤT khối \`\`\`python ... \`\`\`
+
+ĐỀ (tham khảo):
+${p}
+
+LỜI GIẢI (tham khảo):
+${s}
+
+KỊCH BẢN JSON (BẮT BUỘC — bám sát):
+${sb}
+`
+}
+
+function buildGeminiProRevisePrompt(problem, solution, storyboard, code, revisionNotes, mode = 'local_latex') {
+  const notes = (revisionNotes || '').trim() || '(ghi thay đổi kịch bản: ví dụ "tiêu đề nhỏ hơn", "hình scale nhỏ lại", "bước 2 tách 2 dòng")'
+  const sb = (storyboard || '').trim() || '(kịch bản hiện tại — dán JSON nếu có)'
+  const py = (code || '').trim() || '(code Manim hiện tại — dán vào đây)'
+  const local = mode === 'local_latex'
+
+  return `Bạn là lập trình viên Manim CE.
+Nhiệm vụ BƯỚC 3 (SỬA): người dùng muốn chỉnh KỊCH BẢN / bố cục một chút → cập nhật code cho khớp.
+
+QUY TẮC:
+1. Đọc YÊU CẦU SỬA và áp dụng vào kịch bản + code
+2. ${local ? 'Giữ font="Arial" + MathTex cho công thức' : 'Giữ Text/MarkupText'}
+3. ${LAYOUT_SAFE_RULES}
+4. Trả về TOÀN BỘ file Python đã sửa trong \`\`\`python ... \`\`\`
+5. Nếu kịch bản đổi nhiều: trả thêm JSON kịch bản mới TRƯỚC khối python (trong cùng câu trả lời)
+
+YÊU CẦU SỬA CỦA NGƯỜI DÙNG:
+${notes}
+
+KỊCH BẢN HIỆN TẠI:
+${sb}
+
+CODE MANIM HIỆN TẠI:
+\`\`\`python
+${py}
+\`\`\`
+
+ĐỀ / LỜI GIẢI (ngữ cảnh):
+${(problem || '').trim()}
+${(solution || '').trim()}
+`
 }
 
 function buildGeminiProPrompt(problem, solution, mode = 'local_latex') {
@@ -71,8 +198,8 @@ function buildGeminiProPrompt(problem, solution, mode = 'local_latex') {
   • CÔNG THỨC ONLY trong MathTex(r"...") — KHÔNG nhét "Ta có", "Chứng minh", "tứ giác" vào MathTex (gây ô vuông □)
 - Nhãn điểm hình học: Text("A", font_size=28, disable_ligatures=True)
 - Biến đổi công thức: TransformMatchingTex(eq1, eq2) hoặc ReplacementTransform
-- Bố cục: figure = VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
-  text_panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT, buff=0.2).scale(0.42).to_edge(RIGHT, buff=0.35)
+- Bố cục: figure = VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
+  text_panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT, buff=0.2).scale(0.38).to_edge(RIGHT, buff=0.4)
 - Màu STYLE_VN (NTSM): nền #0d1117; điểm #8b1a1a; cạnh #1e40af; tròn #3d6b2f; highlight #FFD700; kết luận #FF8C00
 - BEAT_ORDER: title → problem → construction → solution_steps → conclusion → check_question
 - self.wait(≥0.8) mỗi bước; kết luận có SurroundingRectangle vàng
@@ -83,18 +210,23 @@ function buildGeminiProPrompt(problem, solution, mode = 'local_latex') {
 - Text/MarkupText tiếng Việt, disable_ligatures=True
 - CẤM: Tex, MathTex, SingleStringMathTex, Label("A"), Typst, MathTypst
 - Nhãn điểm: Text("A", font_size=28) — không Label("A")
-- Hình trái / chữ phải; VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
+- Hình trái / chữ phải; VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
 - API: Dot, Line, Circle, Polygon, Angle, RightAngle, Create, Write, FadeIn, Indicate, ReplacementTransform, self.wait`
 
   return `Bạn là lập trình viên Manim Community Edition (ManimCE) — video bài giảng Toán Việt Nam.
-Tôi đưa ĐỀ + LỜI GIẢI hoàn chỉnh. CHỈ viết 1 file Python Manim CE (1 class Scene).
+
+⚠️ QUY TRÌNH 3 BƯỚC (BẮT BUỘC):
+Bước 1 → Kịch bản JSON (dùng prompt "Copy Bước 1 — Kịch bản")
+Bước 2 → Code Python (dùng prompt "Copy Bước 2 — Code" + dán kịch bản)
+Bước 3 → Sửa nhẹ (dùng prompt "Copy Bước 3 — Sửa" + kịch bản + code + ghi chú)
+
+KHÔNG nhảy thẳng sang code nếu chưa có kịch bản JSON.
 
 ${constraints}
 
-OUTPUT:
-- Trả về DUY NHẤT code trong khối \`\`\`python ... \`\`\`
-- scene_name = tên class Scene
-- Mỗi bước lời giải = 1 khối animation + self.wait()
+${LAYOUT_SAFE_RULES}
+
+OUTPUT bước này (nếu chưa có kịch bản): yêu cầu người dùng làm Bước 1 trước.
 
 ĐỀ BÀI:
 ${p}
@@ -220,6 +352,9 @@ export default function App() {
   const [repairingManim, setRepairingManim] = useState(false)
   const [repairRounds, setRepairRounds] = useState(2)
   const [proPaste, setProPaste] = useState('')
+  const [proStoryboardPaste, setProStoryboardPaste] = useState('')
+  const [proRevisionNotes, setProRevisionNotes] = useState('')
+  const [proPromptStep, setProPromptStep] = useState('storyboard')
   const [proPromptMsg, setProPromptMsg] = useState('')
   const [showProPrompt, setShowProPrompt] = useState(true)
   const [savedGgbImage, setSavedGgbImage] = useState(null)
@@ -831,18 +966,107 @@ export default function App() {
     }
   }
 
-  const geminiProPrompt = useMemo(
-    () => buildGeminiProPrompt(problemText, solutionText, effectiveValidationMode),
-    [problemText, solutionText, effectiveValidationMode],
+  const geminiProStoryboardPrompt = useMemo(
+    () => buildGeminiProStoryboardPrompt(problemText, solutionText, videoFormat),
+    [problemText, solutionText, videoFormat],
   )
 
-  const handleCopyGeminiProPrompt = async () => {
+  const geminiProCodePrompt = useMemo(
+    () =>
+      buildGeminiProCodePrompt(
+        problemText,
+        solutionText,
+        proStoryboardPaste || storyboardText,
+        effectiveValidationMode,
+      ),
+    [
+      problemText,
+      solutionText,
+      proStoryboardPaste,
+      storyboardText,
+      effectiveValidationMode,
+    ],
+  )
+
+  const geminiProRevisePrompt = useMemo(
+    () =>
+      buildGeminiProRevisePrompt(
+        problemText,
+        solutionText,
+        proStoryboardPaste || storyboardText,
+        proPaste || code,
+        proRevisionNotes,
+        effectiveValidationMode,
+      ),
+    [
+      problemText,
+      solutionText,
+      proStoryboardPaste,
+      storyboardText,
+      proPaste,
+      code,
+      proRevisionNotes,
+      effectiveValidationMode,
+    ],
+  )
+
+  const geminiProPrompt = useMemo(() => {
+    if (proPromptStep === 'storyboard') return geminiProStoryboardPrompt
+    if (proPromptStep === 'revise') return geminiProRevisePrompt
+    return geminiProCodePrompt
+  }, [
+    proPromptStep,
+    geminiProStoryboardPrompt,
+    geminiProCodePrompt,
+    geminiProRevisePrompt,
+  ])
+
+  const copyProPrompt = async (text, msg) => {
     try {
-      await navigator.clipboard.writeText(geminiProPrompt)
-      setProPromptMsg('Đã copy prompt — dán vào Gemini Pro chat, rồi copy code trả về vào ô bên dưới.')
+      await navigator.clipboard.writeText(text)
+      setProPromptMsg(msg)
     } catch {
-      setProPromptMsg('Không copy được — hãy chọn toàn bộ prompt và Ctrl+C.')
+      setProPromptMsg('Không copy được — chọn toàn bộ prompt và Ctrl+C.')
     }
+  }
+
+  const handleCopyGeminiProStoryboard = () => {
+    setProPromptStep('storyboard')
+    copyProPrompt(
+      geminiProStoryboardPrompt,
+      'Đã copy Bước 1 (kịch bản) — dán vào Gemini Pro, nhận JSON rồi dán vào ô Kịch bản bên dưới.',
+    )
+  }
+
+  const handleCopyGeminiProCode = () => {
+    setProPromptStep('code')
+    copyProPrompt(
+      geminiProCodePrompt,
+      'Đã copy Bước 2 (code) — cần đã có kịch bản JSON trong ô Kịch bản.',
+    )
+  }
+
+  const handleCopyGeminiProRevise = () => {
+    setProPromptStep('revise')
+    copyProPrompt(
+      geminiProRevisePrompt,
+      'Đã copy Bước 3 (sửa) — gửi lại Gemini Pro, dán code mới vào ô Code.',
+    )
+  }
+
+  const handleCopyGeminiProPrompt = handleCopyGeminiProCode
+
+  const handleApplyProStoryboard = () => {
+    const raw = (proStoryboardPaste || '').trim()
+    if (!raw) {
+      setError('Chưa có kịch bản JSON để áp dụng.')
+      return
+    }
+    setError(null)
+    setStoryboardText(raw)
+    setStoryboardReady(true)
+    setManimReady(false)
+    setProPromptMsg('Đã lưu kịch bản — bấm Copy Bước 2 để tạo code Manim.')
   }
 
   const handleApplyProPaste = async () => {
@@ -1491,9 +1715,11 @@ export default function App() {
         <section className="panel">
           <h2 className="panel-title">3. Manim → video</h2>
           <p className="step-hint">
-            Luồng Pro: copy prompt → Gemini Pro → dán code → Validate → Biên dịch 480p. Chế độ{' '}
+            Luồng Pro <strong>3 bước</strong>: (1) kịch bản JSON → (2) code Python → (3) sửa nhẹ nếu cần.
+            Chế độ{' '}
             <strong>{effectiveValidationMode === 'local_latex' ? 'Local + LaTeX' : 'Render Free'}</strong>
             {backend.deps?.latex ? ' (LaTeX OK)' : ' (chưa có LaTeX)'}.
+            Canh khung: hình <code>scale_to_fit_height(4.0)</code>, tiêu đề trên, chữ phải — không đè lên nhau.
           </p>
 
           <div className="validation-mode-row">
@@ -1520,45 +1746,111 @@ export default function App() {
 
           <div className="pro-workflow-box">
             <h3 className="voiceover-title">
-              <Code2 size={16} /> Dán code từ Gemini Pro
+              <Code2 size={16} /> Gemini Pro — 3 bước
             </h3>
-            <ol className="ce-checklist">
-              {ceChecklist.map((item) => (
-                <li key={item.id}>{item.label}</li>
-              ))}
+            <ol className="ce-checklist pro-steps">
+              <li>
+                <strong>Bước 1 — Kịch bản:</strong> Copy prompt → Gemini Pro → dán JSON vào ô Kịch bản
+              </li>
+              <li>
+                <strong>Bước 2 — Code:</strong> Copy prompt (có kịch bản) → nhận Python → dán vào ô Code
+              </li>
+              <li>
+                <strong>Bước 3 — Sửa:</strong> Ghi chú thay đổi → Copy prompt sửa → dán code mới
+              </li>
             </ol>
 
-            <div className="export-row">
+            <div className="export-row pro-step-buttons">
               <button
                 type="button"
-                className="btn secondary export-btn"
-                onClick={() => setShowProPrompt((v) => !v)}
+                className={`btn secondary export-btn ${proPromptStep === 'storyboard' ? 'active-mode' : ''}`}
+                onClick={handleCopyGeminiProStoryboard}
               >
-                <FileText size={15} /> {showProPrompt ? 'Ẩn prompt mẫu' : 'Hiện prompt mẫu'}
+                <Copy size={15} /> Bước 1 — Kịch bản
               </button>
               <button
                 type="button"
-                className="btn primary export-btn"
-                onClick={handleCopyGeminiProPrompt}
+                className={`btn primary export-btn ${proPromptStep === 'code' ? 'active-mode' : ''}`}
+                onClick={handleCopyGeminiProCode}
               >
-                <Copy size={15} /> Copy prompt (kèm đề + lời giải)
+                <Copy size={15} /> Bước 2 — Code
+              </button>
+              <button
+                type="button"
+                className={`btn secondary export-btn ${proPromptStep === 'revise' ? 'active-mode' : ''}`}
+                onClick={handleCopyGeminiProRevise}
+              >
+                <Copy size={15} /> Bước 3 — Sửa
+              </button>
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={() => setShowProPrompt((v) => !v)}
+              >
+                <FileText size={15} /> {showProPrompt ? 'Ẩn prompt' : 'Xem prompt'}
               </button>
             </div>
 
             {showProPrompt && (
               <label className="field">
-                <span className="field-label">PROMPT MẪU (CHỈNH ĐƯỢC TRƯỚC KHI COPY)</span>
-                <textarea
-                  rows={8}
-                  className="mono"
-                  readOnly
-                  value={geminiProPrompt}
-                />
+                <span className="field-label">
+                  PROMPT{' '}
+                  {proPromptStep === 'storyboard'
+                    ? 'BƯỚC 1 (KỊCH BẢN)'
+                    : proPromptStep === 'revise'
+                      ? 'BƯỚC 3 (SỬA)'
+                      : 'BƯỚC 2 (CODE)'}
+                </span>
+                <textarea rows={8} className="mono" readOnly value={geminiProPrompt} />
               </label>
             )}
 
             <label className="field">
-              <span className="field-label">DÁN CODE MANIM TỪ GEMINI PRO</span>
+              <span className="field-label">KỊCH BẢN JSON TỪ GEMINI (BƯỚC 1)</span>
+              <textarea
+                rows={5}
+                className="mono"
+                value={proStoryboardPaste}
+                onChange={(e) => setProStoryboardPaste(e.target.value)}
+                placeholder="Dán JSON kịch bản từ Gemini Pro (Bước 1). Có thể chỉnh nhẹ rồi bấm Áp dụng."
+              />
+            </label>
+            <div className="export-row">
+              <button
+                type="button"
+                className="btn secondary export-btn"
+                onClick={handleApplyProStoryboard}
+                disabled={!proStoryboardPaste.trim()}
+              >
+                <Upload size={15} /> Áp dụng kịch bản
+              </button>
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={() => {
+                  setProStoryboardPaste('')
+                  setProPromptMsg('')
+                }}
+                disabled={!proStoryboardPaste.trim()}
+              >
+                <X size={15} /> Xóa ô kịch bản
+              </button>
+            </div>
+
+            <label className="field">
+              <span className="field-label">YÊU CẦU SỬA KỊCH BẢN / BỐ CỤC (BƯỚC 3)</span>
+              <textarea
+                rows={3}
+                value={proRevisionNotes}
+                onChange={(e) => setProRevisionNotes(e.target.value)}
+                placeholder={
+                  'Ví dụ:\n- Tiêu đề nhỏ hơn, đẩy lên trên\n- Hình scale nhỏ lại (4.0), không cắt điểm K\n- Bước 2 tách 2 dòng, không đè lên tiêu đề'
+                }
+              />
+            </label>
+
+            <label className="field">
+              <span className="field-label">DÁN CODE MANIM TỪ GEMINI PRO (BƯỚC 2 / 3)</span>
               <textarea
                 rows={6}
                 className="mono"
@@ -1589,6 +1881,12 @@ export default function App() {
               </button>
             </div>
             {proPromptMsg && <div className="step-ok">{proPromptMsg}</div>}
+
+            <ul className="ce-checklist">
+              {ceChecklist.map((item) => (
+                <li key={item.id}>{item.label}</li>
+              ))}
+            </ul>
           </div>
 
           <label className="field">
