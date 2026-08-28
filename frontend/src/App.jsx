@@ -74,8 +74,9 @@ function buildGeminiProPrompt(problem, solution, mode = 'local_latex') {
 - Biến đổi công thức: TransformMatchingTex(eq1, eq2) hoặc ReplacementTransform
 - Bố cục: figure = VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
   text_panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT, buff=0.2).scale(0.42).to_edge(RIGHT, buff=0.35)
-- Màu: nền đen (#111), chữ trắng/vàng; điểm YELLOW, đường BLUE, kết luận GREEN
-- Animation: Create/Write/FadeIn/Indicate + self.wait(0.8~1.5) mỗi bước lời giải
+- Màu STYLE_VN (NTSM): nền #0d1117; điểm #8b1a1a; cạnh #1e40af; tròn #3d6b2f; highlight #FFD700; kết luận #FF8C00
+- BEAT_ORDER: title → problem → construction → solution_steps → conclusion → check_question
+- self.wait(≥0.8) mỗi bước; kết luận có SurroundingRectangle vàng
 - Comment tiếng Việt trước mỗi bước; không TODO/placeholder
 - API: Dot, Line, DashedLine, Circle, Arc, Polygon, Angle, RightAngle, VGroup, SurroundingRectangle`
     : `RÀNG BUỘC (Render Free / Docker):
@@ -208,6 +209,7 @@ export default function App() {
   const [solutionText, setSolutionText] = useState('')
   const [solutionSteps, setSolutionSteps] = useState([])
   const [manimGuidance, setManimGuidance] = useState('')
+  const [videoFormat, setVideoFormat] = useState('landscape')
   const [storyboardText, setStoryboardText] = useState('')
   const [storyboardReady, setStoryboardReady] = useState(false)
   const [generatingStoryboard, setGeneratingStoryboard] = useState(false)
@@ -725,6 +727,7 @@ export default function App() {
           user_guidance: manimGuidance,
           geogebra_commands: ggbCommands,
           geogebra_mode: ggbMode,
+          video_format: videoFormat,
           image_base64: savedGgbImage,
           mime_type: savedGgbImage?.startsWith('data:')
             ? savedGgbImage.slice(5, savedGgbImage.indexOf(';'))
@@ -1410,6 +1413,18 @@ export default function App() {
           )}
 
           <label className="field">
+            <span className="field-label">ĐỊNH DẠNG VIDEO</span>
+            <select
+              className="select"
+              value={videoFormat}
+              onChange={(e) => setVideoFormat(e.target.value)}
+            >
+              <option value="landscape">Landscape 16:9 — hình trái + lời giải phải (median, Muôn Nơi)</option>
+              <option value="shorts">Shorts 9:16 — 1 khung tập trung (Thanh Thầy Việt)</option>
+            </select>
+          </label>
+
+          <label className="field">
             <span className="field-label">PROMPT HƯỚNG DẪN (CHO KỊCH BẢN + MANIM)</span>
             <textarea
               rows={4}
@@ -1434,8 +1449,8 @@ export default function App() {
           <label className="field">
             <span className="field-label">KỊCH BẢN VIDEO (JSON — CHỈNH ĐƯỢC)</span>
             <p className="step-hint">
-              Kiểu Math-To-Manim: learner → prerequisites → teaching_order → đối tượng/camera → beats
-              (problem → solution → check). Chưa viết code ở bước này.
+              Math-To-Manim + STYLE_VN: video_format → beats (title → problem → construction →
+              solution_steps → conclusion → check). Màu NTSM: điểm đỏ, cạnh xanh dương, tròn xanh lá.
             </p>
             <textarea
               rows={10}

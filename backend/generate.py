@@ -10,6 +10,11 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from manim_style import BEAT_ORDER, STYLE_VN, STYLE_VN_PROMPT, VIDEO_FORMATS
+
+_STYLE_VN_JSON = json.dumps(STYLE_VN, ensure_ascii=False)
+_BEAT_ORDER_TEXT = ", ".join(BEAT_ORDER)
+
 logger = logging.getLogger("manim-studio.generate")
 
 # Model mới trước; bỏ 1.5 / 2.0 (đã shutdown → 404 trên nhiều key).
@@ -136,138 +141,129 @@ YÊU CẦU:
 - Không viết mã GeoGebra/Manim ở bước này.
 """
 
-STORYBOARD_PROMPT = """Bạn là đạo diễn video bài giảng Toán theo phong cách Math-To-Manim.
+STORYBOARD_PROMPT = (
+    """Bạn là đạo diễn video bài giảng Toán theo phong cách Math-To-Manim + 4 kênh VN.
 Nhiệm vụ: CHỈ viết KỊCH BẢN VIDEO dạng JSON — chưa viết code Python.
 Suy nghĩ theo pipeline: hiểu học sinh → kiến thức cần trước → chuỗi giảng → chọn toán → kế hoạch hình/camera → beats.
 
+"""
+    + STYLE_VN_PROMPT
+    + f"""
+
 Trả về ĐÚNG 1 JSON:
-{
+{{
   "scene_name": "TenClassScene",
   "title": "tiêu đề ngắn",
-  "learner": {
+  "video_format": "landscape",
+  "style": {{
+    "palette": "STYLE_VN",
+    "colors": {_STYLE_VN_JSON},
+    "channel_style": "median | thanh_viet_shorts | muon_noi | mixed"
+  }},
+  "learner": {{
     "level": "THCS/THPT/...",
     "assume_knows": ["kiến thức đã biết"],
     "goal": "học sinh hiểu được gì sau video"
-  },
+  }},
   "prerequisites": ["ý cần ôn trước khi vào bài"],
   "teaching_order": ["bước dạy 1", "bước dạy 2", "bước dạy 3"],
   "check_question": "1 câu hỏi kiểm tra cuối (ngắn)",
-  "camera": {
+  "camera": {{
     "focus": "figure_then_text",
-    "notes": "hình trái, chữ phải; không zoom phức tạp"
-  },
-  "layout": {
+    "notes": "shorts: single_focus giữa; landscape: hình trái chữ phải"
+  }},
+  "layout": {{
+    "mode": "two_panel",
     "figure_area": "left",
     "text_area": "right",
-    "figure_fit": "scale_to_fit_height_5_then_shift_left"
-  },
+    "figure_fit": "scale_to_fit_height_5_then_shift_left",
+    "shorts_single_frame": false
+  }},
   "figure_objects": [
-    {"id": "A", "kind": "dot", "x": 0.0, "y": 0.0, "label": "A", "color": "RED"},
-    {"id": "B", "kind": "dot", "x": 3.0, "y": 0.0, "label": "B", "color": "RED"},
-    {"id": "AB", "kind": "segment", "from": "A", "to": "B", "color": "BLUE", "label": ""}
+    {{"id": "A", "kind": "dot", "x": 0.0, "y": 0.0, "label": "A", "color": "#8b1a1a"}},
+    {{"id": "B", "kind": "dot", "x": 3.0, "y": 0.0, "label": "B", "color": "#8b1a1a"}},
+    {{"id": "AB", "kind": "segment", "from": "A", "to": "B", "color": "#1e40af", "label": ""}}
   ],
   "beats": [
-    {
-      "id": 1,
-      "phase": "problem",
-      "comment_vi": "Hiện đề bài",
-      "teach_point": "nêu đề",
-      "text_lines": ["Đề: ..."],
-      "actions": [
-        {"op": "write_text", "target": "problem_block"},
-        {"op": "wait", "seconds": 1.0}
-      ],
-      "reveal_objects": [],
-      "camera_hint": "nhìn toàn cảnh"
-    },
-    {
-      "id": 2,
-      "phase": "solution",
-      "comment_vi": "Bước 1: dựng đoạn AB",
-      "teach_point": "xác định cạnh AB",
-      "text_lines": ["1) Dựng đoạn AB"],
-      "actions": [
-        {"op": "create", "targets": ["A", "B", "AB"]},
-        {"op": "indicate", "targets": ["AB"]},
-        {"op": "wait", "seconds": 0.8}
-      ],
-      "reveal_objects": ["A", "B", "AB"],
-      "camera_hint": "nhấn mạnh AB"
-    },
-    {
-      "id": 99,
-      "phase": "check",
-      "comment_vi": "Câu hỏi kiểm tra",
-      "teach_point": "kiểm tra hiểu bài",
-      "text_lines": ["Hỏi: ...?"],
-      "actions": [
-        {"op": "write_text", "target": "check_block"},
-        {"op": "wait", "seconds": 1.2}
-      ],
-      "reveal_objects": [],
-      "camera_hint": "nhìn chữ kiểm tra"
-    }
+    {{"id": 0, "phase": "title", "comment_vi": "Tiêu đề ngắn", "text_lines": ["Bài: ..."],
+      "actions": [{{"op": "write_text", "target": "title_block"}}, {{"op": "wait", "seconds": 1.5}}]}},
+    {{"id": 1, "phase": "problem", "comment_vi": "Hiện đề bài", "text_lines": ["Đề: ..."],
+      "actions": [{{"op": "write_text", "target": "problem_block"}}, {{"op": "wait", "seconds": 1.0}}]}},
+    {{"id": 2, "phase": "construction", "comment_vi": "Dựng hình", "text_lines": [],
+      "actions": [{{"op": "create", "targets": ["A", "B"]}}, {{"op": "wait", "seconds": 0.8}}]}},
+    {{"id": 3, "phase": "solution_steps", "comment_vi": "Bước 1", "text_lines": ["1) ..."],
+      "actions": [{{"op": "indicate", "targets": ["AB"]}}, {{"op": "write_text", "target": "step_panel"}}, {{"op": "wait", "seconds": 0.8}}]}},
+    {{"id": 98, "phase": "conclusion", "comment_vi": "Kết luận", "text_lines": ["Vậy ..."],
+      "actions": [{{"op": "surround_rect", "target": "conclusion_block", "color": "#FFD700"}}, {{"op": "wait", "seconds": 1.2}}]}},
+    {{"id": 99, "phase": "check_question", "comment_vi": "Kiểm tra", "text_lines": ["Hỏi: ...?"],
+      "actions": [{{"op": "write_text", "target": "check_block"}}, {{"op": "wait", "seconds": 1.2}}]}}
   ],
   "notes": "ghi chú"
-}
+}}
 
 === QUY TẮC KỊCH BẢN ===
-1. learner / prerequisites / teaching_order / check_question: BẮT BUỘC có (ngắn gọn tiếng Việt).
-2. Tọa độ figure_objects trong x∈[-3.5,3.5], y∈[-2.5,2.5] (đã scale; KHÔNG copy tọa độ GeoGebra lớn).
-3. kind chỉ: dot | segment | line | circle | polygon | label | angle_mark
-4. op chỉ: write_text | create | fade_in | indicate | set_color | wait
-5. Beat đầu phase=problem; giữa = solution theo teaching_order; beat cuối phase=check.
-6. Mỗi bước lời giải = 1 beat; text_lines ≤ 2 dòng.
-7. camera.focus + camera_hint từng beat — CHỈ gợi ý bố cục (không MovingCameraScene).
-8. Không viết code Manim/Python.
-9. Hướng dẫn người dùng: ưu tiên bố cục/hiệu ứng theo đó.
-10. Bỏ object GeoGebra đã ẩn (SetVisibleInView false).
+1. video_format BẮT BUỘC: "shorts" hoặc "landscape".
+2. Beats theo BEAT_ORDER: {_BEAT_ORDER_TEXT} — phase khớp tên.
+3. shorts: layout.shorts_single_frame=true, 1 khung giữa; 3–5 beats.
+4. landscape: two_panel; 8–15 beats; có check_question; median (câu hỏi trước — trả lời sau).
+5. learner / prerequisites / teaching_order / check_question: BẮT BUỘC (tiếng Việt).
+6. Màu figure_objects hex STYLE_VN (#8b1a1a điểm, #1e40af cạnh, #3d6b2f tròn).
+7. Tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5].
+8. kind: dot | segment | line | circle | polygon | label | angle_mark
+9. op: write_text | create | fade_in | indicate | set_color | surround_rect | transform | wait
+10. Mỗi bước lời giải = 1 beat phase=solution_steps; wait ≥ 0.8s.
+11. Không viết code Manim/Python. Bỏ object GeoGebra đã ẩn.
 """
+)
 
-MANIM_FROM_STORYBOARD_PROMPT = """Bạn là lập trình viên Manim Community Edition (ManimCE).
-Nhiệm vụ: chuyển KỊCH BẢN JSON thành mã Python Manim AN TOÀN cho Docker/Render Free.
+MANIM_FROM_STORYBOARD_PROMPT = (
+    """Bạn là lập trình viên Manim Community Edition (ManimCE).
+Nhiệm vụ: chuyển KỊCH BẢN JSON thành mã Python Manim theo STYLE_VN (4 kênh VN + NTSM).
+
+"""
+    + STYLE_VN_PROMPT
+    + f"""
 
 Trả về ĐÚNG 1 JSON:
-{
+{{
   "scene_name": "TenClassScene",
-  "manim_code": "from manim import *\\n...",
+  "manim_code": "from manim import *\\\\n...",
   "notes": "tóm tắt"
-}
+}}
 
 === SYSTEM / KIẾN TRÚC CODE (BẮT BUỘC) ===
 from manim import *
 
-class TenClassScene(Scene):  # CHỈ Scene — không MovingCameraScene/ThreeDScene
+STYLE_VN = {_STYLE_VN_JSON}
+
+def vn(s, size=28, color=None):
+    return Text(s, font_size=size, color=color or STYLE_VN["text"], disable_ligatures=True)
+
+class TenClassScene(Scene):
     def construct(self):
-        # 1) Text/MarkupText tiếng Việt (font mặc định OK; disable_ligatures=True)
-        # 2) Dot/Line/Circle/Polygon/Angle từ figure_objects
-        # 3) Có thể ImageMobject(path) nếu có ảnh GeoGebra
-        # 4) figure = VGroup(...).scale_to_fit_height(5).move_to(LEFT * 3)
-        # 5) text_panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT).scale(0.45).to_edge(RIGHT, buff=0.3)
-        # 6) từng beat: comment tiếng Việt + Create/Write/Indicate + self.wait()
+        self.camera.background_color = STYLE_VN["bg"]
+        # shorts: 1 khung giữa; landscape: figure trái + text_panel phải
+        # BEAT_ORDER: {_BEAT_ORDER_TEXT}
+        # Mỗi beat: comment # phase + animation + self.wait(≥0.8)
 
-=== API ƯU TIÊN (Manim CE) ===
-Text, MarkupText, Paragraph,
-Dot, Line, DashedLine, Circle, Arc, Polygon, Triangle, Square, Rectangle,
-Angle, RightAngle, VGroup, ImageMobject,
-SurroundingRectangle, BackgroundRectangle,
-Create, Write, FadeIn, FadeOut, Indicate, ReplacementTransform,
-self.wait, scale_to_fit_height, move_to, to_edge, next_to, arrange,
-RED, BLUE, GREEN, YELLOW, WHITE, ORANGE, LEFT, RIGHT, UP, DOWN
+=== FORMAT ===
+- video_format "shorts": VGroup tập trung ORIGIN; text lớn, ít dòng
+- video_format "landscape": figure.scale_to_fit_height(5).move_to(LEFT*3); panel.to_edge(RIGHT)
+- median: TransformMatchingTex / ReplacementTransform — không FadeOut cả khung đột ngột
 
-Nhãn điểm: Text("A", font_size=28, disable_ligatures=True) — KHÔNG Label("A").
+=== API ===
+Text, MathTex(r"..."), Dot, Line, Circle, Polygon, Angle, VGroup, SurroundingRectangle,
+Create, Write, Indicate, TransformMatchingTex, LaggedStart, self.wait
 
-=== CẤM (Render Free / CE traps) ===
-Tex, MathTex, SingleStringMathTex, tex_template, add_to_preamble, Typst, MathTypst;
-Label("chuỗi"), LabeledLine với chuỗi trần (mặc định MathTex);
-MovingCameraScene, ThreeDScene, ZoomedScene, OpenGL*;
-Brace.get_tex / DecimalNumber mặc định nếu kéo LaTeX;
-import ngoài manim/numpy/math; placeholder/TODO; code cắt cụt.
+=== LOCAL vs RENDER ===
+Local/LaTeX: MathTex công thức + Text tiếng Việt. Render Free: chỉ Text/MarkupText.
 
-=== ĐỒNG BỘ ===
-Mỗi beat = comment # tiếng Việt + text_lines + create/indicate + wait.
-scene_name khớp class. JSON manim_code: xuống dòng là \\n.
+=== CẤM ===
+MovingCameraScene, ThreeDScene, Label("chuỗi"), Tex cho tiếng Việt, import lạ, TODO.
+
+scene_name khớp class. JSON manim_code: xuống dòng là \\\\n.
 """
+)
 
 
 def _strip_code_fence(text: str) -> str:
@@ -710,6 +706,7 @@ def generate_storyboard(
     solution_steps: list[str] | None = None,
     user_guidance: str = "",
     geogebra_mode: str = "geometry",
+    video_format: str = "landscape",
     image_b64: str | None = None,
     mime_type: str = "image/png",
 ) -> dict[str, Any]:
@@ -735,7 +732,14 @@ def generate_storyboard(
         steps = []
     steps = [str(s).strip() for s in steps if str(s).strip()]
 
+    fmt = (video_format or "landscape").strip().lower()
+    if fmt not in ("shorts", "landscape"):
+        fmt = "landscape"
+    fmt_meta = VIDEO_FORMATS[fmt]
+
     user_prompt = STORYBOARD_PROMPT
+    user_prompt += f"\n\n--- VIDEO FORMAT (BẮT BUỘC) ---\nvideo_format: {fmt}\n"
+    user_prompt += json.dumps(fmt_meta, ensure_ascii=False, indent=2)
     user_prompt += "\n\n--- ĐỀ BÀI ---\n" + problem
     user_prompt += "\n\n--- LỜI GIẢI ---\n" + solution
     if steps:
@@ -796,7 +800,7 @@ def generate_manim_from_storyboard(
         user_prompt += "\n\n--- HƯỚNG DẪN THÊM (ƯU TIÊN KHI VIẾT CODE) ---\n"
         user_prompt += user_guidance.strip()
     # Pass teaching metadata if present (Math-To-Manim style)
-    for key in ("learner", "prerequisites", "teaching_order", "check_question", "camera"):
+    for key in ("learner", "prerequisites", "teaching_order", "check_question", "camera", "style", "video_format", "layout"):
         if storyboard.get(key):
             user_prompt += f"\n\n--- {key.upper()} ---\n"
             user_prompt += json.dumps(storyboard[key], ensure_ascii=False)

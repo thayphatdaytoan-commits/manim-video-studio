@@ -160,6 +160,7 @@
   border-color: var(--accent);
 }
 
+.field select,
 .field textarea,
 .key-input {
   background: var(--bg-input);

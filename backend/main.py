@@ -103,6 +103,24 @@ TEMPLATES: list[dict[str, Any]] = [
         "file": "pythagoras.py",
         "default_scene": "PythagoreanTheorem",
     },
+    {
+        "id": "style_shorts_viet",
+        "name": "Mẫu Shorts — Thanh Thầy Việt",
+        "file": "style_shorts_thanh_viet.py",
+        "default_scene": "ShortsThanhVietDemo",
+    },
+    {
+        "id": "style_median",
+        "name": "Mẫu Landscape — median",
+        "file": "style_landscape_median.py",
+        "default_scene": "LandscapeMedianDemo",
+    },
+    {
+        "id": "style_muon_noi",
+        "name": "Mẫu Landscape — Muôn Nơi",
+        "file": "style_landscape_muon_noi.py",
+        "default_scene": "LandscapeMuonNoiDemo",
+    },
 ]
 
 # Lưu trạng thái job trong bộ nhớ (đủ cho demo đơn máy)
@@ -178,6 +196,10 @@ class StoryboardRequest(BaseModel):
     user_guidance: str = Field(default="")
     geogebra_commands: list[str] | str = Field(default_factory=list)
     geogebra_mode: str = Field(default="geometry")
+    video_format: str = Field(
+        default="landscape",
+        description="shorts (9:16, 1 khung) hoặc landscape (16:9, 2 panel)",
+    )
     image_base64: str | None = Field(default=None)
     mime_type: str = Field(default="image/png")
 
@@ -323,6 +345,7 @@ async def api_generate_storyboard(
             solution_steps=req.solution_steps,
             user_guidance=req.user_guidance,
             geogebra_mode=req.geogebra_mode,
+            video_format=req.video_format,
             image_b64=req.image_base64,
             mime_type=req.mime_type,
         )

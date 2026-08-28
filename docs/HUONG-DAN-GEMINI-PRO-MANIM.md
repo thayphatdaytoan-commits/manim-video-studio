@@ -63,6 +63,46 @@ MarkupText(
 
 ---
 
+## 4b. Bộ nguyên tắc STYLE_VN (4 kênh + NTSM)
+
+```python
+STYLE_VN = {
+    "bg": "#0d1117",        # nền đen xanh
+    "circle": "#3d6b2f",    # đường tròn
+    "segment": "#1e40af",    # cạnh/đoạn
+    "point": "#8b1a1a",     # điểm
+    "text": "#FFFFFF",
+    "highlight": "#FFD700",
+    "conclusion": "#FF8C00",
+}
+```
+
+### Thứ tự beat (BEAT_ORDER)
+
+1. **title** — 1–2 giây  
+2. **problem** — đề từng dòng  
+3. **construction** — Create từng element hình  
+4. **solution_steps** — Indicate + Write từng bước  
+5. **conclusion** — SurroundingRectangle vàng/cam  
+6. **check_question** — chỉ video dài (landscape)
+
+### Shorts vs Landscape
+
+| | Shorts (Thanh Thầy Việt) | Landscape (median, Muôn Nơi) |
+|--|---------------------------|------------------------------|
+| Tỷ lệ | 9:16 | 16:9 |
+| Layout | 1 khung giữa | Hình trái + text phải |
+| Beats | 3–5 | 8–15 |
+| Text | Tối thiểu | Có subtitle nhỏ |
+
+### Mẫu code trong repo (chọn trên web)
+
+- `style_shorts_thanh_viet.py` — ShortsThanhVietDemo  
+- `style_landscape_median.py` — LandscapeMedianDemo  
+- `style_landscape_muon_noi.py` — LandscapeMuonNoiDemo  
+
+---
+
 ## 4. LaTeX / MathTex — công thức đẹp
 
 ### Cú pháp bắt buộc
