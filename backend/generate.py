@@ -131,6 +131,31 @@ geogebra_mode: graphing nếu đồ thị; 3d nếu không gian; còn lại geom
 Không sinh mã Manim ở bước này.
 """
 
+FIGURE_REFERENCE_PROMPT = """Bạn là chuyên gia chuyển hình GeoGebra đã chỉnh → mã tham chiếu Manim CE.
+Nhiệm vụ: từ manifest JSON + lệnh GeoGebra + ảnh hình đã lưu, viết mã Python tham chiếu tọa độ.
+
+Trả về ĐÚNG 1 JSON (không markdown):
+{
+  "figure_reference_code": "from manim import *\\n...",
+  "figure_objects": [
+    {"id": "A", "kind": "dot", "x": 0.0, "y": 1.2, "label": "A", "color": "#8b1a1a", "construction_step": 1}
+  ],
+  "construction_order": ["circle1", "A", "B", "AB"],
+  "notes": "ghi chú"
+}
+
+=== QUY TẮC ===
+1. Bám ĐÚNG thứ tự construction_order người dùng đã chọn — KHÔNG đổi thứ tự.
+2. Tọa độ Manim: x∈[-3.5,3.5], y∈[-2.5,2.5]; dùng Dot/Line/Circle/RightAngle/Angle.
+3. Tiếng Việt nhãn: vn("A", 22).next_to(dot, buff=0.06) — CẤM Tex().
+4. Công thức góc: MathTex(r"\\\\angle ABC = 90^\\\\circ") nếu cần.
+5. figure = VGroup(...).scale_to_fit_height(3.6).move_to(DOWN*0.8)
+6. Cuối file: CONSTRUCTION_ORDER = [...] và comment hướng dẫn Create tuần tự.
+7. Màu STYLE_VN: điểm #8b1a1a, cạnh #1e40af, tròn #3d6b2f, highlight #FFD700.
+8. Góc vuông: RightAngle; góc thường: Angle — ghi rõ id đối tượng góc.
+9. Không viết class Scene hoàn chỉnh — chỉ mã tham chiếu (điểm, cạnh, figure, CONSTRUCTION_ORDER).
+"""
+
 PROBLEM_SOLUTION_PROMPT = """Bạn là giáo viên Toán Việt Nam.
 Nhiệm vụ: từ ảnh đề và/hoặc gợi ý văn bản, tạo ĐỀ BÀI rõ ràng và LỜI GIẢI từng bước để làm video bài giảng.
 
@@ -746,6 +771,99 @@ def generate_geogebra(
     }
 
 
+def _append_figure_context_to_prompt(
+    user_prompt: str,
+    *,
+    construction_order: list[str] | None = None,
+    figure_manifest: dict[str, Any] | None = None,
+    figure_reference_code: str = "",
+    figure_objects: list[dict[str, Any]] | None = None,
+) -> str:
+    """Gắn thông tin hình GeoGebra đã lưu vào prompt kịch bản."""
+    order = [str(x).strip() for x in (construction_order or []) if str(x).strip()]
+    if order:
+        user_prompt += "\n\n--- THỨ TỰ DỰNG HÌNH (BẮT BUỘC — beat problem_and_figure) ---\n"
+        user_prompt += "\n".join(f"{i + 1}. {name}" for i, name in enumerate(order))
+        user_prompt += (
+            "\n\nQUY TẮC: beat problem_and_figure phải dùng figure_targets theo ĐÚNG thứ tự trên. "
+            "Mỗi solution_steps có indicate_targets khớp id cạnh/góc trong manifest."
+        )
+    if figure_objects:
+        user_prompt += "\n\n--- figure_objects (TỌA ĐỘ MANIM ĐÃ TÍNH — dùng trong JSON) ---\n"
+        user_prompt += json.dumps(figure_objects, ensure_ascii=False, indent=2)[:12000]
+    elif figure_manifest and isinstance(figure_manifest.get("objects"), list):
+        user_prompt += "\n\n--- FIGURE MANIFEST (GeoGebra) ---\n"
+        user_prompt += json.dumps(figure_manifest, ensure_ascii=False, indent=2)[:12000]
+    if figure_reference_code.strip():
+        user_prompt += "\n\n--- MÃ THAM CHIẾU TỌA ĐỘ MANIM ---\n"
+        user_prompt += figure_reference_code.strip()[:16000]
+    return user_prompt
+
+
+def export_figure_reference(
+    *,
+    api_key: str | list[str],
+    figure_manifest: dict[str, Any] | None = None,
+    construction_order: list[str] | None = None,
+    geogebra_commands: list[str] | str = "",
+    figure_reference_code: str = "",
+    problem_text: str = "",
+    solution_text: str = "",
+    image_b64: str | None = None,
+    mime_type: str = "image/png",
+) -> dict[str, Any]:
+    """AI tinh chỉnh mã tham chiếu tọa độ Manim từ hình GeoGebra đã lưu."""
+    keys = _normalize_api_keys(api_key)
+    if not keys:
+        raise ValueError("Thiếu Gemini API key")
+
+    order = [str(x).strip() for x in (construction_order or []) if str(x).strip()]
+    commands = _normalize_commands(geogebra_commands)
+
+    user_prompt = FIGURE_REFERENCE_PROMPT
+    if problem_text.strip():
+        user_prompt += "\n\n--- ĐỀ BÀI ---\n" + problem_text.strip()
+    if solution_text.strip():
+        user_prompt += "\n\n--- LỜI GIẢI ---\n" + solution_text.strip()
+    if order:
+        user_prompt += "\n\n--- CONSTRUCTION ORDER (KHÔNG ĐỔI) ---\n"
+        user_prompt += json.dumps(order, ensure_ascii=False)
+    if figure_manifest:
+        user_prompt += "\n\n--- FIGURE MANIFEST ---\n"
+        user_prompt += json.dumps(figure_manifest, ensure_ascii=False, indent=2)[:12000]
+    if commands:
+        user_prompt += "\n\n--- LỆNH GEOGEBRA ---\n" + "\n".join(commands)
+    if figure_reference_code.strip():
+        user_prompt += "\n\n--- MÃ THAM CHIẾU NHÁP (cải thiện, giữ thứ tự) ---\n"
+        user_prompt += figure_reference_code.strip()[:12000]
+    if image_b64:
+        user_prompt += "\n\n--- ẢNH HÌNH ĐÃ LƯU ---\nBám ảnh để xác nhận nhãn, góc, vị trí."
+
+    raw = _gemini_with_fallback(
+        api_key=keys,
+        prompt=user_prompt,
+        image_b64=image_b64,
+        mime_type=mime_type,
+    )
+    data = _extract_json(raw)
+    code = str(data.get("figure_reference_code") or "").strip()
+    if not code:
+        raise ValueError("AI không sinh được mã tham chiếu tọa độ")
+    objs = data.get("figure_objects")
+    if not isinstance(objs, list):
+        objs = []
+    out_order = data.get("construction_order")
+    if not isinstance(out_order, list):
+        out_order = order
+    return {
+        "figure_reference_code": code,
+        "figure_objects": objs,
+        "construction_order": [str(x) for x in out_order],
+        "notes": str(data.get("notes") or ""),
+        "keys_available": len(keys),
+    }
+
+
 def generate_storyboard(
     *,
     api_key: str | list[str],
@@ -758,6 +876,10 @@ def generate_storyboard(
     video_format: str = "shorts",
     image_b64: str | None = None,
     mime_type: str = "image/png",
+    construction_order: list[str] | None = None,
+    figure_manifest: dict[str, Any] | None = None,
+    figure_reference_code: str = "",
+    figure_objects: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     keys = _normalize_api_keys(api_key)
     if not keys:
@@ -805,6 +927,13 @@ def generate_storyboard(
         )
     user_prompt += "\n\n--- LỆNH GEOGEBRA (tham chiếu; bỏ object ẩn) ---\n"
     user_prompt += "\n".join(commands) if commands else "(không có lệnh — bám theo ảnh)"
+    user_prompt = _append_figure_context_to_prompt(
+        user_prompt,
+        construction_order=construction_order,
+        figure_manifest=figure_manifest,
+        figure_reference_code=figure_reference_code,
+        figure_objects=figure_objects,
+    )
 
     raw = _gemini_with_fallback(
         api_key=keys,

@@ -513,6 +513,183 @@ function isFreePointType(type) {
   return type === 'point' || type === 'point3d'
 }
 
+function parseDefinitionRefs(def, type) {
+  const d = String(def || '').trim()
+  if (!d) return {}
+
+  const seg = d.match(/^Segment\s*\(([^)]+)\)/i)
+  if (seg) {
+    const [a, b] = parseArgList(seg[1])
+    return { from: a, to: b }
+  }
+  const line = d.match(/^(?:Line|Ray)\s*\(([^)]+)\)/i)
+  if (line) {
+    const [a, b] = parseArgList(line[1])
+    return { from: a, to: b }
+  }
+  const circ = d.match(/^Circle\s*\(([^)]+)\)/i)
+  if (circ) {
+    const args = parseArgList(circ[1])
+    if (args.length >= 2) {
+      const r = Number(args[1])
+      if (Number.isFinite(r)) return { center: args[0], radius: r }
+      return { center: args[0], through: args[1] }
+    }
+  }
+  const poly = d.match(/^Polygon\s*\(([^)]+)\)/i)
+  if (poly) return { vertices: parseArgList(poly[1]) }
+  const ang = d.match(/^Angle\s*\(([^)]+)\)/i)
+  if (ang) return { points: parseArgList(ang[1]) }
+  return {}
+}
+
+function parseArgList(raw) {
+  return String(raw || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function ggbKindFromType(type, def) {
+  const t = String(type || '').toLowerCase()
+  if (t === 'point' || t === 'point3d') return 'dot'
+  if (t === 'segment') return 'segment'
+  if (t === 'line' || t === 'ray') return 'line'
+  if (t === 'circle' || t === 'conic') return 'circle'
+  if (t === 'polygon') return 'polygon'
+  if (t === 'angle') return 'angle'
+  if (t === 'arc') return 'arc'
+  if (t === 'text') return 'label'
+  if (/^Segment/i.test(def)) return 'segment'
+  if (/^Circle/i.test(def)) return 'circle'
+  if (/^Angle/i.test(def)) return 'angle'
+  return t || 'unknown'
+}
+
+/**
+ * Xuất manifest có cấu trúc: điểm, cạnh, tròn, góc + thứ tự dựng hình.
+ */
+export function exportFigureManifest(api) {
+  if (!api || typeof api.getObjectNumber !== 'function') {
+    return { objects: [], constructionOrder: [] }
+  }
+
+  const commands = exportConstructionCommands(api)
+  const n = api.getObjectNumber()
+  const objects = []
+  const constructionOrder = []
+
+  for (let i = 0; i < n; i++) {
+    let name = ''
+    try {
+      name = api.getObjectName(i)
+    } catch {
+      continue
+    }
+    if (!name || name.startsWith('_')) continue
+
+    let type = ''
+    let def = ''
+    let cmd = ''
+    try {
+      type = String(api.getObjectType(name) || '').toLowerCase()
+    } catch {
+      continue
+    }
+    try {
+      if (typeof api.getDefinitionString === 'function') {
+        def = String(api.getDefinitionString(name) || '').trim()
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (typeof api.getCommandString === 'function') {
+        cmd = String(api.getCommandString(name) || '').trim()
+      }
+    } catch {
+      /* ignore */
+    }
+
+    let visible = true
+    try {
+      if (typeof api.getVisible === 'function') {
+        try {
+          visible = !!api.getVisible(name, 1)
+        } catch {
+          visible = !!api.getVisible(name)
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const kind = ggbKindFromType(type, def || cmd)
+    const refs = parseDefinitionRefs(def || cmd, type)
+    const entry = {
+      id: name,
+      kind,
+      ggbType: type,
+      definition: def || cmd,
+      visible,
+    }
+
+    if (kind === 'dot') {
+      try {
+        entry.x = roundCoord(api.getXcoord(name))
+        entry.y = roundCoord(api.getYcoord(name))
+        entry.label = name
+      } catch {
+        /* dependent point — skip coords */
+      }
+    } else if (kind === 'segment' || kind === 'line') {
+      entry.from = refs.from
+      entry.to = refs.to
+    } else if (kind === 'circle') {
+      entry.center = refs.center
+      entry.through = refs.through
+      if (refs.radius) entry.radius = refs.radius
+      else if (refs.center && refs.through) {
+        try {
+          const cx = roundCoord(api.getXcoord(refs.center))
+          const cy = roundCoord(api.getYcoord(refs.center))
+          const tx = roundCoord(api.getXcoord(refs.through))
+          const ty = roundCoord(api.getYcoord(refs.through))
+          entry.radius = roundCoord(Math.hypot(tx - cx, ty - cy))
+        } catch {
+          entry.radius = 1
+        }
+      }
+    } else if (kind === 'polygon') {
+      entry.vertices = refs.vertices || []
+    } else if (kind === 'angle') {
+      entry.points = refs.points || []
+    } else if (kind === 'label') {
+      entry.text = def || name
+      const attach = def.match(/^Text\s*\(([^,]+)/i)
+      entry.attachTo = attach ? attach[1].trim() : undefined
+    }
+
+    objects.push(entry)
+    if (visible && kind !== 'unknown') {
+      constructionOrder.push(name)
+    }
+  }
+
+  // Ưu tiên thứ tự từ lệnh export (phản ánh thứ tự tạo trong GeoGebra)
+  const cmdOrder = []
+  for (const line of commands) {
+    const m = line.match(/^\s*([A-Za-z_]\w*)\s*=/)
+    if (m && !cmdOrder.includes(m[1])) cmdOrder.push(m[1])
+  }
+  const mergedOrder = [
+    ...cmdOrder.filter((id) => constructionOrder.includes(id)),
+    ...constructionOrder.filter((id) => !cmdOrder.includes(id)),
+  ]
+
+  return { objects, constructionOrder: mergedOrder.length ? mergedOrder : constructionOrder }
+}
+
 /**
  * Xuất lại lệnh GeoGebra từ trạng thái applet hiện tại
  * (sau kéo thả điểm tự do, tọa độ được cập nhật).
@@ -654,6 +831,11 @@ const GeoGebraApplet = forwardRef(function GeoGebraApplet(
       const api = apiRef.current
       if (!api) throw new Error('Applet chưa sẵn sàng — đợi hình load xong.')
       return exportConstructionCommands(api)
+    },
+    exportFigureManifest: () => {
+      const api = apiRef.current
+      if (!api) throw new Error('Applet chưa sẵn sàng — đợi hình load xong.')
+      return exportFigureManifest(api)
     },
     /** Chụp PNG + xuất lệnh sau khi chỉnh hình */
     saveSnapshot: async (filename = `geogebra-saved-${Date.now()}.png`) => {

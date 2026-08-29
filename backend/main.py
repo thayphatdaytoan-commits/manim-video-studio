@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from generate import (
+    export_figure_reference,
     generate_geogebra,
     generate_manim_from_geogebra,
     generate_manim_from_storyboard,
@@ -208,6 +209,36 @@ class StoryboardRequest(BaseModel):
     )
     image_base64: str | None = Field(default=None)
     mime_type: str = Field(default="image/png")
+    construction_order: list[str] = Field(
+        default_factory=list,
+        description="Thứ tự dựng hình do giáo viên chọn (id đối tượng GeoGebra)",
+    )
+    figure_manifest: dict | None = Field(
+        default=None,
+        description="Manifest hình GeoGebra (điểm, cạnh, tròn, góc)",
+    )
+    figure_reference_code: str = Field(
+        default="",
+        description="Mã Python tham chiếu tọa độ Manim",
+    )
+    figure_objects: list[dict] = Field(
+        default_factory=list,
+        description="figure_objects JSON đã tính sẵn cho kịch bản",
+    )
+
+
+class FigureReferenceRequest(BaseModel):
+    problem_text: str = Field(default="")
+    solution_text: str = Field(default="")
+    geogebra_commands: list[str] | str = Field(default_factory=list)
+    construction_order: list[str] = Field(default_factory=list)
+    figure_manifest: dict | None = Field(default=None)
+    figure_reference_code: str = Field(
+        default="",
+        description="Mã nháp client-side — AI tinh chỉnh",
+    )
+    image_base64: str | None = Field(default=None)
+    mime_type: str = Field(default="image/png")
 
 
 class ReviseManimRequest(BaseModel):
@@ -354,11 +385,42 @@ async def api_generate_storyboard(
             video_format=req.video_format,
             image_b64=req.image_base64,
             mime_type=req.mime_type,
+            construction_order=req.construction_order,
+            figure_manifest=req.figure_manifest,
+            figure_reference_code=req.figure_reference_code,
+            figure_objects=req.figure_objects,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
         logger.exception("generate-storyboard failed")
+        raise HTTPException(502, str(exc)) from exc
+
+
+@app.post("/api/export-figure-reference")
+async def api_export_figure_reference(
+    req: FigureReferenceRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """AI tinh chỉnh mã tham chiếu tọa độ Manim từ hình GeoGebra đã lưu."""
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
+    try:
+        return await asyncio.to_thread(
+            export_figure_reference,
+            api_key=api_keys,
+            figure_manifest=req.figure_manifest,
+            construction_order=req.construction_order,
+            geogebra_commands=req.geogebra_commands,
+            figure_reference_code=req.figure_reference_code,
+            problem_text=req.problem_text,
+            solution_text=req.solution_text,
+            image_b64=req.image_base64,
+            mime_type=req.mime_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("export-figure-reference failed")
         raise HTTPException(502, str(exc)) from exc
 
 

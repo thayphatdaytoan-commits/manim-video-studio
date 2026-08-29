@@ -24,6 +24,13 @@ import {
   Bot,
 } from 'lucide-react'
 import GeoGebraApplet, { sanitizeGgbCommands } from './GeoGebraApplet'
+import {
+  buildFigureContextBlock,
+  buildManimReferenceCode,
+  defaultConstructionOrder,
+  kindLabel,
+  manifestToFigureObjects,
+} from './figureReference'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
@@ -266,7 +273,12 @@ function layoutRulesForFormat(videoFormat) {
   return LAYOUT_SAFE_RULES
 }
 
-function buildGeminiProStoryboardPrompt(problem, solution, videoFormat = 'shorts') {
+function buildGeminiProStoryboardPrompt(
+  problem,
+  solution,
+  videoFormat = 'shorts',
+  figureCtx = {},
+) {
   const p = (problem || '').trim() || '(dán đề bài đầy đủ vào đây)'
   const s = (solution || '').trim() || '(dán lời giải từng bước vào đây)'
   const fmt = videoFormat === 'shorts'
@@ -276,6 +288,14 @@ function buildGeminiProStoryboardPrompt(problem, solution, videoFormat = 'shorts
   const beatOrder = videoFormat === 'shorts'
     ? 'title → problem_and_figure → transition_hide_problem → solution_steps → page_break → conclusion'
     : 'title → problem → construction → solution_steps → conclusion → check_question'
+
+  const figureBlock = buildFigureContextBlock({
+    constructionOrder: figureCtx.constructionOrder,
+    figureReferenceCode: figureCtx.figureReferenceCode,
+    ggbCommands: figureCtx.ggbCommands,
+    figureObjects: figureCtx.figureObjects,
+    hasSavedImage: figureCtx.hasSavedImage,
+  })
 
   return `Bạn là đạo diễn video Toán Manim CE (Math-To-Manim).
 Nhiệm vụ BƯỚC 1: CHỈ viết KỊCH BẢN JSON — CHƯA viết code Python.
@@ -295,13 +315,16 @@ STYLE_VN: nền #0d1117; điểm #8b1a1a; cạnh #1e40af; tròn #3d6b2f; highlig
 
 ${CHANNEL_STYLE_HINT}
 
+${figureBlock ? `\n=== HÌNH GEOGEBRA ĐÃ LƯU (BẮT BUỘC BÁM) ===\n${figureBlock}\n` : ''}
+
 Trả về ĐÚNG 1 JSON (không markdown) gồm:
 - scene_name, title, video_format ("${videoFormat}")
 - layout: { mode, max_lines_per_page (shorts=4), figure_initial, figure_after_transition }
-- figure_objects (tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5])
+- figure_objects (tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5]) — BÁM manifest/figure_objects bên trên
 - beats[]: phase, comment_vi, text_lines (shorts: 1 dòng/beat ở solution_steps),
   latex_lines, actions, indicate_targets, figure_targets
 ${videoFormat === 'shorts' ? '- BẮT BUỘC có beats: problem_and_figure, transition_hide_problem, solution_steps, page_break' : ''}
+${figureCtx.constructionOrder?.length ? '- beat problem_and_figure: figure_targets THEO ĐÚNG THỨ TỰ DỰNG HÌNH ở trên' : ''}
 
 OUTPUT: chỉ JSON. KHÔNG code Python.
 ${GEMINI_SELF_CHECK}
@@ -470,6 +493,9 @@ function buildCursorAgentBrief({
   existingCode,
   compileLog,
   fixMode = false,
+  constructionOrder,
+  figureReferenceCode,
+  figureObjects,
 }) {
   const p = (problem || '').trim() || '(chưa có — nhập ở cột 1)'
   const s = (solution || '').trim() || '(chưa có — nhập ở cột 1)'
@@ -495,6 +521,14 @@ Giáo viên sẽ copy code vào Manim Video Studio → Validate → biên dịch
     ? 'SHORTS 9:16 TQH — bắt buộc luồng: problem_and_figure → transition_hide_problem → solution_steps (+ page_break mỗi 4 dòng)'
     : 'LANDSCAPE 16:9 — hình trái + panel phải'
 
+  const figureCtxBlock = buildFigureContextBlock({
+    constructionOrder,
+    figureReferenceCode,
+    ggbCommands,
+    figureObjects,
+    hasSavedImage: hasGgbImage,
+  })
+
   let body = `Bạn là lập trình viên Manim CE trong repo manim-video-studio (Hướng A — Cursor Agent).
 
 ${task}
@@ -505,6 +539,7 @@ CHẾ ĐỘ: ${local ? 'Local + LaTeX (MiKTeX)' : 'Render Free'}
 ${latexBlock}
 ${videoFormat === 'shorts' ? SHORTS_TQH_LAYOUT_RULES : LAYOUT_SAFE_RULES}
 ${CHANNEL_STYLE_HINT}
+${figureCtxBlock ? `\n${figureCtxBlock}\n` : ''}
 
 THAM CHIẾU CODE MẪU TRONG REPO:
 - backend/examples/style_shorts_tqh_geometry.py (shorts 9:16 hình học — MẶC ĐỊNH)
@@ -670,6 +705,12 @@ export default function App() {
   const [cursorAgentMsg, setCursorAgentMsg] = useState('')
   const [showCursorBrief, setShowCursorBrief] = useState(false)
   const [savedGgbImage, setSavedGgbImage] = useState(null)
+  const [figureManifest, setFigureManifest] = useState(null)
+  const [constructionOrder, setConstructionOrder] = useState([])
+  const [figureObjects, setFigureObjects] = useState([])
+  const [figureReferenceCode, setFigureReferenceCode] = useState('')
+  const [generatingFigureRef, setGeneratingFigureRef] = useState(false)
+  const [figureRefReady, setFigureRefReady] = useState(false)
   const [savingGgb, setSavingGgb] = useState(false)
   const [ggbCommandsText, setGgbCommandsText] = useState(
     '# AI sẽ tạo lệnh GeoGebra tại đây\n# Đường phụ phải có SetVisible(..., false)',
@@ -732,6 +773,57 @@ export default function App() {
     }
     return validationMode
   }, [validationMode, backend.default_validation_mode])
+
+  const applyFigureManifest = useCallback((manifest) => {
+    if (!manifest?.objects?.length) return
+    const order = defaultConstructionOrder(manifest)
+    setFigureManifest(manifest)
+    setConstructionOrder(order)
+    setFigureObjects(manifestToFigureObjects(manifest, order))
+    setFigureReferenceCode(buildManimReferenceCode(manifest, order))
+    setFigureRefReady(true)
+  }, [])
+
+  const updateConstructionOrder = useCallback(
+    (nextOrder) => {
+      if (!figureManifest?.objects?.length) return
+      setConstructionOrder(nextOrder)
+      setFigureObjects(manifestToFigureObjects(figureManifest, nextOrder))
+      setFigureReferenceCode(buildManimReferenceCode(figureManifest, nextOrder))
+      setFigureRefReady(true)
+      setStoryboardReady(false)
+      setManimReady(false)
+    },
+    [figureManifest],
+  )
+
+  const moveConstructionItem = useCallback(
+    (index, direction) => {
+      setConstructionOrder((prev) => {
+        const next = [...prev]
+        const j = index + direction
+        if (j < 0 || j >= next.length) return prev
+        ;[next[index], next[j]] = [next[j], next[index]]
+        if (figureManifest) {
+          setFigureObjects(manifestToFigureObjects(figureManifest, next))
+          setFigureReferenceCode(buildManimReferenceCode(figureManifest, next))
+        }
+        setStoryboardReady(false)
+        setManimReady(false)
+        return next
+      })
+    },
+    [figureManifest],
+  )
+
+  const constructionItems = useMemo(() => {
+    if (!figureManifest?.objects?.length) return []
+    const byId = Object.fromEntries(figureManifest.objects.map((o) => [o.id, o]))
+    return constructionOrder
+      .map((id) => byId[id])
+      .filter(Boolean)
+      .filter((o) => o.visible !== false)
+  }, [figureManifest, constructionOrder])
 
   const ceChecklist = useMemo(
     () =>
@@ -1106,6 +1198,11 @@ export default function App() {
       setGgbReady(true)
       setProblemReady(true)
       setSavedGgbImage(null)
+      setFigureManifest(null)
+      setConstructionOrder([])
+      setFigureObjects([])
+      setFigureReferenceCode('')
+      setFigureRefReady(false)
       setVideoUrl(null)
       setCode('# Chỉnh xong hình GeoGebra, lưu hình, rồi tạo Manim')
       setScenes([])
@@ -1133,13 +1230,68 @@ export default function App() {
         setGgbCommandsText(sanitizeGgbCommands(cmds.join('\n')))
       }
       setSavedGgbImage(snap.dataUrl)
+      if (ggbRef.current?.exportFigureManifest) {
+        const manifest = ggbRef.current.exportFigureManifest()
+        applyFigureManifest(manifest)
+      }
       setManimReady(false)
       setStoryboardReady(false)
-      setExportMsg('Đã lưu hình sau chỉnh sửa — tiếp theo tạo kịch bản video')
+      setExportMsg('Đã lưu hình — kiểm tra thứ tự dựng hình, rồi xuất mã tọa độ / tạo kịch bản')
     } catch (err) {
       setError(err.message || 'Lưu hình thất bại')
     } finally {
       setSavingGgb(false)
+    }
+  }
+
+  const handleRefreshFigureReference = () => {
+    if (!figureManifest?.objects?.length) {
+      setError('Chưa có manifest hình — hãy Lưu hình GeoGebra trước.')
+      return
+    }
+    setError(null)
+    updateConstructionOrder(constructionOrder.length ? constructionOrder : defaultConstructionOrder(figureManifest))
+    setExportMsg('Đã cập nhật mã tọa độ từ hình hiện tại')
+  }
+
+  const handleAiRefineFigureReference = async () => {
+    if (!savedGgbImage) {
+      setError('Hãy Lưu hình GeoGebra trước khi dùng AI tinh chỉnh tọa độ.')
+      return
+    }
+    if (!requireApiKey()) return
+
+    setGeneratingFigureRef(true)
+    setError(null)
+    try {
+      const data = await api('/api/export-figure-reference', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          problem_text: problemText,
+          solution_text: solutionText,
+          geogebra_commands: ggbCommands,
+          construction_order: constructionOrder,
+          figure_manifest: figureManifest,
+          figure_reference_code: figureReferenceCode,
+          image_base64: savedGgbImage,
+          mime_type: savedGgbImage?.startsWith('data:')
+            ? savedGgbImage.slice(5, savedGgbImage.indexOf(';'))
+            : 'image/png',
+        }),
+      })
+      if (data.figure_reference_code) setFigureReferenceCode(data.figure_reference_code)
+      if (data.figure_objects?.length) setFigureObjects(data.figure_objects)
+      if (data.construction_order?.length) setConstructionOrder(data.construction_order)
+      setFigureRefReady(true)
+      setStoryboardReady(false)
+      setManimReady(false)
+      if (data.notes) setAiNotes(data.notes)
+      setExportMsg('AI đã tinh chỉnh mã tọa độ — kiểm tra rồi tạo kịch bản')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setGeneratingFigureRef(false)
     }
   }
 
@@ -1154,6 +1306,10 @@ export default function App() {
     }
     if (!savedGgbImage) {
       setError('Hãy Lưu hình đã chỉnh trước khi tạo kịch bản video.')
+      return
+    }
+    if (!figureRefReady && !figureReferenceCode.trim()) {
+      setError('Hãy xuất mã tọa độ (tự động sau Lưu hình) hoặc bấm «Cập nhật mã tọa độ» trước.')
       return
     }
     if (!requireApiKey()) return
@@ -1178,6 +1334,10 @@ export default function App() {
           mime_type: savedGgbImage?.startsWith('data:')
             ? savedGgbImage.slice(5, savedGgbImage.indexOf(';'))
             : 'image/png',
+          construction_order: constructionOrder,
+          figure_manifest: figureManifest,
+          figure_reference_code: figureReferenceCode,
+          figure_objects: figureObjects,
         }),
       })
       const sb = data.storyboard || data
@@ -1279,8 +1439,24 @@ export default function App() {
   }
 
   const geminiProStoryboardPrompt = useMemo(
-    () => buildGeminiProStoryboardPrompt(problemText, solutionText, videoFormat),
-    [problemText, solutionText, videoFormat],
+    () =>
+      buildGeminiProStoryboardPrompt(problemText, solutionText, videoFormat, {
+        constructionOrder,
+        figureReferenceCode,
+        ggbCommands,
+        figureObjects,
+        hasSavedImage: Boolean(savedGgbImage),
+      }),
+    [
+      problemText,
+      solutionText,
+      videoFormat,
+      constructionOrder,
+      figureReferenceCode,
+      ggbCommands,
+      figureObjects,
+      savedGgbImage,
+    ],
   )
 
   const geminiProCodePrompt = useMemo(
@@ -1351,6 +1527,9 @@ export default function App() {
         existingCode: code,
         compileLog: log,
         fixMode: false,
+        constructionOrder,
+        figureReferenceCode,
+        figureObjects,
       }),
     [
       problemText,
@@ -1364,6 +1543,9 @@ export default function App() {
       effectiveValidationMode,
       code,
       log,
+      constructionOrder,
+      figureReferenceCode,
+      figureObjects,
     ],
   )
 
@@ -1381,6 +1563,9 @@ export default function App() {
         existingCode: code,
         compileLog: log,
         fixMode: true,
+        constructionOrder,
+        figureReferenceCode,
+        figureObjects,
       }),
     [
       problemText,
@@ -1394,6 +1579,9 @@ export default function App() {
       effectiveValidationMode,
       code,
       log,
+      constructionOrder,
+      figureReferenceCode,
+      figureObjects,
     ],
   )
 
@@ -1799,7 +1987,7 @@ export default function App() {
           </div>
           <div>
             <h1>Manim Video Studio</h1>
-            <p>1) Đề+lời giải → 2) GeoGebra → kịch bản → Manim → video</p>
+            <p>1) Đề+lời giải → 2) GeoGebra → 3) Mã tọa độ → 4) Kịch bản → Manim → video</p>
           </div>
         </div>
         <div className="header-actions">
@@ -1944,7 +2132,11 @@ export default function App() {
 
         {/* Cột 2: GeoGebra */}
         <section className="panel">
-          <h2 className="panel-title">2. Chỉnh hình GeoGebra</h2>
+          <h2 className="panel-title">2. GeoGebra → mã tọa độ → kịch bản</h2>
+          <p className="step-hint">
+            Chỉnh hình → <strong>Lưu hình</strong> → sắp thứ tự dựng hình → xuất mã tọa độ → tạo kịch bản
+            (bám đúng hình bạn đã lưu).
+          </p>
           <p className="step-hint">
             Phong cách NTSM: cạnh dùng <code>Segment</code>; đường dựng dùng{' '}
             <code>Line</code>/<code>PerpendicularLine</code> rồi{' '}
@@ -2034,8 +2226,91 @@ export default function App() {
 
           {savedGgbImage && (
             <div className="saved-ggb-preview">
-              <div className="saved-ggb-label">Hình đã lưu (dùng để tạo Manim)</div>
+              <div className="saved-ggb-label">Hình đã lưu (dùng cho mã tọa độ + kịch bản)</div>
               <img src={savedGgbImage} alt="GeoGebra đã lưu" />
+            </div>
+          )}
+
+          {constructionItems.length > 0 && (
+            <div className="construction-order-box">
+              <div className="field-label">THỨ TỰ DỰNG HÌNH (kéo ý tưởng: cái nào hiện trước / sau)</div>
+              <p className="step-hint">
+                Dùng ↑↓ để đổi thứ tự. Beat <code>problem_and_figure</code> trong kịch bản sẽ bám đúng
+                danh sách này.
+              </p>
+              <ol className="construction-order-list">
+                {constructionItems.map((item, idx) => (
+                  <li key={item.id} className="construction-order-item">
+                    <span className="construction-order-index">{idx + 1}</span>
+                    <span className="construction-order-name">{item.id}</span>
+                    <span className="construction-order-kind">{kindLabel(item.kind)}</span>
+                    <span className="construction-order-actions">
+                      <button
+                        type="button"
+                        className="btn ghost construction-move-btn"
+                        onClick={() => moveConstructionItem(idx, -1)}
+                        disabled={idx === 0}
+                        title="Lên trên"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="btn ghost construction-move-btn"
+                        onClick={() => moveConstructionItem(idx, 1)}
+                        disabled={idx === constructionItems.length - 1}
+                        title="Xuống dưới"
+                      >
+                        ↓
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <div className="export-row">
+                <button
+                  type="button"
+                  className="btn secondary export-btn"
+                  onClick={handleRefreshFigureReference}
+                >
+                  <RefreshCw size={15} /> Cập nhật mã tọa độ
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary export-btn"
+                  onClick={handleAiRefineFigureReference}
+                  disabled={generatingFigureRef || !savedGgbImage}
+                >
+                  {generatingFigureRef ? (
+                    <Loader2 className="spin" size={15} />
+                  ) : (
+                    <Sparkles size={15} />
+                  )}
+                  AI tinh chỉnh tọa độ
+                </button>
+              </div>
+            </div>
+          )}
+
+          {figureReferenceCode && (
+            <label className="field">
+              <span className="field-label">MÃ THAM CHIẾU TỌA ĐỘ MANIM (chỉnh được)</span>
+              <textarea
+                rows={12}
+                className="mono"
+                value={figureReferenceCode}
+                onChange={(e) => {
+                  setFigureReferenceCode(e.target.value)
+                  setFigureRefReady(Boolean(e.target.value.trim()))
+                  setStoryboardReady(false)
+                  setManimReady(false)
+                }}
+              />
+            </label>
+          )}
+          {figureRefReady && (
+            <div className="step-ok">
+              Đã có mã tọa độ — tiếp theo tạo kịch bản (AI hoặc copy prompt Gemini Pro cột 3).
             </div>
           )}
 
@@ -2067,10 +2342,10 @@ export default function App() {
             className="btn secondary"
             type="button"
             onClick={handleGenerateStoryboard}
-            disabled={generatingStoryboard || !savedGgbImage}
+            disabled={generatingStoryboard || !savedGgbImage || !figureRefReady}
           >
             {generatingStoryboard ? <Loader2 className="spin" size={18} /> : <FileText size={18} />}
-            {generatingStoryboard ? 'Đang tạo kịch bản...' : 'AI tạo kịch bản video'}
+            {generatingStoryboard ? 'Đang tạo kịch bản từ hình...' : 'AI tạo kịch bản từ hình'}
           </button>
 
           <label className="field">
@@ -2118,7 +2393,10 @@ export default function App() {
             <div className="export-msg">Cần đề bài + lời giải ở cột 1.</div>
           ) : null}
           {!savedGgbImage && ggbCommands.length > 0 && (
-            <div className="export-msg">Chỉnh hình xong hãy bấm “Lưu hình đã chỉnh” trước.</div>
+            <div className="export-msg">Chỉnh hình xong hãy bấm “Lưu hình đã chỉnh” → sắp thứ tự → mã tọa độ.</div>
+          )}
+          {savedGgbImage && !figureRefReady && (
+            <div className="export-msg">Đã lưu hình — bấm «Cập nhật mã tọa độ» nếu chưa thấy mã bên trên.</div>
           )}
           {manimReady && (
             <div className="step-ok">Đã có Manim — sang cột 3 để validate / biên dịch video.</div>
@@ -2227,7 +2505,10 @@ export default function App() {
             </p>
             <ol className="ce-checklist pro-steps">
               <li>
-                <strong>Bước 1 — Kịch bản:</strong> Copy prompt → Gemini Pro → dán JSON vào ô Kịch bản
+                <strong>Cột 2:</strong> Lưu hình GeoGebra → sắp thứ tự dựng hình → có mã tọa độ
+              </li>
+              <li>
+                <strong>Bước 1 — Kịch bản:</strong> Copy prompt (đã lồng hình + thứ tự) → Gemini Pro → dán JSON
               </li>
               <li>
                 <strong>Bước 2 — Code:</strong> Copy prompt (có kịch bản) → nhận Python → dán vào ô Code
