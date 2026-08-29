@@ -28,15 +28,59 @@ BEAT_ORDER: list[str] = [
     "check_question",
 ]
 
+BEAT_ORDER_SHORTS_TQH_GEOMETRY: list[str] = [
+    "title",
+    "problem_and_figure",
+    "transition_hide_problem",
+    "solution_steps",
+    "page_break",
+    "conclusion",
+]
+
+SHORTS_TQH_LAYOUT_RULES = """
+=== SHORTS 9:16 — HÌNH HỌC (PHONG CÁCH TQH — MẶC ĐỊNH) ===
+Render dọc: config.pixel_width=1080, pixel_height=1920 (hoặc manim -pq).
+
+【GIAI ĐOẠN 1 — problem_and_figure: ĐỀ + HÌNH CÙNG LÚC】
+- problem_block: to_edge(UP, buff=0.3), font 24–28, tối đa 3–4 dòng đề
+- figure: scale_to_fit_height(3.6), move_to(DOWN * 0.8) — nằm dưới đề
+- Dựng hình tuần tự (Create) trong cùng giai đoạn hoặc ngay sau khi hiện đề
+
+【GIAI ĐOẠN 2 — transition_hide_problem: ẨN ĐỀ, ĐẨY HÌNH LÊN】
+- self.play(FadeOut(problem_block))
+- self.play(figure.animate.shift(UP * 2.0))   # hình cố định phía trên
+- KHÔNG FadeOut hình khi sang lời giải
+
+【GIAI ĐOẠN 3 — solution_steps: TỪNG DÒNG + HIỆU ỨNG HÌNH】
+- solution_stack = VGroup(), xếp DOWN dưới figure (buff≈0.35)
+- MỖI bước: Write 1 dòng (vn hoặc MathTex) + Indicate/RightAngle/Create trên hình
+- 1 dòng / animation; self.wait(0.8)
+
+【GIAI ĐOẠN 4 — page_break: HẾT KHUNG MÀN HÌNH】
+- MAX_LINES_PER_PAGE = 4 (shorts 9:16)
+- Khi đủ 4 dòng HOẶC stack tràn mép dưới (y < -3.5):
+  FadeOut(solution_stack) → reset stack rỗng → GIỮ figure ở vị trí trên
+  Tiếp tục lời giải (có thể lặp page_break nhiều lần)
+
+【Kết luận】
+- 1 dòng ngắn + SurroundingRectangle vàng
+
+CODE KHUNG:
+  problem_block.to_edge(UP)
+  figure.scale_to_fit_height(3.6).move_to(DOWN*0.8)
+  # sau transition: figure.shift(UP*2.0)
+  # solution: next_to(figure, DOWN, buff=0.35)
+"""
+
 VIDEO_FORMATS: dict[str, dict[str, str | int | list[str]]] = {
     "shorts": {
         "aspect": "9:16",
         "pixel_width": 1080,
         "pixel_height": 1920,
-        "layout": "single_focus",
-        "duration": "30-60s",
-        "beats": "3-5",
-        "channel_ref": "Thanh Thầy Việt — 1 khung, text tối thiểu, 1 kỹ năng",
+        "layout": "shorts_tqh_geometry",
+        "duration": "45-90s",
+        "beats": "5-12",
+        "channel_ref": "Shorts 9:16 — hình học TQH (đề+hình → ẩn đề → lời giải từng dòng)",
     },
     "landscape": {
         "aspect": "16:9",
@@ -49,7 +93,8 @@ VIDEO_FORMATS: dict[str, dict[str, str | int | list[str]]] = {
     },
 }
 
-STYLE_VN_PROMPT = """
+STYLE_VN_PROMPT = (
+    """
 === MÀU SẮC & NỀN (NTSM + 4 kênh VN) ===
 STYLE_VN = {
   "bg": "#0d1117",           # nền đen xanh (hoặc #0a0e1a)
@@ -75,9 +120,12 @@ BEAT_ORDER = ["title", "problem", "construction", "solution_steps", "conclusion"
 self.wait(≥0.8) sau MỖI beat. Một màn hình = một ý.
 
 === FORMAT VIDEO ===
-video_format: "shorts" | "landscape"
-- shorts (9:16): 1 khung tập trung giữa; 3–5 beats; text tối thiểu; config pixel 1080×1920
-- landscape (16:9): figure trái + text_panel phải; 8–15 beats; subtitle nhỏ; có check_question
+video_format: "shorts" | "landscape"  — MẶC ĐỊNH: "shorts" (9:16)
+- shorts (9:16): phong cách TQH hình học — đề+hình → ẩn đề → lời giải từng dòng + page_break
+- landscape (16:9): figure trái + text_panel phải; 8–15 beats; có check_question
+"""
+    + SHORTS_TQH_LAYOUT_RULES
+    + """
 
 === FONT TIẾNG VIỆT (BẮT BUỘC — tránh ô vuông □) ===
 - Text/MarkupText: font="Arial", disable_ligatures=True (Windows local)
@@ -93,6 +141,7 @@ def vn(text, size=28, color=None):
 - Hình minh họa dẫn trước lời giải chữ
 - Transform/ReplacementTransform khi cập nhật — không FadeOut/FadeIn đột ngột cả khung
 """
+)
 
 LAYOUT_SAFE_RULES = """
 === CANH KHUNG & KHÔNG ĐÈ CHỮ (BẮT BUỘC) ===
@@ -169,7 +218,14 @@ CHANNEL_STYLE_PROMPT = """
 - Hình đơn giản, ít hiệu ứng; chữ lớn, dễ đọc; màu tươi (vàng highlight câu hỏi)
 - check_question cuối video: 1 câu tương tự để luyện
 
-【Kênh hình học kiểu Trần Quang Hùng — Euclidean, THCS/THPT】
+【Kênh hình học Shorts 9:16 — phong cách TQH (MẶC ĐỊNH cho hình học)】
+- Beat problem_and_figure: đề bài + dựng hình CÙNG LÚC (đề trên, hình dưới)
+- Beat transition_hide_problem: FadeOut đề → figure.animate.shift(UP*2)
+- Beat solution_steps: từng dòng lời giải + Indicate/RightAngle trên hình
+- Beat page_break: khi ≥4 dòng hoặc tràn mép → FadeOut chữ, GIỮ hình, tiếp tục
+- Tham khảo: backend/examples/style_shorts_tqh_geometry.py
+
+【Kênh hình học Landscape — Euclidean】
 - Layout: hình trái lớn, lời giải phải ngắn (≤2 dòng/beat)
 - Dựng hình theo thứ tự logic: đường tròn → đường kính → điểm trên cung → phụ
 - Mỗi bước chứng minh: Indicate cạnh/góc đang nói + MathTex(r"\\angle ... = 90^\\circ")

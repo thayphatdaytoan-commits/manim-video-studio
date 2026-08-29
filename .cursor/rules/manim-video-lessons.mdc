@@ -8,47 +8,33 @@ alwaysApply: false
 
 # Manim Video Studio — quy tắc code (Hướng A: Cursor Agent)
 
-Bạn viết/sửa **file Python Manim CE** cho giáo viên Toán Việt Nam. Giáo viên dùng **Manim Video Studio** local (Windows) để Validate + render — không dùng Gemini cho code chính.
+Bạn viết/sửa **file Python Manim CE** cho giáo viên Toán Việt Nam. Giáo viên dùng **Manim Video Studio** local (Windows) để Validate + render.
 
 ## Output
 
-- Một `class ... (Scene)` trong `scenes/<TenBai>.py` (hoặc sửa file giáo viên chỉ định).
+- Một `class ... (Scene)` trong `scenes/<TenBai>.py`.
 - `scene_name` khớp tên class.
 - Comment tiếng Việt trước mỗi beat.
 
-## Local + LaTeX (mặc định nếu máy có MiKTeX)
+## Local + LaTeX
 
-- Tiếng Việt: `Text(..., font="Arial", disable_ligatures=True)` hoặc helper `vn()`.
+- Tiếng Việt: `Text(..., font="Arial", disable_ligatures=True)` hoặc `vn()`.
 - Công thức: `MathTex(r"...")` — **CẤM `Tex()`**.
-- Luôn `r"..."` trong MathTex; không bọc `$...$` bên trong.
-- Biến đổi công thức: `TransformMatchingTex(eq1, eq2)`.
 
-## Layout (bắt buộc — landscape 16:9)
+## Layout mặc định: Shorts 9:16 — hình học TQH
 
-```python
-title = vn("...", 28).to_edge(UP, buff=0.35)
-figure = VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
-panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT, buff=0.2).scale(0.38).to_edge(RIGHT, buff=0.4)
-```
+1. **problem_and_figure**: đề + hình cùng lúc — `problem_block.to_edge(UP)`, `figure.scale_to_fit_height(3.6).move_to(DOWN*0.8)`
+2. **transition_hide_problem**: `FadeOut(problem_block)` → `figure.animate.shift(UP*2)`
+3. **solution_steps**: từng dòng dưới hình + `Indicate`/`RightAngle` trên hình; `self.wait(0.8)`
+4. **page_break**: khi ≥4 dòng → `FadeOut(solution_stack)`, **giữ hình**, tiếp tục lời giải
 
-- Mỗi beat: ≤2 dòng panel; `FadeOut(panel_cũ)` hoặc `ReplacementTransform` trước beat mới.
-- `self.wait(≥0.8)` sau mỗi bước.
+Landscape 16:9 (nếu chọn): figure `LEFT*2.8`, panel phải.
 
-## STYLE_VN
+## Tham chiếu
 
-- Nền `#0d1117`; điểm `#8b1a1a`; cạnh `#1e40af`; tròn `#3d6b2f`; highlight `#FFD700`; kết luận `#FF8C00`.
-- BEAT_ORDER: title → problem → construction → solution_steps → conclusion → check_question.
-
-## Tham chiếu trong repo
-
-- `backend/examples/style_landscape_median.py` — hình trái + panel phải
-- `backend/examples/style_landscape_muon_noi.py` — hình học
-- `backend/manim_style.py` — `LAYOUT_SAFE_RULES`, `MATH_LATEX_RULES`
+- `backend/examples/style_shorts_tqh_geometry.py` — **mẫu mặc định**
+- `backend/manim_style.py` — `SHORTS_TQH_LAYOUT_RULES`, `MATH_LATEX_RULES`
 
 ## Cấm
 
-- `MovingCameraScene`, `ThreeDScene`, `Tex()`, tiếng Việt trong `MathTex`, `Label("A")` (dùng `Text("A")`).
-
-## Khi giáo viên gửi lỗi Validate / nhật ký biên dịch
-
-Sửa toàn bộ file, giữ layout và lời giải từng bước; không bỏ beat.
+- `MovingCameraScene`, `ThreeDScene`, `Tex()`, tiếng Việt trong `MathTex`, `Label("A")`.

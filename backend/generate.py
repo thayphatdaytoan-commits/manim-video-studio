@@ -12,9 +12,11 @@ from typing import Any
 
 from manim_style import (
     BEAT_ORDER,
+    BEAT_ORDER_SHORTS_TQH_GEOMETRY,
     CHANNEL_STYLE_PROMPT,
     LAYOUT_SAFE_RULES,
     MATH_LATEX_RULES,
+    SHORTS_TQH_LAYOUT_RULES,
     STYLE_VN,
     STYLE_VN_PROMPT,
     VIDEO_FORMATS,
@@ -22,6 +24,7 @@ from manim_style import (
 
 _STYLE_VN_JSON = json.dumps(STYLE_VN, ensure_ascii=False)
 _BEAT_ORDER_TEXT = ", ".join(BEAT_ORDER)
+_BEAT_ORDER_SHORTS_TEXT = ", ".join(BEAT_ORDER_SHORTS_TQH_GEOMETRY)
 
 logger = logging.getLogger("manim-studio.generate")
 
@@ -162,7 +165,7 @@ Trả về ĐÚNG 1 JSON:
 {{
   "scene_name": "TenClassScene",
   "title": "tiêu đề ngắn",
-  "video_format": "landscape",
+  "video_format": "shorts",
   "style": {{
     "palette": "STYLE_VN",
     "colors": {_STYLE_VN_JSON},
@@ -210,21 +213,23 @@ Trả về ĐÚNG 1 JSON:
 }}
 
 === QUY TẮC KỊCH BẢN ===
-1. video_format BẮT BUỘC: "shorts" hoặc "landscape".
-2. Beats theo BEAT_ORDER: {_BEAT_ORDER_TEXT} — phase khớp tên.
-3. shorts: layout.shorts_single_frame=true, 1 khung giữa; 3–5 beats.
-4. landscape: two_panel; 8–15 beats; có check_question; median (câu hỏi trước — trả lời sau).
-5. learner / prerequisites / teaching_order / check_question: BẮT BUỘC (tiếng Việt).
-6. Màu figure_objects hex STYLE_VN (#8b1a1a điểm, #1e40af cạnh, #3d6b2f tròn).
-7. Tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5].
-8. kind: dot | segment | line | circle | polygon | label | angle_mark
-9. op: write_text | create | fade_in | indicate | set_color | surround_rect | transform | wait
-10. Mỗi bước lời giải = 1 beat phase=solution_steps; wait ≥ 0.8s.
-11. Không viết code Manim/Python. Bỏ object GeoGebra đã ẩn.
-12. layout JSON phải có title_zone, figure_area, text_area, safe_margins.
-13. Mỗi beat solution_steps có text_lines (tiếng Việt) VÀ latex_lines (công thức LaTeX thuần, không $ bọc ngoài).
+1. video_format BẮT BUỘC: "shorts" (MẶC ĐỊNH) hoặc "landscape".
+2. shorts: BEAT_ORDER_SHORTS_TQH: {_BEAT_ORDER_SHORTS_TEXT} — phase khớp tên; layout shorts_tqh_geometry.
+3. landscape: BEAT_ORDER: {_BEAT_ORDER_TEXT} — phase khớp tên.
+4. shorts: layout.shorts_single_frame=true; problem_and_figure → transition_hide_problem → solution_steps (+ page_break khi ≥4 dòng).
+5. landscape: two_panel; 8–15 beats; có check_question; median (câu hỏi trước — trả lời sau).
+6. learner / prerequisites / teaching_order: BẮT BUỘC (tiếng Việt); check_question chỉ landscape.
+7. Màu figure_objects hex STYLE_VN (#8b1a1a điểm, #1e40af cạnh, #3d6b2f tròn).
+8. Tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5].
+9. kind: dot | segment | line | circle | polygon | label | angle_mark
+10. op: write_text | create | fade_in | fade_out | indicate | shift_figure_up | page_break | surround_rect | wait
+11. Mỗi dòng lời giải = 1 beat solution_steps; wait ≥ 0.8s.
+12. Không viết code Manim/Python. Bỏ object GeoGebra đã ẩn.
+13. layout JSON: title_zone, figure_area, text_area, max_lines_per_page (shorts=4).
+14. Mỗi beat solution_steps: text_lines + latex_lines (LaTeX thuần, không $).
 """
     + CHANNEL_STYLE_PROMPT
+    + SHORTS_TQH_LAYOUT_RULES
     + LAYOUT_SAFE_RULES
 )
 
@@ -259,10 +264,11 @@ class TenClassScene(Scene):
         # Mỗi beat: comment # phase + animation + self.wait(≥0.8)
 
 === FORMAT ===
-- video_format "shorts": VGroup tập trung ORIGIN; text lớn, ít dòng; scale_to_fit_height(6.5)
+- video_format "shorts" (MẶC ĐỊNH): TQH geometry — đề+hình → FadeOut đề → figure.shift(UP*2) → lời giải từng dòng + page_break
+  figure.scale_to_fit_height(3.6).move_to(DOWN*0.8) rồi shift lên; MAX_LINES_PER_PAGE=4
 - video_format "landscape": figure.scale_to_fit_height(4.0).move_to(LEFT*2.8); panel.to_edge(RIGHT, buff=0.4).scale(0.38)
-- median: TransformMatchingTex / ReplacementTransform — không FadeOut cả khung đột ngột
 """
+    + SHORTS_TQH_LAYOUT_RULES
     + LAYOUT_SAFE_RULES
     + """
 
@@ -725,7 +731,7 @@ def generate_storyboard(
     solution_steps: list[str] | None = None,
     user_guidance: str = "",
     geogebra_mode: str = "geometry",
-    video_format: str = "landscape",
+    video_format: str = "shorts",
     image_b64: str | None = None,
     mime_type: str = "image/png",
 ) -> dict[str, Any]:
@@ -751,9 +757,9 @@ def generate_storyboard(
         steps = []
     steps = [str(s).strip() for s in steps if str(s).strip()]
 
-    fmt = (video_format or "landscape").strip().lower()
+    fmt = (video_format or "shorts").strip().lower()
     if fmt not in ("shorts", "landscape"):
-        fmt = "landscape"
+        fmt = "shorts"
     fmt_meta = VIDEO_FORMATS[fmt]
 
     user_prompt = STORYBOARD_PROMPT

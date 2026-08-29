@@ -104,6 +104,12 @@ TEMPLATES: list[dict[str, Any]] = [
         "default_scene": "PythagoreanTheorem",
     },
     {
+        "id": "style_shorts_tqh",
+        "name": "Mẫu Shorts 9:16 — Hình học TQH",
+        "file": "style_shorts_tqh_geometry.py",
+        "default_scene": "ShortsTQHGeometryDemo",
+    },
+    {
         "id": "style_shorts_viet",
         "name": "Mẫu Shorts — Thanh Thầy Việt",
         "file": "style_shorts_thanh_viet.py",
@@ -197,8 +203,8 @@ class StoryboardRequest(BaseModel):
     geogebra_commands: list[str] | str = Field(default_factory=list)
     geogebra_mode: str = Field(default="geometry")
     video_format: str = Field(
-        default="landscape",
-        description="shorts (9:16, 1 khung) hoặc landscape (16:9, 2 panel)",
+        default="shorts",
+        description="shorts (9:16, TQH hình học — mặc định) hoặc landscape (16:9, 2 panel)",
     )
     image_base64: str | None = Field(default=None)
     mime_type: str = Field(default="image/png")

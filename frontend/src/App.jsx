@@ -106,24 +106,47 @@ BIẾN ĐỔI: TransformMatchingTex(eq1, eq2) khi đổi dòng công thức.
 `
 
 const CHANNEL_STYLE_HINT = `
-=== PHONG CÁCH THAM CHIẾU ===
-• Tiệm Toán Tư Duy: beat pause_practice, 1 kỹ năng/video, check_question cuối
-• Hình học Euclidean: dựng hình tuần tự, Indicate cạnh/góc, kết luận SurroundingRectangle
+=== PHONG CÁCH MẶC ĐỊNH: SHORTS 9:16 HÌNH HỌC (TQH) ===
+1. problem_and_figure: ĐỀ + HÌNH cùng lúc (đề trên, hình dưới)
+2. transition_hide_problem: FadeOut đề → figure.shift(UP*2)
+3. solution_steps: từng dòng lời giải + Indicate/RightAngle trên hình
+4. page_break: ≥4 dòng hoặc tràn mép → FadeOut chữ, GIỮ hình, tiếp tục
+Tham khảo: backend/examples/style_shorts_tqh_geometry.py
 `
 
-function buildGeminiProStoryboardPrompt(problem, solution, videoFormat = 'landscape') {
+const SHORTS_TQH_LAYOUT_RULES = `
+=== SHORTS 9:16 — HÌNH HỌC TQH (MẶC ĐỊNH) ===
+- problem_block.to_edge(UP); figure.scale_to_fit_height(3.6).move_to(DOWN*0.8)
+- FadeOut(problem_block) → figure.animate.shift(UP*2.0)
+- solution_stack dưới hình; 1 dòng/animation + Indicate trên hình
+- MAX_LINES_PER_PAGE=4 → FadeOut(stack), giữ hình, tiếp tục
+- Render: 1080×1920 hoặc manim -pq
+`
+
+function layoutRulesForFormat(videoFormat) {
+  if (videoFormat === 'shorts') return SHORTS_TQH_LAYOUT_RULES
+  return LAYOUT_SAFE_RULES
+}
+
+function buildGeminiProStoryboardPrompt(problem, solution, videoFormat = 'shorts') {
   const p = (problem || '').trim() || '(dán đề bài đầy đủ vào đây)'
   const s = (solution || '').trim() || '(dán lời giải từng bước vào đây)'
-  const fmt = videoFormat === 'shorts' ? 'shorts (9:16, 1 khung giữa)' : 'landscape (16:9, hình trái + chữ phải)'
+  const fmt = videoFormat === 'shorts'
+    ? 'shorts 9:16 — TQH hình học (đề+hình → ẩn đề → lời giải từng dòng)'
+    : 'landscape 16:9 — hình trái + chữ phải'
+
+  const beatOrder = videoFormat === 'shorts'
+    ? 'title → problem_and_figure → transition_hide_problem → solution_steps → page_break → conclusion'
+    : 'title → problem → construction → solution_steps → conclusion → check_question'
 
   return `Bạn là đạo diễn video Toán Manim CE (Math-To-Manim).
 Nhiệm vụ BƯỚC 1: CHỈ viết KỊCH BẢN JSON — CHƯA viết code Python.
 
 ĐỊNH DẠNG: ${fmt}
 
-${LAYOUT_SAFE_RULES}
+${layoutRulesForFormat(videoFormat)}
 
-BEAT_ORDER: title → problem → construction → solution_steps → conclusion → check_question
+BEAT_ORDER: ${beatOrder}
 STYLE_VN: nền #0d1117; điểm #8b1a1a; cạnh #1e40af; tròn #3d6b2f; highlight #FFD700
 
 ${CHANNEL_STYLE_HINT}
@@ -145,7 +168,7 @@ ${s}
 `
 }
 
-function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_latex') {
+function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_latex', videoFormat = 'shorts') {
   const p = (problem || '').trim() || '(dán đề bài)'
   const s = (solution || '').trim() || '(dán lời giải)'
   const sb = (storyboard || '').trim() || '(dán kịch bản JSON từ Bước 1 vào đây)'
@@ -159,7 +182,8 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
 - latex_lines trong JSON → MathTex(r"..."); text_lines → Text/vn()
 - class Scene; self.camera.background_color = "#0d1117"
 ${MATH_LATEX_RULES}
-${LAYOUT_SAFE_RULES}`
+${layoutRulesForFormat(videoFormat)}
+`
     : `RÀNG BUỘC CODE (Render Free):
 - Bám kịch bản JSON; chỉ Text/MarkupText, không MathTex
 ${LAYOUT_SAFE_RULES}`
@@ -182,7 +206,7 @@ ${sb}
 `
 }
 
-function buildGeminiProRevisePrompt(problem, solution, storyboard, code, revisionNotes, mode = 'local_latex') {
+function buildGeminiProRevisePrompt(problem, solution, storyboard, code, revisionNotes, mode = 'local_latex', videoFormat = 'shorts') {
   const notes = (revisionNotes || '').trim() || '(ghi thay đổi kịch bản: ví dụ "tiêu đề nhỏ hơn", "hình scale nhỏ lại", "bước 2 tách 2 dòng")'
   const sb = (storyboard || '').trim() || '(kịch bản hiện tại — dán JSON nếu có)'
   const py = (code || '').trim() || '(code Manim hiện tại — dán vào đây)'
@@ -195,7 +219,7 @@ QUY TẮC:
 1. Đọc YÊU CẦU SỬA và áp dụng vào kịch bản + code
 2. ${local ? 'Giữ font="Arial" + MathTex(r"..."); CẤM Tex()' : 'Giữ Text/MarkupText'}
 3. ${local ? MATH_LATEX_RULES : ''}
-4. ${LAYOUT_SAFE_RULES}
+4. ${layoutRulesForFormat(videoFormat)}
 5. Trả về TOÀN BỘ file Python đã sửa trong \`\`\`python ... \`\`\`
 6. Nếu kịch bản đổi nhiều: trả thêm JSON kịch bản mới TRƯỚC khối python (trong cùng câu trả lời)
 
@@ -304,21 +328,24 @@ Giáo viên sẽ copy code vào Manim Video Studio → Validate → biên dịch
     ? `${MATH_LATEX_RULES}`
     : '- Render Free: chỉ Text/MarkupText, không MathTex/Tex.'
 
+  const fmtNote = videoFormat === 'shorts'
+    ? 'SHORTS 9:16 TQH — bắt buộc luồng: problem_and_figure → transition_hide_problem → solution_steps (+ page_break mỗi 4 dòng)'
+    : 'LANDSCAPE 16:9 — hình trái + panel phải'
+
   let body = `Bạn là lập trình viên Manim CE trong repo manim-video-studio (Hướng A — Cursor Agent).
 
 ${task}
 
 CHẾ ĐỘ: ${local ? 'Local + LaTeX (MiKTeX)' : 'Render Free'}
-ĐỊNH DẠNG VIDEO: ${fmt}
+ĐỊNH DẠNG VIDEO: ${fmt} — ${fmtNote}
 
 ${latexBlock}
-${LAYOUT_SAFE_RULES}
+${videoFormat === 'shorts' ? SHORTS_TQH_LAYOUT_RULES : LAYOUT_SAFE_RULES}
 ${CHANNEL_STYLE_HINT}
 
 THAM CHIẾU CODE MẪU TRONG REPO:
-- backend/examples/style_landscape_muon_noi.py (hình học)
-- backend/examples/style_landscape_median.py (landscape + TransformMatchingTex)
-- backend/examples/style_shorts_thanh_viet.py (shorts)
+- backend/examples/style_shorts_tqh_geometry.py (shorts 9:16 hình học — MẶC ĐỊNH)
+- backend/examples/style_landscape_muon_noi.py (landscape hình học)
 - .cursor/rules/manim-video-lessons.mdc (rule bắt buộc)
 
 ĐỀ BÀI:
@@ -459,7 +486,7 @@ export default function App() {
   const [solutionText, setSolutionText] = useState('')
   const [solutionSteps, setSolutionSteps] = useState([])
   const [manimGuidance, setManimGuidance] = useState('')
-  const [videoFormat, setVideoFormat] = useState('landscape')
+  const [videoFormat, setVideoFormat] = useState('shorts')
   const [storyboardText, setStoryboardText] = useState('')
   const [storyboardReady, setStoryboardReady] = useState(false)
   const [generatingStoryboard, setGeneratingStoryboard] = useState(false)
@@ -1100,6 +1127,7 @@ export default function App() {
         solutionText,
         proStoryboardPaste || storyboardText,
         effectiveValidationMode,
+        videoFormat,
       ),
     [
       problemText,
@@ -1107,6 +1135,7 @@ export default function App() {
       proStoryboardPaste,
       storyboardText,
       effectiveValidationMode,
+      videoFormat,
     ],
   )
 
@@ -1119,6 +1148,7 @@ export default function App() {
         proPaste || code,
         proRevisionNotes,
         effectiveValidationMode,
+        videoFormat,
       ),
     [
       problemText,
@@ -1129,6 +1159,7 @@ export default function App() {
       code,
       proRevisionNotes,
       effectiveValidationMode,
+      videoFormat,
     ],
   )
 
@@ -1852,8 +1883,8 @@ export default function App() {
               value={videoFormat}
               onChange={(e) => setVideoFormat(e.target.value)}
             >
-              <option value="landscape">Landscape 16:9 — hình trái + lời giải phải (median, Muôn Nơi)</option>
-              <option value="shorts">Shorts 9:16 — 1 khung tập trung (Thanh Thầy Việt)</option>
+              <option value="shorts">Shorts 9:16 — hình học TQH (mặc định): đề+hình → lời giải từng dòng</option>
+              <option value="landscape">Landscape 16:9 — hình trái + lời giải phải</option>
             </select>
           </label>
 
@@ -1864,7 +1895,7 @@ export default function App() {
               value={manimGuidance}
               onChange={(e) => setManimGuidance(e.target.value)}
               placeholder={
-                'Ví dụ:\n- Hình bên trái, lời giải bên phải\n- Bước 1 hiện đoạn AB rồi Indicate\n- Chữ lời giải cỡ nhỏ, màu trắng'
+                'Ví dụ (shorts TQH):\n- Đề + hình cùng lúc, sau đó ẩn đề đẩy hình lên\n- Lời giải từng dòng + Indicate góc/cạnh\n- Hết 4 dòng thì page_break, giữ hình'
               }
             />
           </label>
@@ -1882,8 +1913,8 @@ export default function App() {
           <label className="field">
             <span className="field-label">KỊCH BẢN VIDEO (JSON — CHỈNH ĐƯỢC)</span>
             <p className="step-hint">
-              Math-To-Manim + STYLE_VN: video_format → beats (title → problem → construction →
-              solution_steps → conclusion → check). Màu NTSM: điểm đỏ, cạnh xanh dương, tròn xanh lá.
+              Shorts TQH: problem_and_figure → ẩn đề → solution_steps (+ page_break mỗi 4 dòng).
+              Màu NTSM: điểm đỏ, cạnh xanh dương, tròn xanh lá.
             </p>
             <textarea
               rows={10}
