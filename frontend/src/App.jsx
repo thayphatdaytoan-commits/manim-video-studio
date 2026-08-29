@@ -22,6 +22,8 @@ import {
   Wrench,
   X,
   Bot,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react'
 import GeoGebraApplet, { sanitizeGgbCommands } from './GeoGebraApplet'
 import {
@@ -726,6 +728,7 @@ export default function App() {
   const [exportPreview, setExportPreview] = useState(null)
   const [svgCodePreview, setSvgCodePreview] = useState(null)
   const [exporting, setExporting] = useState(false)
+  const [ggbFullscreen, setGgbFullscreen] = useState(false)
 
   // Lồng tiếng Edge TTS
   const [voiceScript, setVoiceScript] = useState('')
@@ -799,21 +802,13 @@ export default function App() {
 
   const moveConstructionItem = useCallback(
     (index, direction) => {
-      setConstructionOrder((prev) => {
-        const next = [...prev]
-        const j = index + direction
-        if (j < 0 || j >= next.length) return prev
-        ;[next[index], next[j]] = [next[j], next[index]]
-        if (figureManifest) {
-          setFigureObjects(manifestToFigureObjects(figureManifest, next))
-          setFigureReferenceCode(buildManimReferenceCode(figureManifest, next))
-        }
-        setStoryboardReady(false)
-        setManimReady(false)
-        return next
-      })
+      const next = [...constructionOrder]
+      const j = index + direction
+      if (j < 0 || j >= next.length) return
+      ;[next[index], next[j]] = [next[j], next[index]]
+      updateConstructionOrder(next)
     },
-    [figureManifest],
+    [constructionOrder, updateConstructionOrder],
   )
 
   const constructionItems = useMemo(() => {
@@ -824,6 +819,19 @@ export default function App() {
       .filter(Boolean)
       .filter((o) => o.visible !== false)
   }, [figureManifest, constructionOrder])
+
+  useEffect(() => {
+    if (!ggbFullscreen) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') setGgbFullscreen(false)
+    }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = ''
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [ggbFullscreen])
 
   const ceChecklist = useMemo(
     () =>
@@ -1801,6 +1809,12 @@ export default function App() {
     if (cleaned !== ggbCommandsText) setGgbCommandsText(cleaned)
     setGgbRevision((n) => n + 1)
     setSavedGgbImage(null)
+    setFigureManifest(null)
+    setConstructionOrder([])
+    setFigureObjects([])
+    setFigureReferenceCode('')
+    setFigureRefReady(false)
+    setStoryboardReady(false)
     setManimReady(false)
   }
 
@@ -2009,7 +2023,123 @@ export default function App() {
         </div>
       </header>
 
-      <main className="layout three">
+      <main className="studio-layout">
+        <section className={`panel panel-ggb-workspace ${ggbFullscreen ? 'is-fullscreen' : ''}`}>
+          <div className="ggb-workspace-head">
+            <div>
+              <h2 className="panel-title">2. Chỉnh hình GeoGebra</h2>
+              <p className="step-hint ggb-workspace-hint">
+                Kéo thả điểm trên hình lớn bên dưới → <strong>Lưu hình</strong> → sang cột «Mã tọa độ &
+                kịch bản».
+              </p>
+            </div>
+            <div className="ggb-workspace-actions">
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={() => setGgbFullscreen((v) => !v)}
+                title={ggbFullscreen ? 'Thu nhỏ' : 'Phóng to toàn màn hình'}
+              >
+                {ggbFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                {ggbFullscreen ? 'Thu nhỏ' : 'Phóng to'}
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={handleSaveGgbFigure}
+                disabled={savingGgb || !ggbCommands.length}
+              >
+                {savingGgb ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                {savingGgb ? 'Đang lưu...' : 'Lưu hình đã chỉnh'}
+              </button>
+            </div>
+          </div>
+
+          <div className="ggb-wrap">
+            <GeoGebraApplet
+              ref={ggbRef}
+              commands={ggbCommands}
+              mode={ggbMode}
+              revision={ggbRevision}
+            />
+          </div>
+
+          <div className="ggb-workspace-toolbar">
+            <label className="field ggb-mode-field">
+              <span className="field-label">CHẾ ĐỘ</span>
+              <select value={ggbMode} onChange={(e) => setGgbMode(e.target.value)}>
+                <option value="geometry">Hình học phẳng</option>
+                <option value="graphing">Đồ thị</option>
+                <option value="3d">Hình học 3D</option>
+              </select>
+            </label>
+            <div className="export-row ggb-export-row">
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={handleExportSvg}
+                disabled={exporting}
+              >
+                {exporting ? <Loader2 className="spin" size={15} /> : <FileImage size={15} />}
+                SVG
+              </button>
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={handleExportSvgCode}
+                disabled={exporting}
+                title="Xem và sao chép mã nguồn SVG"
+              >
+                {exporting ? <Loader2 className="spin" size={15} /> : <Code2 size={15} />}
+                Mã SVG
+              </button>
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={handleExportPng}
+                disabled={exporting}
+              >
+                {exporting ? <Loader2 className="spin" size={15} /> : <Download size={15} />}
+                PNG
+              </button>
+              <button type="button" className="btn ghost export-btn" onClick={handleApplyTheme}>
+                <Sparkles size={15} /> Màu NTSM
+              </button>
+              <button type="button" className="btn ghost export-btn" onClick={applyGgbToPreview}>
+                <RefreshCw size={15} /> Áp dụng lệnh
+              </button>
+            </div>
+          </div>
+          {exportMsg && <div className="export-msg">{exportMsg}</div>}
+
+          <details className="ggb-commands-details">
+            <summary>Lệnh GeoGebra (mỗi dòng 1 lệnh) — bấm để mở chỉnh</summary>
+            <label className="field">
+              <textarea
+                rows={6}
+                className="mono"
+                value={ggbCommandsText}
+                onChange={(e) => {
+                  setGgbCommandsText(e.target.value)
+                  setManimReady(false)
+                }}
+              />
+            </label>
+            <p className="step-hint">
+              NTSM: cạnh <code>Segment</code>; đường phụ <code>Line</code> rồi{' '}
+              <code>SetVisibleInView(tên, 1, false)</code>.
+            </p>
+          </details>
+
+          {savedGgbImage && (
+            <div className="saved-ggb-preview saved-ggb-preview-inline">
+              <div className="saved-ggb-label">Hình đã lưu</div>
+              <img src={savedGgbImage} alt="GeoGebra đã lưu" />
+            </div>
+          )}
+        </section>
+
+        <div className="layout three">
         {/* Cột 1: Ảnh/đề → AI đề+lời giải → GeoGebra */}
         <section className="panel">
           <h2 className="panel-title">1. Đề bài & lời giải</h2>
@@ -2130,107 +2260,13 @@ export default function App() {
           )}
         </section>
 
-        {/* Cột 2: GeoGebra */}
-        <section className="panel">
-          <h2 className="panel-title">2. GeoGebra → mã tọa độ → kịch bản</h2>
+        {/* Cột 2: Mã tọa độ → kịch bản */}
+        <section className="panel panel-workflow">
+          <h2 className="panel-title">Mã tọa độ → kịch bản</h2>
           <p className="step-hint">
-            Chỉnh hình → <strong>Lưu hình</strong> → sắp thứ tự dựng hình → xuất mã tọa độ → tạo kịch bản
-            (bám đúng hình bạn đã lưu).
+            Sau khi <strong>Lưu hình</strong> ở khung GeoGebra phía trên: sắp thứ tự dựng hình → mã
+            tọa độ → tạo kịch bản.
           </p>
-          <p className="step-hint">
-            Phong cách NTSM: cạnh dùng <code>Segment</code>; đường dựng dùng{' '}
-            <code>Line</code>/<code>PerpendicularLine</code> rồi{' '}
-            <code>SetVisibleInView(tên, 1, false)</code>. Chỉnh/kéo thả xong →{' '}
-            <strong>Lưu hình đã chỉnh</strong> → tạo Manim (AI dựa vào ảnh đã lưu).
-          </p>
-          <label className="field">
-            <span className="field-label">CHẾ ĐỘ</span>
-            <select value={ggbMode} onChange={(e) => setGgbMode(e.target.value)}>
-              <option value="geometry">Hình học phẳng</option>
-              <option value="graphing">Đồ thị</option>
-              <option value="3d">Hình học 3D</option>
-            </select>
-          </label>
-
-          <label className="field">
-            <span className="field-label">LỆNH GEOGEBRA (MỖI DÒNG 1 LỆNH)</span>
-            <textarea
-              rows={7}
-              className="mono"
-              value={ggbCommandsText}
-              onChange={(e) => {
-                setGgbCommandsText(e.target.value)
-                setManimReady(false)
-              }}
-            />
-          </label>
-
-          <button type="button" className="btn secondary" onClick={applyGgbToPreview}>
-            <RefreshCw size={16} />
-            Áp dụng lệnh lên hình
-          </button>
-
-          <div className="export-row">
-            <button
-              type="button"
-              className="btn ghost export-btn"
-              onClick={handleExportSvg}
-              disabled={exporting}
-            >
-              {exporting ? <Loader2 className="spin" size={15} /> : <FileImage size={15} />}
-              SVG
-            </button>
-            <button
-              type="button"
-              className="btn ghost export-btn"
-              onClick={handleExportSvgCode}
-              disabled={exporting}
-              title="Xem và sao chép mã nguồn SVG"
-            >
-              {exporting ? <Loader2 className="spin" size={15} /> : <Code2 size={15} />}
-              Mã SVG
-            </button>
-            <button
-              type="button"
-              className="btn ghost export-btn"
-              onClick={handleExportPng}
-              disabled={exporting}
-            >
-              {exporting ? <Loader2 className="spin" size={15} /> : <Download size={15} />}
-              PNG
-            </button>
-            <button type="button" className="btn ghost export-btn" onClick={handleApplyTheme}>
-              <Sparkles size={15} /> Màu NTSM
-            </button>
-          </div>
-          {exportMsg && <div className="export-msg">{exportMsg}</div>}
-
-          <div className="ggb-wrap">
-            <GeoGebraApplet
-              ref={ggbRef}
-              commands={ggbCommands}
-              mode={ggbMode}
-              revision={ggbRevision}
-            />
-          </div>
-
-          <button
-            type="button"
-            className="btn secondary"
-            onClick={handleSaveGgbFigure}
-            disabled={savingGgb || !ggbCommands.length}
-          >
-            {savingGgb ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-            {savingGgb ? 'Đang lưu hình...' : 'Lưu hình đã chỉnh'}
-          </button>
-
-          {savedGgbImage && (
-            <div className="saved-ggb-preview">
-              <div className="saved-ggb-label">Hình đã lưu (dùng cho mã tọa độ + kịch bản)</div>
-              <img src={savedGgbImage} alt="GeoGebra đã lưu" />
-            </div>
-          )}
-
           {constructionItems.length > 0 && (
             <div className="construction-order-box">
               <div className="field-label">THỨ TỰ DỰNG HÌNH (kéo ý tưởng: cái nào hiện trước / sau)</div>
@@ -2936,6 +2972,7 @@ export default function App() {
             Nhật ký biên dịch
           </button>
         </section>
+        </div>
       </main>
 
       {showLog && (
