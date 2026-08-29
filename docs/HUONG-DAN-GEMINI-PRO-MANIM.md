@@ -59,6 +59,46 @@ panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT, buff=0.2).scale(0.38).to_ed
 
 ---
 
+## 1d. Học phong cách 2 kênh tham chiếu
+
+### Tiệm Toán Tư Duy ([@tiemtoantuduy](https://youtube.com/@tiemtoantuduy))
+
+| Đặc điểm | Áp dụng vào Manim |
+|----------|-------------------|
+| 1 video = 1 kỹ năng / 1 dạng | Beat ngắn, 3–8 bước, không nhồi nhiều dạng |
+| Giọng thầy cô, thân thiện | `text_lines` dùng ngôn ngữ gần gũi ("Ta có", "Như vậy") |
+| **Tạm dừng tự làm** | Beat `pause_practice`: "Hãy tạm dừng video và thử..." + `self.wait(2)` |
+| Kiểm tra cuối | `check_question`: 1 câu tương tự đề |
+| Hình đơn giản, chữ rõ | Ít hiệu ứng; highlight vàng câu hỏi |
+
+### Kênh hình học kiểu Trần Quang Hùng ([@tranquanghungmath](https://youtube.com/@tranquanghungmath))
+
+| Đặc điểm | Áp dụng vào Manim |
+|----------|-------------------|
+| Hình Euclidean sạch, từng bước dựng | Beat `construction`: Create từng đường/tròn |
+| Chứng minh ngắn, logic rõ | Mỗi beat ≤2 dòng + 1 công thức `MathTex` |
+| Nhấn góc/cạnh đang nói | `Indicate` + `RightAngle` / `Angle` vàng |
+| Kết luận khung vàng | `SurroundingRectangle` quanh kết quả |
+
+> **Lưu ý:** Thầy Trần Quang Hùng (HSGS Hà Nội) đã [cảnh báo](https://qhtran.org/blogs/fake-youtube/) một số kênh YouTube dùng tên ông không chính thức. Học **phong cách trình bày hình học**, không sao chép watermark/tên người khác.
+
+---
+
+## 1e. CẤM Tex() — chỉ MathTex(r"...") cho công thức
+
+Gemini hay nhầm `Tex()` (render xấu) thay vì `MathTex()` (LaTeX đẹp).
+
+| Sai | Đúng |
+|-----|------|
+| `Tex(r"Ta có $CK \perp AE$")` | `VGroup(vn("Ta có"), MathTex(r"CK \perp AE"))` |
+| `Tex(r"$\angle AKC = 90^\circ$")` | `MathTex(r"\angle AKC = 90^\circ")` |
+| `MathTex("x^2")` | `MathTex(r"x^2")` |
+| `MathTex(r"$x^2$")` | `MathTex(r"x^2")` |
+
+**Validate Local + LaTeX** sẽ báo lỗi **Cấm Tex()** nếu Gemini vẫn dùng Tex.
+
+---
+
 ## 2. Môi trường (máy giáo viên — Windows local)
 
 - Manim CE (`manim` CLI) + FFmpeg + **MiKTeX / TeX Live** (cho `MathTex`)
@@ -309,6 +349,7 @@ manim -ql scene.py TenScene     # video thử 480p
 | Triệu chứng | Nguyên nhân | Sửa |
 |-------------|-------------|-----|
 | Ô vuông thay chữ tiếng Việt | Dùng Tex/MathTex cho tiếng Việt | Đổi sang `Text(..., disable_ligatures=True)` |
+| Công thức xấu / Tex thay MathTex | Gemini dùng `Tex()` hoặc `MathTex` thiếu `r"..."` | Bật **Local + LaTeX**; Validate sẽ báo **Cấm Tex()**; copy lại Bước 2 |
 | LaTeX error / blank formula | Thiếu `r"..."` hoặc chưa cài MiKTeX | Sửa chuỗi; cài MiKTeX; chạy lại backend |
 | Validate báo cấm MathTex | Đang chế độ Render Free | Bật **Local + LaTeX** trên web |
 | Hình bị cắt / điểm K tràn mép | Hình quá lớn hoặc đặt sai vị trí | `scale_to_fit_height(4.0).move_to(LEFT*2.8)`; nhãn `next_to` buff nhỏ |

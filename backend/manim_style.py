@@ -121,6 +121,66 @@ Khung 16:9 Manim: rộng ~14, cao ~8 (từ -7 đến 7, -4 đến 4).
    # mỗi bước: self.play(FadeOut(old_panel)) rồi Write(new_panel) nếu cần
 """
 
+MATH_LATEX_RULES = """
+=== CÔNG THỨC LaTeX ĐẸP (BẮT BUỘC — Local + LaTeX) ===
+CẤM Tex(...) hoàn toàn. Tex render xấu, không morph công thức, dễ lỗi font.
+
+PHÂN LOẠI BẮT BUỘC:
+| Nội dung | Dùng |
+| Tiếng Việt (đề, lời giải, nhãn A/B/C) | Text(font="Arial", disable_ligatures=True) hoặc vn() |
+| Công thức, góc, ký hiệu ⊥, △, ∠ | MathTex(r"...") — LUÔN có chữ r trước chuỗi |
+
+SAI → ĐÚNG (copy mẫu):
+❌ Tex(r"Ta có $CK \\perp AE$")
+✅ VGroup(vn("Ta có"), MathTex(r"CK \\perp AE"))
+
+❌ Tex(r"$\\angle AKC = 90^\\circ$")
+✅ MathTex(r"\\angle AKC = 90^\\circ")
+
+❌ MathTex("x^2")                    # thiếu r
+✅ MathTex(r"x^2")
+
+❌ MathTex(r"$x^2$")                 # thừa dấu $
+✅ MathTex(r"x^2")
+
+❌ MathTex(r"Chứng minh tứ giác nội tiếp")   # tiếng Việt trong MathTex → ô vuông
+✅ vn("Chứng minh tứ giác nội tiếp")
+
+❌ Text("CK ⊥ AE")                    # ký hiệu toán trong Text → xấu
+✅ MathTex(r"CK \\perp AE")
+
+MẪU HÌNH HỌC:
+  MathTex(r"\\angle ABC"), MathTex(r"CK \\perp AE"), MathTex(r"\\triangle ABC")
+  MathTex(r"\\Rightarrow"), MathTex(r"\\therefore")   # mũi tên suy luận
+
+BIẾN ĐỔI CÔNG THỨC (bắt buộc khi đổi dòng):
+  eq1 = MathTex(r"AB^2 = AC^2 + BC^2")
+  eq2 = MathTex(r"BC^2 = 9 + 16")
+  self.play(TransformMatchingTex(eq1, eq2))
+"""
+
+CHANNEL_STYLE_PROMPT = """
+=== HỌC PHONG CÁCH 2 KÊNH THAM CHIẾU ===
+
+【Tiệm Toán Tư Duy / Trạm Dừng Toán Học — tư duy, tiểu học/THCS】
+- Giọng thầy cô thân thiện; mỗi video = 1 kỹ năng / 1 dạng
+- Beat "pause_practice": nhắc học sinh dừng video tự làm (text_lines: "Hãy tạm dừng và thử...")
+- Lời giải chia nhỏ: đọc đề → gợi ý → làm mẫu 1 bước → kiểm tra đáp án
+- Hình đơn giản, ít hiệu ứng; chữ lớn, dễ đọc; màu tươi (vàng highlight câu hỏi)
+- check_question cuối video: 1 câu tương tự để luyện
+
+【Kênh hình học kiểu Trần Quang Hùng — Euclidean, THCS/THPT】
+- Layout: hình trái lớn, lời giải phải ngắn (≤2 dòng/beat)
+- Dựng hình theo thứ tự logic: đường tròn → đường kính → điểm trên cung → phụ
+- Mỗi bước chứng minh: Indicate cạnh/góc đang nói + MathTex(r"\\angle ... = 90^\\circ")
+- Góc vuông: RightAngle; góc nhọn: Angle màu vàng
+- Kết luận: SurroundingRectangle vàng quanh dòng quan trọng
+- Không dump cả bài chứng minh một lúc — reveal từng nhận xét
+
+Lưu ý: Thầy Trần Quang Hùng (HSGS Hà Nội) đã cảnh báo một số kênh YouTube dùng tên ông không chính thức.
+Học phong cách trình bày hình học, không sao chép watermark/tên người khác.
+"""
+
 MANIM_STYLE_CODE_SNIPPET = '''
 # --- Style VN (copy vào đầu construct hoặc module) ---
 STYLE_VN = {

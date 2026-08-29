@@ -42,8 +42,9 @@ const CE_CHECKLIST_RENDER_FREE = [
 const CE_CHECKLIST_LOCAL = [
   { id: 'scene', label: 'class Scene (2D) — không MovingCamera / 3D' },
   { id: 'hybrid', label: 'Text tiếng Việt + MathTex(r"...") cho công thức' },
+  { id: 'notex', label: 'CẤM Tex() — chỉ MathTex(r"...") cho công thức LaTeX đẹp' },
   { id: 'font', label: 'Text: font="Arial" + disable_ligatures=True (tránh ô vuông □)' },
-  { id: 'latex', label: 'MathTex dùng chuỗi thô r"..."; LaTeX đã cài (MiKTeX)' },
+  { id: 'latex', label: 'MathTex bắt buộc r"..."; không dùng $ bọc ngoài' },
   { id: 'geom', label: 'Dot, Line, Circle, Polygon, Angle, TransformMatchingTex' },
   { id: 'layout', label: 'Hình trái scale≤4.0 / chữ phải — không chồng, không tràn mép' },
 ]
@@ -85,6 +86,30 @@ Khung 16:9 Manim: rộng ~14, cao ~8 (từ -7 đến 7, -4 đến 4).
    # mỗi bước: self.play(FadeOut(old_panel)) rồi Write(new_panel) nếu cần
 `
 
+const MATH_LATEX_RULES = `
+=== CÔNG THỨC LaTeX ĐẸP (BẮT BUỘC — Local + LaTeX) ===
+CẤM Tex(...) hoàn toàn. Tex render xấu, không morph được, dễ lỗi.
+
+PHÂN LOẠI:
+- Tiếng Việt → Text(font="Arial", disable_ligatures=True) hoặc vn()
+- Công thức / góc / ⊥ / △ / ∠ → MathTex(r"...") — LUÔN có chữ r
+
+SAI → ĐÚNG:
+❌ Tex(r"Ta có $CK \\perp AE$")  →  ✅ VGroup(vn("Ta có"), MathTex(r"CK \\perp AE"))
+❌ Tex(r"$\\angle AKC = 90^\\circ$")  →  ✅ MathTex(r"\\angle AKC = 90^\\circ")
+❌ MathTex("x^2")  →  ✅ MathTex(r"x^2")
+❌ MathTex(r"$x^2$")  →  ✅ MathTex(r"x^2")   (không bọc $)
+❌ MathTex(r"Chứng minh tứ giác...")  →  ✅ vn("Chứng minh...") + MathTex(r"\\Rightarrow")
+
+BIẾN ĐỔI: TransformMatchingTex(eq1, eq2) khi đổi dòng công thức.
+`
+
+const CHANNEL_STYLE_HINT = `
+=== PHONG CÁCH THAM CHIẾU ===
+• Tiệm Toán Tư Duy: beat pause_practice, 1 kỹ năng/video, check_question cuối
+• Hình học Euclidean: dựng hình tuần tự, Indicate cạnh/góc, kết luận SurroundingRectangle
+`
+
 function buildGeminiProStoryboardPrompt(problem, solution, videoFormat = 'landscape') {
   const p = (problem || '').trim() || '(dán đề bài đầy đủ vào đây)'
   const s = (solution || '').trim() || '(dán lời giải từng bước vào đây)'
@@ -100,11 +125,13 @@ ${LAYOUT_SAFE_RULES}
 BEAT_ORDER: title → problem → construction → solution_steps → conclusion → check_question
 STYLE_VN: nền #0d1117; điểm #8b1a1a; cạnh #1e40af; tròn #3d6b2f; highlight #FFD700
 
+${CHANNEL_STYLE_HINT}
+
 Trả về ĐÚNG 1 JSON (không markdown) gồm:
 - scene_name, title, video_format
 - layout: { figure_area, text_area, title_zone, safe_margins }
 - figure_objects (tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5])
-- beats[]: mỗi beat có phase, comment_vi, text_lines (≤2 dòng), actions, camera_hint
+- beats[]: mỗi beat có phase, comment_vi, text_lines (≤2 dòng), latex_lines (công thức LaTeX thuần), actions, camera_hint
 - Ghi rõ vùng title / figure / panel để code không chồng chéo
 
 OUTPUT: chỉ JSON. KHÔNG code Python.
@@ -127,8 +154,10 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
     ? `RÀNG BUỘC CODE (Local + LaTeX):
 - Bám ĐÚNG kịch bản JSON — không đổi thứ tự beat trừ khi JSON ghi khác
 - Tiếng Việt: Text(..., font="Arial", disable_ligatures=True)
-- Công thức: MathTex(r"...") — KHÔNG tiếng Việt trong MathTex
+- Công thức: MathTex(r"...") — CẤM Tex() hoàn toàn
+- latex_lines trong JSON → MathTex(r"..."); text_lines → Text/vn()
 - class Scene; self.camera.background_color = "#0d1117"
+${MATH_LATEX_RULES}
 ${LAYOUT_SAFE_RULES}`
     : `RÀNG BUỘC CODE (Render Free):
 - Bám kịch bản JSON; chỉ Text/MarkupText, không MathTex
@@ -163,10 +192,11 @@ Nhiệm vụ BƯỚC 3 (SỬA): người dùng muốn chỉnh KỊCH BẢN / b�
 
 QUY TẮC:
 1. Đọc YÊU CẦU SỬA và áp dụng vào kịch bản + code
-2. ${local ? 'Giữ font="Arial" + MathTex cho công thức' : 'Giữ Text/MarkupText'}
-3. ${LAYOUT_SAFE_RULES}
-4. Trả về TOÀN BỘ file Python đã sửa trong \`\`\`python ... \`\`\`
-5. Nếu kịch bản đổi nhiều: trả thêm JSON kịch bản mới TRƯỚC khối python (trong cùng câu trả lời)
+2. ${local ? 'Giữ font="Arial" + MathTex(r"..."); CẤM Tex()' : 'Giữ Text/MarkupText'}
+3. ${local ? MATH_LATEX_RULES : ''}
+4. ${LAYOUT_SAFE_RULES}
+5. Trả về TOÀN BỘ file Python đã sửa trong \`\`\`python ... \`\`\`
+6. Nếu kịch bản đổi nhiều: trả thêm JSON kịch bản mới TRƯỚC khối python (trong cùng câu trả lời)
 
 YÊU CẦU SỬA CỦA NGƯỜI DÙNG:
 ${notes}
@@ -195,7 +225,9 @@ function buildGeminiProPrompt(problem, solution, mode = 'local_latex') {
 - class kế thừa Scene (KHÔNG MovingCameraScene / ThreeDScene)
 - CHIẾN LƯỢC HYBRID (bắt buộc):
   • Tiếng Việt: Text("...", font="Arial", font_size=28, disable_ligatures=True)
-  • CÔNG THỨC ONLY trong MathTex(r"...") — KHÔNG nhét "Ta có", "Chứng minh", "tứ giác" vào MathTex (gây ô vuông □)
+  • CÔNG THỨC ONLY trong MathTex(r"...") — CẤM Tex() hoàn toàn
+  • KHÔNG nhét "Ta có", "Chứng minh", "tứ giác" vào MathTex (gây ô vuông □)
+  • KHÔNG bọc $ trong MathTex — dùng MathTex(r"x^2") không phải r"$x^2$"
 - Nhãn điểm hình học: Text("A", font_size=28, disable_ligatures=True)
 - Biến đổi công thức: TransformMatchingTex(eq1, eq2) hoặc ReplacementTransform
 - Bố cục: figure = VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
@@ -223,6 +255,8 @@ Bước 3 → Sửa nhẹ (dùng prompt "Copy Bước 3 — Sửa" + kịch bả
 KHÔNG nhảy thẳng sang code nếu chưa có kịch bản JSON.
 
 ${constraints}
+
+${local ? MATH_LATEX_RULES : ''}
 
 ${LAYOUT_SAFE_RULES}
 

@@ -36,6 +36,10 @@ _RENDER_FREE_FORBIDDEN: list[tuple[str, str]] = [
 
 _LOCAL_LATEX_FORBIDDEN: list[tuple[str, str]] = [
     (
+        r"\bTex\s*\(",
+        "Cấm Tex() — dùng Text(font='Arial') cho tiếng Việt và MathTex(r'...') cho công thức LaTeX đẹp",
+    ),
+    (
         r"\bMathTypst\s*\(|\bTypst\s*\(",
         "Cấm Typst/MathTypst — dùng MathTex hoặc Text",
     ),
@@ -59,16 +63,12 @@ _WARNING_PATTERNS: list[tuple[str, str]] = [
 
 _LOCAL_WARNINGS: list[tuple[str, str]] = [
     (
-        r"\bTex\s*\(\s*(?![rf][\"'])",
-        "Tex/MathTex: nên dùng chuỗi thô r\"...\" hoặc f\"...\"",
-    ),
-    (
         r"\bMathTex\s*\(\s*(?![rf][\"'])",
-        "MathTex: nên dùng chuỗi thô r\"...\"",
+        "MathTex: BẮT BUỘC dùng chuỗi thô r\"...\" (vd: MathTex(r\"x^2\"))",
     ),
     (
-        r"\bTex\s*\(\s*[rf]?[\"'][^\"']*[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]",
-        "Tex chứa tiếng Việt — dùng Text(..., disable_ligatures=True)",
+        r"\bMathTex\s*\(\s*r?[\"'][^\"']*\$[^\"']*[\"']",
+        "MathTex không cần dấu $ bọc ngoài — dùng MathTex(r\"x^2\") không phải r\"$x^2$\"",
     ),
     (
         r"\bLabel\s*\(\s*[\"']",

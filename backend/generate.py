@@ -12,7 +12,9 @@ from typing import Any
 
 from manim_style import (
     BEAT_ORDER,
+    CHANNEL_STYLE_PROMPT,
     LAYOUT_SAFE_RULES,
+    MATH_LATEX_RULES,
     STYLE_VN,
     STYLE_VN_PROMPT,
     VIDEO_FORMATS,
@@ -220,7 +222,9 @@ Trả về ĐÚNG 1 JSON:
 10. Mỗi bước lời giải = 1 beat phase=solution_steps; wait ≥ 0.8s.
 11. Không viết code Manim/Python. Bỏ object GeoGebra đã ẩn.
 12. layout JSON phải có title_zone, figure_area, text_area, safe_margins.
+13. Mỗi beat solution_steps có text_lines (tiếng Việt) VÀ latex_lines (công thức LaTeX thuần, không $ bọc ngoài).
 """
+    + CHANNEL_STYLE_PROMPT
     + LAYOUT_SAFE_RULES
 )
 
@@ -268,9 +272,13 @@ Create, Write, Indicate, TransformMatchingTex, LaggedStart, self.wait
 
 === LOCAL vs RENDER ===
 Local/LaTeX: MathTex công thức + Text tiếng Việt. Render Free: chỉ Text/MarkupText.
+"""
+    + MATH_LATEX_RULES
+    + """
 
 === CẤM ===
-MovingCameraScene, ThreeDScene, Label("chuỗi"), Tex cho tiếng Việt, import lạ, TODO.
+MovingCameraScene, ThreeDScene, Label("chuỗi"), Tex(...) hoàn toàn, import lạ, TODO.
+Tex → thay bằng Text (tiếng Việt) hoặc MathTex(r"...") (công thức).
 
 scene_name khớp class. JSON manim_code: xuống dòng là \\\\n.
 """
@@ -1001,7 +1009,7 @@ QUY TẮC MANIM CE:
 1. Trả về TOÀN BỘ file Python đã sửa (không truncation, không diff).
 2. scene_name khớp class; class CHỈ kế thừa Scene (không MovingCameraScene/ThreeDScene).
 3. Ưu tiên sửa lỗi trong nhật ký / validate (SyntaxError, NameError, Tex, Label...).
-4. Tex/MathTex/Label(\"...\") → Text/MarkupText(font=\"Arial\", disable_ligatures=True).
+4. Tex(...) → thay bằng Text(font=\"Arial\") cho tiếng Việt HOẶC MathTex(r\"...\") cho công thức — CẤM Tex.
 5. Ô vuông □ thay chữ có dấu: tách tiếng Việt ra Text(font=\"Arial\"); MathTex chỉ công thức.
 6. API an toàn: Text, MarkupText, Dot, Line, Circle, Polygon, Angle, RightAngle, VGroup,
    ImageMobject, SurroundingRectangle, Create, FadeIn, Write, Indicate, ReplacementTransform, wait.
@@ -1010,6 +1018,7 @@ QUY TẮC MANIM CE:
 9. Không để title/hình/text đè lên nhau — FadeOut panel cũ trước beat mới.
 """
     + LAYOUT_SAFE_RULES
+    + MATH_LATEX_RULES
 )
 
 
