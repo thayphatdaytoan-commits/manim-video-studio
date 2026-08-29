@@ -28,7 +28,7 @@
 - Angle, RightAngle, VGroup, ImageMobject
 - SurroundingRectangle, BackgroundRectangle
 - Create, Write, FadeIn, FadeOut, Indicate, ReplacementTransform
-- **Shorts 9:16 full-frame (mặc định):** đề chữ trên/hình dưới → ẩn đề → hình trên/chữ dưới; `SAFE_W`; font≥28
+- **Shorts 9:16 full-frame (mặc định):** đề chữ trên/hình dưới → ẩn đề → hình trên/chữ dưới **canh giữa** (`center_x`); `TOP_BUFF=0.05`; `FIGURE_RATIO=0.58`; font≥28
 - Landscape: figure LEFT, text RIGHT; scale_to_fit_height(4.0)
 
 ## Đồng bộ bài giảng
