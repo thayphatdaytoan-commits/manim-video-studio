@@ -219,10 +219,13 @@ export function buildManimReferenceCode(manifest, constructionOrder) {
     const pts = o.points || []
     if (pts.length >= 3) {
       lines.push(
-        `# ${o.id}: góc tại ${pts[1]} — cần 2 cạnh kề (ví dụ RightAngle hoặc Angle)`,
+        `# ∠${pts[0]}${pts[1]}${pts[2]} tại ${pts[1]} — góc TRONG <180°:`,
       )
       lines.push(
-        `# ${o.id} = RightAngle(Line(${pts[0]}, ${pts[1]}), Line(${pts[1]}, ${pts[2]}), length=0.22, color=STYLE_VN["highlight"])`,
+        `ang_${pts[1]}_${pts[0]}${pts[2]} = interior_angle_at(${pts[1]}, ${pts[0]}, ${pts[2]}, radius=0.28, color=STYLE_VN["highlight"])`,
+      )
+      lines.push(
+        `# Góc vuông tại ${pts[1]}: right_angle_at(${pts[1]}, ${pts[0]}, ${pts[2]}, length=0.22, color=STYLE_VN["highlight"])`,
       )
     }
   }

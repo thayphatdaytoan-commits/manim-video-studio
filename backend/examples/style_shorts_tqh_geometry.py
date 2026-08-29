@@ -53,6 +53,28 @@ def fit_figure_full_width(figure, max_height):
     return figure
 
 
+def _pt(m):
+    return m.get_center() if hasattr(m, "get_center") else m
+
+
+def interior_angle_at(vertex, arm1, arm2, radius=0.28, color=None, **kwargs):
+    """∠(arm1 — vertex — arm2) góc TRONG < 180°."""
+    v, a1, a2 = _pt(vertex), _pt(arm1), _pt(arm2)
+    return Angle(
+        Line(v, a1, buff=0),
+        Line(v, a2, buff=0),
+        radius=radius,
+        other_angle=False,
+        color=color or STYLE_VN["highlight"],
+        **kwargs,
+    )
+
+
+def right_angle_at(vertex, arm1, arm2, length=0.22, **kwargs):
+    v, a1, a2 = _pt(vertex), _pt(arm1), _pt(arm2)
+    return RightAngle(Line(v, a1, buff=0), Line(v, a2, buff=0), length=length, **kwargs)
+
+
 class ShortsTQHGeometryDemo(Scene):
     """Mẫu full-frame: đề+chữ trên / hình dưới → ẩn đề → hình trên / lời giải canh giữa."""
 
@@ -139,7 +161,7 @@ class ShortsTQHGeometryDemo(Scene):
             anims = [Write(new_parts)]
             if indicate_targets:
                 if isinstance(indicate_targets, str) and indicate_targets == "ACB":
-                    ang = RightAngle(AC, BC, length=0.25, color=STYLE_VN["highlight"])
+                    ang = right_angle_at(C, A, B, length=0.25, color=STYLE_VN["highlight"])
                     figure.add(ang)
                     anims.append(Indicate(ang, color=STYLE_VN["highlight"]))
                 elif isinstance(indicate_targets, tuple):

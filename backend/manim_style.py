@@ -123,6 +123,9 @@ GEMINI_ANTI_PATTERNS = """
 17. Thiếu config.pixel_width=1080, pixel_height=1920 ở đầu file
 18. align_to(LEFT_EDGE, LEFT) cho đề/lời giải Shorts → SAI; dùng center_x(mob)
 19. TOP_BUFF > 0.12 hoặc FIGURE_RATIO < 0.52 → viền đen trên/dưới quá lớn
+20. Angle/ Arc reflex (>180°) tại đỉnh → dùng interior_angle_at(vertex, arm1, arm2)
+21. RightAngle(Line(A,B), Line(B,C)) khi cần tia từ B → SAI; dùng right_angle_at(B, A, C)
+22. Tự vẽ Arc thay Angle cho góc trong → dễ sai cung lớn
 """
 
 GEMINI_SELF_CHECK = """
@@ -134,6 +137,7 @@ GEMINI_SELF_CHECK = """
 □ Code có vn(), STYLE_VN, MAX_LINES_PER_PAGE=4, self.wait(≥0.8) mỗi beat?
 □ Không Tex(), Label(), MovingCameraScene, ThreeDScene?
 □ Hình đã scale_to_fit_width(SAFE_W) + chữ font≥28 + center_x — không viền đen dư?
+□ Mọi ký hiệu góc dùng interior_angle_at / right_angle_at — không cung reflex >180°?
 □ config.pixel_width=1080, pixel_height=1920 ở đầu file?
 """
 
@@ -146,7 +150,8 @@ GEMINI_ACTION_MAP = """
 | shift_figure_up | fit_figure_full_width + figure.to_edge(UP, buff=TOP_BUFF) + center_x(figure) |
 | write_line | Write(new_line) — 1 dòng vn()/MathTex; center_x sau next_to |
 | indicate:AB | Indicate(segment_AB, color=STYLE_VN["highlight"]) |
-| right_angle:ACB | RightAngle(AC, BC, length=0.22, color=STYLE_VN["highlight"]) |
+| right_angle:ACB | right_angle_at(C, A, B, length=0.22, color=STYLE_VN["highlight"]) |
+| angle:AHK | interior_angle_at(H, A, K, radius=0.28, color=STYLE_VN["highlight"]) |
 | fade_out_solution_stack | self.play(FadeOut(solution_stack)); solution_stack = VGroup() |
 | surround_rect | SurroundingRectangle(conclusion, color=STYLE_VN["highlight"]) |
 """
@@ -162,9 +167,60 @@ SHORTS_VENN_SET_RULES = """
 - CẤM: align_to(LEFT_EDGE, LEFT) cho lời giải; CẤM khoảng trống lớn trên/dưới
 """
 
+GEMINI_ANGLE_RULES = """
+=== KÝ HIỆU GÓC — BẮT BUỘC GÓC TRONG < 180° (CẤM cung reflex quanh đỉnh) ===
+
+【Hàm chuẩn — COPY vào mọi file có vẽ góc】
+def _pt(m):
+    return m.get_center() if hasattr(m, "get_center") else m
+
+def interior_angle_at(vertex, arm1, arm2, radius=0.28, color=None, **kwargs):
+    \"\"\"∠(arm1 — vertex — arm2) luôn là góc TRONG (< 180°).\"\"\"
+    v, a1, a2 = _pt(vertex), _pt(arm1), _pt(arm2)
+    return Angle(
+        Line(v, a1, buff=0),
+        Line(v, a2, buff=0),
+        radius=radius,
+        other_angle=False,
+        color=color or STYLE_VN.get("highlight", "#FFD700"),
+        **kwargs,
+    )
+
+def right_angle_at(vertex, arm1, arm2, length=0.22, **kwargs):
+    v, a1, a2 = _pt(vertex), _pt(arm1), _pt(arm2)
+    return RightAngle(
+        Line(v, a1, buff=0),
+        Line(v, a2, buff=0),
+        length=length,
+        **kwargs,
+    )
+
+【Quy tắc bắt buộc】
+1. Góc tại đỉnh B (∠ABC): LUÔN dùng interior_angle_at(B, A, C) — 2 tia xuất phát TỪ B
+2. other_angle=False (mặc định) — CẤM other_angle=True trừ khi đã thử đổi thứ tự 2 tia
+3. Nếu vẫn ra cung > 180°: đổi thứ tự arm1/arm2 HOẶC other_angle=True (chỉ 1 trong 2 cách)
+4. Góc vuông: right_angle_at(B, A, C) — KHÔNG RightAngle(Line(A,B), Line(B,C)) nếu 2 Line không cùng chiều từ B
+5. CẤM tự vẽ Arc(angle>PI) hoặc Arc quanh đỉnh để đánh dấu góc
+6. CẤM Angle(Line(A,B), Line(C,D)) khi 2 Line không giao tại cùng 1 đỉnh
+7. radius góc: 0.22–0.35 (tỷ lệ hình); màu STYLE_VN["highlight"]
+
+【Ví dụ ĐÚNG / SAI】
+✅ ang_H = interior_angle_at(H, A, K)          # ∠AHK tại H
+✅ ang_D = interior_angle_at(D, C, E)          # ∠CDE tại D
+✅ ra_C = right_angle_at(C, A, B)              # vuông tại C
+❌ Angle(Line(A,H), Line(H,K))                 # chiều Line có thể sai → cung reflex
+❌ Arc(radius=0.4, angle=TAU*0.8)              # gần full vòng — SAI
+❌ Angle(l1, l2, other_angle=True)             # cố ý vẽ góc lớn — SAI cho SGK
+
+【JSON kịch bản】
+- indicate_targets góc: "angle:AHK" hoặc "right_angle:ACB" (đỉnh ở giữa)
+- Beat solution_steps nói về góc → actions có indicate + interior_angle_at tại đỉnh đó
+"""
+
 GEMINI_SHORTS_TQH_PROMPT = (
     SHORTS_TQH_LAYOUT_RULES
     + SHORTS_VENN_SET_RULES
+    + GEMINI_ANGLE_RULES
     + GEMINI_ACTION_MAP
     + GEMINI_ANTI_PATTERNS
     + """
@@ -352,7 +408,7 @@ CHANNEL_STYLE_PROMPT = """
 - Layout: hình trái lớn, lời giải phải ngắn (≤2 dòng/beat)
 - Dựng hình theo thứ tự logic: đường tròn → đường kính → điểm trên cung → phụ
 - Mỗi bước chứng minh: Indicate cạnh/góc đang nói + MathTex(r"\\angle ... = 90^\\circ")
-- Góc vuông: RightAngle; góc nhọn: Angle màu vàng
+- Góc vuông: right_angle_at(đỉnh, arm1, arm2); góc nhọn/tù: interior_angle_at(đỉnh, arm1, arm2) — luôn <180°
 - Kết luận: SurroundingRectangle vàng quanh dòng quan trọng
 - Không dump cả bài chứng minh một lúc — reveal từng nhận xét
 

@@ -264,6 +264,28 @@ const GEMINI_ANTI_PATTERNS = `
 12. Dump cả lời giải một lúc
 13. align_to(LEFT_EDGE, LEFT) cho đề/lời giải Shorts → SAI; dùng center_x()
 14. TOP_BUFF > 0.12 hoặc FIGURE_RATIO < 0.52 → viền đen trên/dưới quá lớn
+15. Angle/Arc reflex >180° tại đỉnh → dùng interior_angle_at(vertex, arm1, arm2)
+16. RightAngle(Line(A,B),Line(B,C)) khi cần tia từ B → SAI; dùng right_angle_at(B,A,C)
+17. Tự vẽ Arc thay Angle → dễ ra cung gần full vòng
+`
+
+const GEMINI_ANGLE_RULES = `
+=== KÝ HIỆU GÓC — GÓC TRONG < 180° (CẤM cung reflex như ảnh lỗi) ===
+def interior_angle_at(vertex, arm1, arm2, radius=0.28, color=None, **kwargs):
+    v = vertex.get_center(); a1 = arm1.get_center(); a2 = arm2.get_center()
+    return Angle(Line(v,a1,buff=0), Line(v,a2,buff=0), radius=radius, other_angle=False, color=color or "#FFD700", **kwargs)
+
+def right_angle_at(vertex, arm1, arm2, length=0.22, **kwargs):
+    v = vertex.get_center(); a1 = arm1.get_center(); a2 = arm2.get_center()
+    return RightAngle(Line(v,a1,buff=0), Line(v,a2,buff=0), length=length, **kwargs)
+
+QUY TẮC:
+- ∠ABC tại B → interior_angle_at(B, A, C) — 2 tia XUẤT PHÁT TỪ đỉnh B
+- Góc vuông → right_angle_at(đỉnh, arm1, arm2)
+- CẤM: Angle(Line(A,B), Line(B,C)) nếu chiều Line không từ đỉnh ra
+- CẤM: Arc(angle>PI), other_angle=True, cung vàng quanh gần hết vòng tròn
+- Nếu vẫn sai: đổi thứ tự arm1/arm2 hoặc other_angle=True (chọn 1)
+Ví dụ: ang_H = interior_angle_at(H, A, K)  # ∠AHK tại H
 `
 
 const GEMINI_ACTION_MAP = `
@@ -271,6 +293,8 @@ const GEMINI_ACTION_MAP = `
 fade_out_problem → FadeOut(problem_block)
 shift_figure_up → fit_figure_full_width + figure.to_edge(UP, buff=TOP_BUFF) + center_x(figure)
 write_line → next_to(figure/solution_stack, DOWN, buff=0.08) + center_x(); font 28+
+right_angle:ACB → right_angle_at(C, A, B, length=0.22)
+angle:AHK → interior_angle_at(H, A, K, radius=0.28)
 `
 
 const GEMINI_SELF_CHECK = `
@@ -280,6 +304,7 @@ const GEMINI_SELF_CHECK = `
 □ scale_to_fit_width(SAFE_W) — không viền đen trên/dưới/hai bên?
 □ Font ≥28, không scale(0.38)?
 □ Không shift(UP*2) mù?
+□ Góc: interior_angle_at / right_angle_at — không cung reflex >180°?
 `
 
 const GEMINI_CODE_FILE_HEADER = `
@@ -348,6 +373,7 @@ ${videoFormat === 'shorts' ? 'HÌNH HỌC → BẮT BUỘC luồng TQH shorts (�
 ${layoutRulesForFormat(videoFormat)}
 ${videoFormat === 'shorts' ? GEMINI_SHORTS_TQH_JSON_GUIDE : ''}
 ${videoFormat === 'shorts' ? GEMINI_ACTION_MAP : ''}
+${videoFormat === 'shorts' ? GEMINI_ANGLE_RULES : ''}
 ${GEMINI_ANTI_PATTERNS}
 
 BEAT_ORDER: ${beatOrder}
@@ -392,6 +418,7 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
   • Đề trên → hình dưới (fit SAFE_W, center_x) → FadeOut đề → hình to_edge(UP, buff=TOP_BUFF) → chữ dưới hình CANH GIỮA (center_x)
   • Venn/tập hợp: figure = VGroup(các vòng); fit_figure_full_width + center_x — CẤM hình nhỏ bên trái
   • CẤM: align_to(LEFT_EDGE, LEFT), move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), font≤24, TOP_BUFF>0.12
+  • Góc: interior_angle_at(đỉnh, arm1, arm2) / right_angle_at — LUÔN <180°, CẤM cung reflex
 - Bám skeleton + file mẫu trong repo:
   • Hình học: backend/examples/style_shorts_tqh_geometry.py
   • Venn/tập hợp: backend/examples/style_shorts_venn_sets.py
@@ -399,6 +426,7 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
 ${GEMINI_CODE_FILE_HEADER}
 ${GEMINI_SHORTS_TQH_CODE_SKELETON}
 ${GEMINI_ACTION_MAP}
+${GEMINI_ANGLE_RULES}
 ${GEMINI_ANTI_PATTERNS}`
     : ''
 
@@ -459,6 +487,8 @@ QUY TẮC:
 5. ${videoFormat === 'shorts' ? 'GIỮ luồng TQH: đề+hình → ẩn đề → figure lên → lời giải từng dòng → page_break mỗi 4 dòng. KHÔNG đổi sang landscape.' : 'Giữ layout landscape hình trái / panel phải.'}
 6. Trả về TOÀN BỘ file Python đã sửa trong \`\`\`python ... \`\`\`
 7. Nếu kịch bản đổi nhiều: trả thêm JSON kịch bản mới TRƯỚC khối python
+8. Góc bị cung reflex (>180°): thay bằng interior_angle_at(đỉnh, arm1, arm2) hoặc right_angle_at
+${GEMINI_ANGLE_RULES}
 ${GEMINI_ANTI_PATTERNS}
 ${GEMINI_SELF_CHECK}
 

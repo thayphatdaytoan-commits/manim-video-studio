@@ -36,6 +36,28 @@ def fit_figure_full_width(fig, max_h):
     if fig.height > max_h:
         fig.scale_to_fit_height(max_h)
     return fig
+
+
+def _pt(m):
+    return m.get_center() if hasattr(m, "get_center") else m
+
+
+def interior_angle_at(vertex, arm1, arm2, radius=0.28, color=None, **kwargs):
+    \"\"\"∠(arm1 — vertex — arm2) góc TRONG < 180°.\"\"\"
+    v, a1, a2 = _pt(vertex), _pt(arm1), _pt(arm2)
+    return Angle(
+        Line(v, a1, buff=0),
+        Line(v, a2, buff=0),
+        radius=radius,
+        other_angle=False,
+        color=color or "#FFD700",
+        **kwargs,
+    )
+
+
+def right_angle_at(vertex, arm1, arm2, length=0.22, **kwargs):
+    v, a1, a2 = _pt(vertex), _pt(arm1), _pt(arm2)
+    return RightAngle(Line(v, a1, buff=0), Line(v, a2, buff=0), length=length, **kwargs)
 """
 
 SHORTS_LANDSCAPE_PATTERNS = [
@@ -70,7 +92,12 @@ SHORTS_GEMINI_MANDATORY = """
    - CẤM đặt figure nhỏ bên trái với khoảng trống bên phải
    - Công thức inclusion-exclusion: MathTex scale 1.0, canh GIỮA (center_x)
 
-4. CẤM TUYỆT ĐỐI:
+4. KÝ HIỆU GÓC (< 180°):
+   - interior_angle_at(vertex, arm1, arm2) — 2 tia xuất phát TỪ vertex
+   - right_angle_at(vertex, arm1, arm2) cho góc vuông
+   - CẤM Arc reflex, CẤM other_angle=True, CẤM Angle(Line(A,B), Line(C,D)) không chung đỉnh
+
+5. CẤM TUYỆT ĐỐI:
    - align_to(LEFT_EDGE, LEFT) cho đề và lời giải Shorts
    - move_to(LEFT * 2.8), to_edge(RIGHT), panel.scale(0.38)
    - TOP_BUFF > 0.12 hoặc FIGURE_RATIO < 0.52 (gây viền đen trên/dưới)

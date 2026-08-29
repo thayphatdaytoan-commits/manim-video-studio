@@ -32,6 +32,15 @@ def fit_figure_full_width(fig, max_h):
         fig.scale_to_fit_height(max_h)
     return fig
 
+def interior_angle_at(vertex, arm1, arm2, radius=0.28, color=None, **kwargs):
+  v = vertex.get_center(); a1 = arm1.get_center(); a2 = arm2.get_center()
+  return Angle(Line(v,a1,buff=0), Line(v,a2,buff=0), radius=radius, other_angle=False,
+               color=color or STYLE_VN["highlight"], **kwargs)
+
+def right_angle_at(vertex, arm1, arm2, length=0.22, **kwargs):
+  v = vertex.get_center(); a1 = arm1.get_center(); a2 = arm2.get_center()
+  return RightAngle(Line(v,a1,buff=0), Line(v,a2,buff=0), length=length, **kwargs)
+
 === LUỒNG construct() ===
 1. problem_block.to_edge(UP, buff=TOP_BUFF); center_x(problem_block)
 2. figure = VGroup(...); fit_figure_full_width(figure, avail_h); next_to(problem_block, DOWN, buff=0.1); center_x(figure)
@@ -41,6 +50,7 @@ def fit_figure_full_width(fig, max_h):
 
 === CẤM ===
 align_to(LEFT_EDGE, LEFT), Tex(), move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), shift(UP*2), font≤24, TOP_BUFF>0.12
+Angle/Arc reflex >180° — dùng interior_angle_at(đỉnh, arm1, arm2); CẤM other_angle=True
 
 === MẪU CODE (bám cấu trúc) ===
 - Hình học: style_shorts_tqh_geometry.py

@@ -24,6 +24,7 @@ LAYOUT JSON:
 QUY TẮC:
 - Mỗi solution_steps: đúng 1 text_line HOẶC 1 latex_line — CANH GIỮA màn hình
 - Venn/tập hợp: figure_targets là các vòng tròn; hình phải full SAFE_W + center_x
+- Góc trong JSON: indicate_targets dạng "angle:AHK" (đỉnh ở giữa) hoặc "right_angle:ACB"
 - CẤM layout landscape (hình trái, panel phải)
 - CẤM text_align: "left" — luôn "center"
 - figure_objects: tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5]

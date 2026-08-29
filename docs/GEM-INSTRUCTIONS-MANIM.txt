@@ -49,6 +49,22 @@ VENN / TẬP HỢP:
   figure = VGroup(các Circle + nhãn); LUÔN fit_figure_full_width + center_x
   Công thức: MathTex(r"n(T \cup V \cup A) = ...") — scale 1.0, canh GIỮA
 
+=== KÝ HIỆU GÓC — LUÔN < 180° (CẤM cung reflex quanh đỉnh) ===
+Hàm bắt buộc khi vẽ góc:
+  def interior_angle_at(vertex, arm1, arm2, radius=0.28, color=None, **kwargs):
+      v = vertex.get_center(); a1 = arm1.get_center(); a2 = arm2.get_center()
+      return Angle(Line(v,a1,buff=0), Line(v,a2,buff=0), radius=radius, other_angle=False, color=color or "#FFD700", **kwargs)
+  def right_angle_at(vertex, arm1, arm2, length=0.22, **kwargs):
+      v = vertex.get_center(); a1 = arm1.get_center(); a2 = arm2.get_center()
+      return RightAngle(Line(v,a1,buff=0), Line(v,a2,buff=0), length=length, **kwargs)
+
+Quy tắc:
+  - ∠ABC tại B → interior_angle_at(B, A, C) — 2 tia XUẤT PHÁT TỪ đỉnh B
+  - Góc vuông → right_angle_at(đỉnh, arm1, arm2)
+  - CẤM: Angle(Line(A,B), Line(B,C)) nếu không chắc chiều tia từ đỉnh
+  - CẤM: Arc(angle>PI), other_angle=True, cung vàng gần full vòng
+  - Nếu vẫn sai: đổi thứ tự arm1/arm2
+
 === CẤM TUYỆT ĐỐI (gây viền đen / hình nhỏ / chữ lệch trái) ===
 - align_to(LEFT_EDGE, LEFT) cho đề/lời giải Shorts
 - move_to(LEFT * 2.8), to_edge(RIGHT), panel.scale(0.38) — chỉ dùng cho landscape
@@ -82,3 +98,4 @@ Bước 2–3: chỉ ```python ... ``` — class Scene, self.wait(≥0.8) mỗi 
 □ fit_figure_full_width(SAFE_W) + center_x cho đề/hình/chữ?
 □ Không layout landscape khi shorts?
 □ Font ≥ 28?
+□ Góc: interior_angle_at / right_angle_at — không cung reflex >180°?

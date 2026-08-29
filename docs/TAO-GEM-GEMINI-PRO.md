@@ -74,6 +74,7 @@ manim -pq backend/examples/style_shorts_venn_sets.py ShortsVennSetsDemo
 |-----|-------------------------|
 | Viền đen trên/dưới, chữ lệch trái | TOP_BUFF lớn / align LEFT | "center_x() cho đề+lời giải; TOP_BUFF=0.05; FIGURE_RATIO=0.58" |
 | Ô vuông thay chữ Việt | "CẤM Tex; tiếng Việt dùng vn(), công thức MathTex(r'...')" |
+| Góc cung reflex >180° (vàng quanh đỉnh) | Angle/Line chiều sai | "interior_angle_at(H,A,K); other_angle=False; 2 tia từ đỉnh" |
 | Lời giải hiện một lúc | "Tách từng dòng solution_steps + self.wait(0.8)" |
 
 Chi tiết: `docs/HUONG-DAN-GEMINI-PRO-MANIM.md`

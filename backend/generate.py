@@ -154,7 +154,7 @@ Trả về ĐÚNG 1 JSON (không markdown):
 5. figure = fit_figure_full_width(...); figure.next_to(problem_block, DOWN) — full-frame shorts
 6. Cuối file: CONSTRUCTION_ORDER = [...] và comment hướng dẫn Create tuần tự.
 7. Màu STYLE_VN: điểm #8b1a1a, cạnh #1e40af, tròn #3d6b2f, highlight #FFD700.
-8. Góc vuông: RightAngle; góc thường: Angle — ghi rõ id đối tượng góc.
+8. Góc vuông: right_angle_at(đỉnh, arm1, arm2); góc thường: interior_angle_at(đỉnh, arm1, arm2) — LUÔN <180°
 9. Không viết class Scene hoàn chỉnh — chỉ mã tham chiếu (điểm, cạnh, figure, CONSTRUCTION_ORDER).
 """
 
