@@ -21,6 +21,7 @@ import {
   Wand2,
   Wrench,
   X,
+  Bot,
 } from 'lucide-react'
 import GeoGebraApplet, { sanitizeGgbCommands } from './GeoGebraApplet'
 import './App.css'
@@ -270,6 +271,90 @@ ${s}
 `
 }
 
+function buildCursorAgentBrief({
+  problem,
+  solution,
+  guidance,
+  videoFormat,
+  storyboard,
+  ggbCommands,
+  hasGgbImage,
+  validationMode,
+  existingCode,
+  compileLog,
+  fixMode = false,
+}) {
+  const p = (problem || '').trim() || '(chưa có — nhập ở cột 1)'
+  const s = (solution || '').trim() || '(chưa có — nhập ở cột 1)'
+  const g = (guidance || '').trim()
+  const sb = (storyboard || '').trim()
+  const ggb = (ggbCommands || []).filter((l) => l && !String(l).trim().startsWith('#')).join('\n')
+  const fmt = videoFormat === 'shorts' ? 'shorts (9:16)' : 'landscape (16:9, hình trái + chữ phải)'
+  const local = validationMode === 'local_latex'
+  const py = (existingCode || '').trim()
+  const log = (compileLog || '').trim()
+
+  const task = fixMode
+    ? `NHIỆM VỤ: SỬA file Manim trong thư mục scenes/ (hoặc code giáo viên dán) theo lỗi Validate/biên dịch bên dưới.
+Giữ nguyên từng bước lời giải và layout (hình trái, panel phải). Trả về TOÀN BỘ file .py đã sửa.`
+    : `NHIỆM VỤ: VIẾT MỚI file Python Manim CE — đường dẫn gợi ý: scenes/BaiGiang.py (1 class Scene).
+Giáo viên sẽ copy code vào Manim Video Studio → Validate → biên dịch video.`
+
+  const latexBlock = local
+    ? `${MATH_LATEX_RULES}`
+    : '- Render Free: chỉ Text/MarkupText, không MathTex/Tex.'
+
+  let body = `Bạn là lập trình viên Manim CE trong repo manim-video-studio (Hướng A — Cursor Agent).
+
+${task}
+
+CHẾ ĐỘ: ${local ? 'Local + LaTeX (MiKTeX)' : 'Render Free'}
+ĐỊNH DẠNG VIDEO: ${fmt}
+
+${latexBlock}
+${LAYOUT_SAFE_RULES}
+${CHANNEL_STYLE_HINT}
+
+THAM CHIẾU CODE MẪU TRONG REPO:
+- backend/examples/style_landscape_muon_noi.py (hình học)
+- backend/examples/style_landscape_median.py (landscape + TransformMatchingTex)
+- backend/examples/style_shorts_thanh_viet.py (shorts)
+- .cursor/rules/manim-video-lessons.mdc (rule bắt buộc)
+
+ĐỀ BÀI:
+${p}
+
+LỜI GIẢI (từng bước — bám sát, không bỏ ý):
+${s}
+`
+
+  if (g) {
+    body += `\nHƯỚNG DẪN THÊM CỦA GIÁO VIÊN:\n${g}\n`
+  }
+  if (sb) {
+    body += `\nKỊCH BẢN JSON (nếu có — bám beats):\n${sb}\n`
+  }
+  if (ggb) {
+    body += `\nLỆNH GEOGEBRA (tham khảo tọa độ/hình):\n${ggb}\n`
+  }
+  if (hasGgbImage) {
+    body += `\n(Giáo viên đã lưu ảnh hình GeoGebra trên Studio — nếu chat cho phép, hãy xin ảnh hoặc bám lệnh GeoGebra trên.)\n`
+  }
+
+  if (fixMode) {
+    if (log) {
+      body += `\n--- LỖI VALIDATE / BIÊN DỊCH ---\n${log.slice(-8000)}\n`
+    }
+    if (py && !py.startsWith('#')) {
+      body += `\n--- CODE HIỆN TẠI ---\n\`\`\`python\n${py.slice(0, 24000)}\n\`\`\`\n`
+    }
+  } else if (py && !py.startsWith('#') && py.includes('class ')) {
+    body += `\n(Có code nháp trong editor — có thể cải thiện thay vì viết từ đầu.)\n`
+  }
+
+  return body
+}
+
 function extractPythonFromPaste(raw) {
   const text = (raw || '').trim()
   if (!text) return ''
@@ -390,7 +475,10 @@ export default function App() {
   const [proRevisionNotes, setProRevisionNotes] = useState('')
   const [proPromptStep, setProPromptStep] = useState('storyboard')
   const [proPromptMsg, setProPromptMsg] = useState('')
-  const [showProPrompt, setShowProPrompt] = useState(true)
+  const [showProPrompt, setShowProPrompt] = useState(false)
+  const [showGeminiWorkflow, setShowGeminiWorkflow] = useState(false)
+  const [cursorAgentMsg, setCursorAgentMsg] = useState('')
+  const [showCursorBrief, setShowCursorBrief] = useState(false)
   const [savedGgbImage, setSavedGgbImage] = useState(null)
   const [savingGgb, setSavingGgb] = useState(false)
   const [ggbCommandsText, setGgbCommandsText] = useState(
@@ -1055,6 +1143,66 @@ export default function App() {
     geminiProRevisePrompt,
   ])
 
+  const cursorAgentBrief = useMemo(
+    () =>
+      buildCursorAgentBrief({
+        problem: problemText,
+        solution: solutionText,
+        guidance: manimGuidance,
+        videoFormat,
+        storyboard: proStoryboardPaste || storyboardText,
+        ggbCommands,
+        hasGgbImage: Boolean(savedGgbImage),
+        validationMode: effectiveValidationMode,
+        existingCode: code,
+        compileLog: log,
+        fixMode: false,
+      }),
+    [
+      problemText,
+      solutionText,
+      manimGuidance,
+      videoFormat,
+      proStoryboardPaste,
+      storyboardText,
+      ggbCommands,
+      savedGgbImage,
+      effectiveValidationMode,
+      code,
+      log,
+    ],
+  )
+
+  const cursorAgentFixBrief = useMemo(
+    () =>
+      buildCursorAgentBrief({
+        problem: problemText,
+        solution: solutionText,
+        guidance: manimGuidance,
+        videoFormat,
+        storyboard: proStoryboardPaste || storyboardText,
+        ggbCommands,
+        hasGgbImage: Boolean(savedGgbImage),
+        validationMode: effectiveValidationMode,
+        existingCode: code,
+        compileLog: log,
+        fixMode: true,
+      }),
+    [
+      problemText,
+      solutionText,
+      manimGuidance,
+      videoFormat,
+      proStoryboardPaste,
+      storyboardText,
+      ggbCommands,
+      savedGgbImage,
+      effectiveValidationMode,
+      code,
+      log,
+    ],
+  )
+
   const copyProPrompt = async (text, msg) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -1089,6 +1237,34 @@ export default function App() {
   }
 
   const handleCopyGeminiProPrompt = handleCopyGeminiProCode
+
+  const handleCopyCursorAgentBrief = async () => {
+    try {
+      await navigator.clipboard.writeText(cursorAgentBrief)
+      setCursorAgentMsg(
+        'Đã copy brief — mở Cursor (cùng thư mục repo), dán vào chat Agent và yêu cầu viết scenes/TenBai.py',
+      )
+      setProPromptMsg('')
+    } catch {
+      setCursorAgentMsg('Không copy được — bấm “Xem brief” rồi Ctrl+A, Ctrl+C.')
+    }
+  }
+
+  const handleCopyCursorAgentFixBrief = async () => {
+    if (!code.trim() || code.trim().startsWith('#')) {
+      setError('Chưa có code Manim để gửi Cursor sửa.')
+      return
+    }
+    setError(null)
+    try {
+      await navigator.clipboard.writeText(cursorAgentFixBrief)
+      setCursorAgentMsg(
+        'Đã copy brief SỬA LỖI — dán vào Cursor Agent kèm @mention file scenes/ hoặc code hiện tại.',
+      )
+    } catch {
+      setCursorAgentMsg('Không copy được — mở “Xem brief” và copy thủ công.')
+    }
+  }
 
   const handleApplyProStoryboard = () => {
     const raw = (proStoryboardPaste || '').trim()
@@ -1722,8 +1898,18 @@ export default function App() {
             />
           </label>
           {storyboardReady && (
-            <div className="step-ok">Đã có kịch bản — có thể chỉnh JSON rồi tạo code Manim.</div>
+            <div className="step-ok">Đã có kịch bản — copy brief Cursor Agent (cột 3) hoặc tạo code Manim.</div>
           )}
+
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={handleCopyCursorAgentBrief}
+            disabled={!problemText.trim() || !solutionText.trim()}
+            title="Gửi đề + lời giải + kịch bản cho Cursor Agent"
+          >
+            <Bot size={16} /> Copy brief → Cursor Agent
+          </button>
 
           <button
             className="btn primary"
@@ -1749,12 +1935,60 @@ export default function App() {
         <section className="panel">
           <h2 className="panel-title">3. Manim → video</h2>
           <p className="step-hint">
-            Luồng Pro <strong>3 bước</strong>: (1) kịch bản JSON → (2) code Python → (3) sửa nhẹ nếu cần.
-            Chế độ{' '}
+            <strong>Khuyến nghị — Hướng A:</strong> Copy brief → <strong>Cursor Agent</strong> viết{' '}
+            <code>scenes/*.py</code> → dán vào editor → Validate → Biên dịch. Chế độ{' '}
             <strong>{effectiveValidationMode === 'local_latex' ? 'Local + LaTeX' : 'Render Free'}</strong>
             {backend.deps?.latex ? ' (LaTeX OK)' : ' (chưa có LaTeX)'}.
-            Canh khung: hình <code>scale_to_fit_height(4.0)</code>, tiêu đề trên, chữ phải — không đè lên nhau.
           </p>
+
+          <div className="cursor-agent-box">
+            <h3 className="voiceover-title">
+              <Bot size={16} /> Cursor Agent — viết / sửa code (Hướng A)
+            </h3>
+            <ol className="ce-checklist pro-steps">
+              <li>
+                <strong>Studio:</strong> đề + lời giải (cột 1), GeoGebra (cột 2) — bấm Copy brief
+              </li>
+              <li>
+                <strong>Cursor:</strong> mở folder <code>manim-video-studio</code> → chat Agent → dán brief
+              </li>
+              <li>
+                <strong>Agent viết</strong> <code>scenes/TenBai.py</code> — xem{' '}
+                <code>docs/HUONG-DAN-CURSOR-AGENT-MANIM.md</code>
+              </li>
+              <li>
+                <strong>Studio:</strong> copy code vào editor → Validate CE → Biên dịch 480p
+              </li>
+            </ol>
+            <div className="export-row pro-step-buttons">
+              <button type="button" className="btn primary export-btn" onClick={handleCopyCursorAgentBrief}>
+                <Copy size={15} /> Copy brief cho Cursor
+              </button>
+              <button
+                type="button"
+                className="btn secondary export-btn"
+                onClick={handleCopyCursorAgentFixBrief}
+                disabled={!code.trim() || code.trim().startsWith('#')}
+                title="Gửi code + log lỗi cho Agent sửa"
+              >
+                <Wrench size={15} /> Copy brief sửa lỗi
+              </button>
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={() => setShowCursorBrief((v) => !v)}
+              >
+                <FileText size={15} /> {showCursorBrief ? 'Ẩn brief' : 'Xem brief'}
+              </button>
+            </div>
+            {showCursorBrief && (
+              <label className="field">
+                <span className="field-label">BRIEF GỬI CURSOR AGENT</span>
+                <textarea rows={10} className="mono" readOnly value={cursorAgentBrief} />
+              </label>
+            )}
+            {cursorAgentMsg && <div className="step-ok">{cursorAgentMsg}</div>}
+          </div>
 
           <div className="validation-mode-row">
             <span className="field-label">CHẾ ĐỘ KIỂM TRA CODE</span>
@@ -1778,10 +2012,24 @@ export default function App() {
             </div>
           </div>
 
-          <div className="pro-workflow-box">
-            <h3 className="voiceover-title">
-              <Code2 size={16} /> Gemini Pro — 3 bước
-            </h3>
+          <div className="pro-workflow-box gemini-optional">
+            <div className="gemini-optional-header">
+              <h3 className="voiceover-title">
+                <Code2 size={16} /> Tùy chọn: Gemini Pro
+              </h3>
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={() => setShowGeminiWorkflow((v) => !v)}
+              >
+                {showGeminiWorkflow ? 'Thu gọn' : 'Mở rộng'}
+              </button>
+            </div>
+            {showGeminiWorkflow && (
+              <>
+            <p className="step-hint step-hint-tight">
+              Không khuyến nghị cho code chính — dùng khi không có Cursor. Luồng 3 bước: kịch bản → code → sửa.
+            </p>
             <ol className="ce-checklist pro-steps">
               <li>
                 <strong>Bước 1 — Kịch bản:</strong> Copy prompt → Gemini Pro → dán JSON vào ô Kịch bản
@@ -1921,6 +2169,8 @@ export default function App() {
                 <li key={item.id}>{item.label}</li>
               ))}
             </ul>
+              </>
+            )}
           </div>
 
           <label className="field">

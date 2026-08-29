@@ -120,6 +120,10 @@
   color: #5eead4;
 }
 
+.step-hint-tight {
+  margin: 0 0 8px;
+}
+
 .step-ok {
   font-size: 0.85rem;
   color: #86efac;
@@ -415,6 +419,32 @@
 
 .pro-step-buttons {
   flex-wrap: wrap;
+}
+
+.cursor-agent-box {
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gemini-optional {
+  opacity: 0.95;
+}
+
+.gemini-optional-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.gemini-optional-header .voiceover-title {
+  margin: 0;
 }
 
 .ce-checklist.pro-steps li {

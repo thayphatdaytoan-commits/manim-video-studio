@@ -1,0 +1,54 @@
+---
+description: Viết/sửa code Manim CE cho video bài giảng Toán VN trong Manim Video Studio
+globs:
+  - scenes/**/*.py
+  - backend/examples/**/*.py
+alwaysApply: false
+---
+
+# Manim Video Studio — quy tắc code (Hướng A: Cursor Agent)
+
+Bạn viết/sửa **file Python Manim CE** cho giáo viên Toán Việt Nam. Giáo viên dùng **Manim Video Studio** local (Windows) để Validate + render — không dùng Gemini cho code chính.
+
+## Output
+
+- Một `class ... (Scene)` trong `scenes/<TenBai>.py` (hoặc sửa file giáo viên chỉ định).
+- `scene_name` khớp tên class.
+- Comment tiếng Việt trước mỗi beat.
+
+## Local + LaTeX (mặc định nếu máy có MiKTeX)
+
+- Tiếng Việt: `Text(..., font="Arial", disable_ligatures=True)` hoặc helper `vn()`.
+- Công thức: `MathTex(r"...")` — **CẤM `Tex()`**.
+- Luôn `r"..."` trong MathTex; không bọc `$...$` bên trong.
+- Biến đổi công thức: `TransformMatchingTex(eq1, eq2)`.
+
+## Layout (bắt buộc — landscape 16:9)
+
+```python
+title = vn("...", 28).to_edge(UP, buff=0.35)
+figure = VGroup(...).scale_to_fit_height(4.0).move_to(LEFT * 2.8)
+panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT, buff=0.2).scale(0.38).to_edge(RIGHT, buff=0.4)
+```
+
+- Mỗi beat: ≤2 dòng panel; `FadeOut(panel_cũ)` hoặc `ReplacementTransform` trước beat mới.
+- `self.wait(≥0.8)` sau mỗi bước.
+
+## STYLE_VN
+
+- Nền `#0d1117`; điểm `#8b1a1a`; cạnh `#1e40af`; tròn `#3d6b2f`; highlight `#FFD700`; kết luận `#FF8C00`.
+- BEAT_ORDER: title → problem → construction → solution_steps → conclusion → check_question.
+
+## Tham chiếu trong repo
+
+- `backend/examples/style_landscape_median.py` — hình trái + panel phải
+- `backend/examples/style_landscape_muon_noi.py` — hình học
+- `backend/manim_style.py` — `LAYOUT_SAFE_RULES`, `MATH_LATEX_RULES`
+
+## Cấm
+
+- `MovingCameraScene`, `ThreeDScene`, `Tex()`, tiếng Việt trong `MathTex`, `Label("A")` (dùng `Text("A")`).
+
+## Khi giáo viên gửi lỗi Validate / nhật ký biên dịch
+
+Sửa toàn bộ file, giữ layout và lời giải từng bước; không bỏ beat.

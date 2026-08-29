@@ -80,8 +80,17 @@ git pull origin main
 ```
 
 Kiểm tra phiên bản: `git log -1 --oneline`  
-- `0d84b97` = đã có font fix + Gemini guide  
-- `9e5eecd` = thêm **Gemini Pro 3 bước** + canh khung (hình không tràn, chữ không đè)
+- `bac187c` trở lên = Cursor Agent (Hướng A) + MathTex rules
+
+### Luồng làm video (Hướng A — khuyến nghị)
+
+1. **Studio** (trình duyệt): đề + lời giải, GeoGebra, **Copy brief cho Cursor** (cột 3)
+2. **Cursor** (IDE): mở cùng folder → chat Agent → viết `scenes/TenBai.py`
+3. **Studio**: dán code → Validate → Biên dịch video
+
+Chi tiết: [docs/HUONG-DAN-CURSOR-AGENT-MANIM.md](docs/HUONG-DAN-CURSOR-AGENT-MANIM.md)
+
+Gemini Pro trong app = **tùy chọn** (kịch bản nháp / khi không có Cursor).
 
 ---
 
@@ -132,15 +141,16 @@ Repo đã có `Dockerfile` + `render.yaml`. Cách nhanh nhất:
 
 ### Tính năng AI (GeoGebra + Manim)
 
-Luồng kiểu **Math-To-Manim** (học kiến trúc, AI vẫn dùng Gemini — không nhúng Claude/Codex CLI):
+**Hướng A (khuyến nghị):** [Cursor Agent](docs/HUONG-DAN-CURSOR-AGENT-MANIM.md) viết code trong `scenes/` — Studio chỉ Validate/render.
 
-1. **API KEY** → Gemini key từ [Google AI Studio](https://aistudio.google.com/apikey)
-2. **Nhập đề + lời giải thủ công** (nút xác nhận) — hoặc tải ảnh / gợi ý → **AI tạo đề + lời giải**
+Luồng **Math-To-Manim** với Gemini (tùy chọn trong web):
+
+1. **API KEY** → Gemini key từ [Google AI Studio](https://aistudio.google.com/apikey) *(chỉ cần nếu dùng AI trong web)*
+2. **Nhập đề + lời giải thủ công** — hoặc tải ảnh → **AI tạo đề + lời giải**
 3. **AI tạo code GeoGebra** → chỉnh/kéo thả → **Lưu hình**
-4. **Gemini Pro (khuyến nghị):** copy prompt mẫu trên web → Pro chat → dán code → **Validate CE** → biên dịch
-5. (Tuỳ chọn) **AI tạo kịch bản + Manim** trong web bằng Gemini Free
-6. Biên dịch video; nếu lỗi → **Repair loop** / dán lại code đã sửa từ Pro
-7. Lồng tiếng Edge TTS (tuỳ chọn)
+4. **Cursor Agent:** Copy brief → viết `scenes/*.py` → dán vào editor → **Validate CE** → biên dịch
+5. (Tuỳ chọn) Gemini Pro trong web — không khuyến nghị cho code chính
+6. Lồng tiếng Edge TTS (tuỳ chọn)
 
 API:
 - `POST /api/generate-problem-solution`
