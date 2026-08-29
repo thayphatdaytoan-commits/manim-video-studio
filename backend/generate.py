@@ -17,10 +17,12 @@ from manim_style import (
     GEMINI_SHORTS_TQH_PROMPT,
     LAYOUT_SAFE_RULES,
     MATH_LATEX_RULES,
+    SHORTS_VENN_SET_RULES,
     STYLE_VN,
     STYLE_VN_PROMPT,
     VIDEO_FORMATS,
 )
+from shorts_layout import SHORTS_GEMINI_MANDATORY, enforce_shorts_fullframe_code, is_shorts_format
 
 _STYLE_VN_JSON = json.dumps(STYLE_VN, ensure_ascii=False)
 _BEAT_ORDER_TEXT = ", ".join(BEAT_ORDER)
@@ -252,6 +254,7 @@ Trả về ĐÚNG 1 JSON:
 12. Không viết code Manim/Python. Bỏ object GeoGebra đã ẩn.
 13. layout JSON: title_zone, figure_area, text_area, max_lines_per_page (shorts=4).
 14. Mỗi beat solution_steps: text_lines + latex_lines (LaTeX thuần, không $).
+15. shorts + Venn/tập hợp: figure phải scale_to_fit_width(SAFE_W); CẤM hình nhỏ bên trái.
 
 === MẪU JSON KHI video_format="shorts" (THAY layout/beats landscape ở trên) ===
 {{
@@ -314,9 +317,10 @@ class TenClassScene(Scene):
 
 === FORMAT ===
 - video_format "shorts" (MẶC ĐỊNH): full-frame TQH — đề trên/hình dưới → FadeOut đề → hình to_edge(UP) → chữ dưới hình
-  scale_to_fit_width(SAFE_W); MARGIN=0.18; font≥28; MAX_LINES_PER_PAGE=4
-- video_format "landscape": figure.scale_to_fit_height(4.0).move_to(LEFT*2.8); panel.to_edge(RIGHT, buff=0.4).scale(0.38)
+  scale_to_fit_width(SAFE_W); MARGIN=0.12; font≥30; MAX_LINES_PER_PAGE=4
+  CẤM landscape: LEFT*2.8, to_edge(RIGHT), scale(0.38)
 """
+    + SHORTS_GEMINI_MANDATORY
     + GEMINI_SHORTS_TQH_PROMPT
     + LAYOUT_SAFE_RULES
     + """
@@ -911,6 +915,13 @@ def generate_storyboard(
     user_prompt = STORYBOARD_PROMPT
     user_prompt += f"\n\n--- VIDEO FORMAT (BẮT BUỘC) ---\nvideo_format: {fmt}\n"
     user_prompt += json.dumps(fmt_meta, ensure_ascii=False, indent=2)
+    if fmt == "shorts":
+        user_prompt += "\n\n--- SHORTS FULL-FRAME (BẮT BUỘC TRONG KỊCH BẢN) ---\n"
+        user_prompt += SHORTS_GEMINI_MANDATORY
+        user_prompt += (
+            "\nlayout PHẢI có: mode=shorts_tqh_fullframe, shorts_single_frame=true, "
+            "figure_initial=scale_to_fit_width(SAFE_W), max_lines_per_page=4\n"
+        )
     user_prompt += "\n\n--- ĐỀ BÀI ---\n" + problem
     user_prompt += "\n\n--- LỜI GIẢI ---\n" + solution
     if steps:
@@ -985,6 +996,14 @@ def generate_manim_from_storyboard(
     user_prompt += "\n\n--- KỊCH BẢN JSON ---\n"
     user_prompt += json.dumps(storyboard, ensure_ascii=False, indent=2)[:20000]
 
+    if is_shorts_format(storyboard):
+        user_prompt += "\n\n--- BẮT BUỘC SHORTS FULL-FRAME ---\n"
+        user_prompt += SHORTS_GEMINI_MANDATORY
+        user_prompt += (
+            "\n\nNếu đề có Venn/tập hợp/bao hàm loại trừ: "
+            "figure phải fit_figure_full_width(SAFE_W) — KHÔNG để hình nhỏ bên trái.\n"
+        )
+
     raw = _gemini_with_fallback(api_key=keys, prompt=user_prompt)
     data = _extract_json(raw)
     manim_code = str(data.get("manim_code") or "").strip()
@@ -999,13 +1018,18 @@ def generate_manim_from_storyboard(
     if m:
         scene_name = m.group(1)
 
+    manim_code, layout_notes = enforce_shorts_fullframe_code(manim_code, storyboard)
+    notes_extra = str(data.get("notes") or "")
+    if layout_notes:
+        notes_extra = (notes_extra + " | " if notes_extra else "") + "; ".join(layout_notes)
+
     from validate_manim import validate_manim_code
 
     validation = validate_manim_code(manim_code)
     return {
         "scene_name": scene_name,
         "manim_code": manim_code,
-        "notes": str(data.get("notes") or ""),
+        "notes": notes_extra,
         "storyboard": storyboard,
         "validation": validation,
         "keys_available": len(keys),

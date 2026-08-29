@@ -197,31 +197,42 @@ const GEMINI_SHORTS_TQH_JSON_GUIDE = `
 `
 
 const GEMINI_SHORTS_TQH_CODE_SKELETON = `
-=== CODE PYTHON — SHORTS FULL-FRAME ===
+=== CODE PYTHON — SHORTS FULL-FRAME (BẮT BUỘC COPY CẤU TRÚC) ===
+from manim import *
+
 config.pixel_width = 1080
 config.pixel_height = 1920
-MARGIN = 0.18
+MARGIN = 0.12
 SAFE_W = config.frame_width - 2 * MARGIN
 LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
+MAX_LINES_PER_PAGE = 4
+
+def vn(s, size=30, color=None):
+    return Text(s, font_size=size, font="Arial", color=color or "#FFFFFF", disable_ligatures=True)
 
 def fit_figure_full_width(fig, max_h):
     fig.scale_to_fit_width(SAFE_W)
     if fig.height > max_h: fig.scale_to_fit_height(max_h)
     return fig
 
-# Đề trên, hình dưới
-problem_block.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
-avail_h = config.frame_height/2 - problem_block.height - 0.35
-fit_figure_full_width(figure, avail_h)
-figure.next_to(problem_block, DOWN, buff=0.2).align_to(LEFT_EDGE, LEFT)
+class TenBaiScene(Scene):
+    def construct(self):
+        self.camera.background_color = "#0d1117"
+        # --- Giai đoạn 1: đề trên, hình dưới (Venn/hình học đều dùng fit_figure_full_width) ---
+        problem_block = VGroup(...).to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+        figure = VGroup(...)  # Venn hoặc hình học
+        avail_h = config.frame_height / 2 - problem_block.height - 0.3
+        fit_figure_full_width(figure, avail_h)
+        figure.next_to(problem_block, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
+        # --- Giai đoạn 2: ẩn đề, hình phóng lên ---
+        self.play(FadeOut(problem_block))
+        fit_figure_full_width(figure, config.frame_height * 0.52)
+        figure.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+        # --- Giai đoạn 3: lời giải DƯỚI hình, canh trái full SAFE_W ---
+        solution_stack = VGroup()
+        new_line = vn("...", 30).next_to(figure, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
 
-# Ẩn đề → hình trên (phóng to)
-self.play(FadeOut(problem_block))
-fit_figure_full_width(figure, config.frame_height * 0.52)
-figure.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
-
-# Lời giải dưới hình
-new_line.next_to(figure, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)  # vn(size=28)
+CẤM: move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), figure nhỏ giữa/trái với viền đen phải.
 `
 
 const GEMINI_ANTI_PATTERNS = `
@@ -352,8 +363,13 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
   const local = mode === 'local_latex'
 
   const shortsCodeRules = videoFormat === 'shorts'
-    ? `- SHORTS full-frame: đề trên/hình dưới → FadeOut đề → hình phóng to_edge(UP) → chữ dưới hình
-- Bám GEMINI_SHORTS_TQH_CODE_SKELETON; tham khảo style_shorts_tqh_geometry.py
+    ? `- SHORTS 9:16 FULL-FRAME — BẮT BUỘC (không viền đen):
+  • config.pixel_width=1080, pixel_height=1920 ở đầu file
+  • MARGIN=0.12, SAFE_W, LEFT_EDGE, fit_figure_full_width()
+  • Đề trên → hình dưới (fit SAFE_W) → FadeOut đề → hình to_edge(UP) → chữ dưới hình align LEFT_EDGE
+  • Venn/tập hợp: figure = VGroup(các vòng); fit_figure_full_width — CẤM hình nhỏ bên trái
+  • CẤM: move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), font≤24
+- Bám skeleton + style_shorts_tqh_geometry.py
 ${GEMINI_CODE_FILE_HEADER}
 ${GEMINI_SHORTS_TQH_CODE_SKELETON}
 ${GEMINI_ACTION_MAP}
@@ -381,6 +397,7 @@ ${layoutRulesForFormat(videoFormat)}`
   return `Bạn là lập trình viên Manim CE.
 Nhiệm vụ BƯỚC 2: chuyển KỊCH BẢN JSON thành 1 file Python (1 class Scene).
 
+${videoFormat === 'shorts' ? '⚠️ video_format=shorts → PHẢI full-frame 9:16, KHÔNG layout landscape.\n' : ''}
 ${constraints}
 
 OUTPUT: DUY NHẤT khối \`\`\`python ... \`\`\`

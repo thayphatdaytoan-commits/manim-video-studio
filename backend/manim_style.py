@@ -137,8 +137,20 @@ GEMINI_ACTION_MAP = """
 | surround_rect | SurroundingRectangle(conclusion, color=STYLE_VN["highlight"]) |
 """
 
+SHORTS_VENN_SET_RULES = """
+=== SHORTS — VENN / TẬP HỢP / BAO HÀM LOẠI TRỪ (FULL-FRAME) ===
+- figure = VGroup(circle_T, circle_V, circle_A, labels...) — KHÔNG để nhỏ bên trái
+- fit_figure_full_width(figure, config.frame_height * 0.45) sau khi dựng xong
+- figure.next_to(problem_block, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
+- Sau FadeOut đề: fit_figure_full_width(figure, config.frame_height * 0.5); to_edge(UP)
+- solution_stack = VGroup(); mỗi dòng MathTex/Text next_to(figure hoặc stack, DOWN).align_to(LEFT_EDGE, LEFT)
+- Công thức |T∪V∪A|: MathTex(r"n(T \\cup V \\cup A) = ...") — font scale 1.0, không thu nhỏ
+- CẤM: figure.move_to(LEFT*2.8), figure ở ORIGIN nhỏ, panel bên phải trống
+"""
+
 GEMINI_SHORTS_TQH_PROMPT = (
     SHORTS_TQH_LAYOUT_RULES
+    + SHORTS_VENN_SET_RULES
     + GEMINI_ACTION_MAP
     + GEMINI_ANTI_PATTERNS
     + """
