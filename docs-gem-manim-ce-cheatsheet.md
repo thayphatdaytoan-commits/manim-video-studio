@@ -1,6 +1,7 @@
 # Manim Community Edition — cheat sheet (Render Free + Local)
 
-> Hướng dẫn đầy đủ cho Gemini Pro/Gem: [`docs/HUONG-DAN-GEMINI-PRO-MANIM.md`](docs/HUONG-DAN-GEMINI-PRO-MANIM.md)
+> Hướng dẫn đầy đủ: [`docs/HUONG-DAN-GEMINI-PRO-MANIM.md`](docs/HUONG-DAN-GEMINI-PRO-MANIM.md)  
+> Tạo Gem chat: [`docs/TAO-GEM-GEMINI-PRO.md`](docs/TAO-GEM-GEMINI-PRO.md) + [`docs/GEM-INSTRUCTIONS-MANIM.txt`](docs/GEM-INSTRUCTIONS-MANIM.txt)
 
 ## Phiên bản
 - ManimCE (ManimCommunity/manim), không phải ManimGL (3b1b/manim).

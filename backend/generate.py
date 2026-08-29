@@ -1181,6 +1181,8 @@ REVISE_MANIM_PROMPT = (
 Nhiệm vụ: chỉnh SỬA mã Manim hiện có theo yêu cầu người dùng và/hoặc nhật ký biên dịch / validate.
 Giữ nguyên ý đồ video (đề bài, lời giải từng bước, hiệu ứng hình) trừ khi yêu cầu bảo thay đổi.
 
+Nếu code Shorts 9:16 (pixel_height=1920): GIỮ full-frame — fit_figure_full_width(SAFE_W), CẤM LEFT*2.8 + panel RIGHT.
+
 Trả về ĐÚNG 1 JSON (không markdown):
 {
   "scene_name": "TenClassScene",
@@ -1251,6 +1253,8 @@ def revise_manim_code(
     m = re.search(r"class\s+(\w+)\s*\([^)]*Scene", new_code)
     if m:
         scene_name = m.group(1)
+    if "1920" in new_code or "SAFE_W" in new_code or "shorts" in (revision_prompt or "").lower():
+        new_code, _ = enforce_shorts_fullframe_code(new_code, {"video_format": "shorts"})
     from validate_manim import validate_manim_code
 
     validation = validate_manim_code(new_code)

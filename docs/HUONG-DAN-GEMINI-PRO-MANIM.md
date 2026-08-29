@@ -1,5 +1,7 @@
 # Hướng dẫn cấu hình Gemini Pro / Gem — viết code Manim chuẩn (Local + LaTeX)
 
+> **Tạo Gem chat (khuyến nghị):** [`docs/TAO-GEM-GEMINI-PRO.md`](TAO-GEM-GEMINI-PRO.md) — copy Instructions từ [`docs/GEM-INSTRUCTIONS-MANIM.txt`](GEM-INSTRUCTIONS-MANIM.txt), upload file mẫu `backend/examples/style_shorts_*.py`.
+
 Tài liệu này dùng để:
 1. **Dán vào Custom Instructions** của Gemini Pro (hoặc tạo **Gem** riêng)
 2. **Upload làm Knowledge** (file `.md` / `.txt`) nếu Gem hỗ trợ
@@ -52,7 +54,9 @@ LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
 
 **CẤM:** `move_to(DOWN*0.8)`, `scale_to_fit_height(3.6)` không kèm `SAFE_W`, `panel.scale(0.38)`, font≤24.
 
-Mẫu code: `backend/examples/style_shorts_tqh_geometry.py`
+Mẫu code:
+- Hình học: `backend/examples/style_shorts_tqh_geometry.py`
+- Venn / tập hợp: `backend/examples/style_shorts_venn_sets.py`
 
 ---
 

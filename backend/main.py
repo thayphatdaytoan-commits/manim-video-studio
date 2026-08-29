@@ -112,6 +112,12 @@ TEMPLATES: list[dict[str, Any]] = [
         "default_scene": "ShortsTQHGeometryDemo",
     },
     {
+        "id": "style_shorts_venn",
+        "name": "Mẫu Shorts 9:16 — Venn / tập hợp",
+        "file": "style_shorts_venn_sets.py",
+        "default_scene": "ShortsVennSetsDemo",
+    },
+    {
         "id": "style_shorts_viet",
         "name": "Mẫu Shorts — Thanh Thầy Việt",
         "file": "style_shorts_thanh_viet.py",

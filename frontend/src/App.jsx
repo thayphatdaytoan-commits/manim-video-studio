@@ -348,6 +348,8 @@ ${figureCtx.constructionOrder?.length ? '- beat problem_and_figure: figure_targe
 OUTPUT: chỉ JSON. KHÔNG code Python.
 ${GEMINI_SELF_CHECK}
 
+(File mẫu prompt Gem: docs/mau-prompt-buoc-1-kich-ban.txt — hướng dẫn tạo Gem: docs/TAO-GEM-GEMINI-PRO.md)
+
 ĐỀ BÀI:
 ${p}
 
@@ -369,7 +371,10 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
   • Đề trên → hình dưới (fit SAFE_W) → FadeOut đề → hình to_edge(UP) → chữ dưới hình align LEFT_EDGE
   • Venn/tập hợp: figure = VGroup(các vòng); fit_figure_full_width — CẤM hình nhỏ bên trái
   • CẤM: move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), font≤24
-- Bám skeleton + style_shorts_tqh_geometry.py
+- Bám skeleton + file mẫu trong repo:
+  • Hình học: backend/examples/style_shorts_tqh_geometry.py
+  • Venn/tập hợp: backend/examples/style_shorts_venn_sets.py
+  • Prompt Gem (chat ngoài Studio): docs/mau-prompt-buoc-2-code.txt
 ${GEMINI_CODE_FILE_HEADER}
 ${GEMINI_SHORTS_TQH_CODE_SKELETON}
 ${GEMINI_ACTION_MAP}
@@ -403,6 +408,8 @@ ${constraints}
 OUTPUT: DUY NHẤT khối \`\`\`python ... \`\`\`
 ${GEMINI_SELF_CHECK}
 
+(File mẫu Gem: docs/mau-prompt-buoc-2-code.txt | Instructions: docs/GEM-INSTRUCTIONS-MANIM.txt)
+
 ĐỀ (tham khảo):
 ${p}
 
@@ -433,6 +440,8 @@ QUY TẮC:
 7. Nếu kịch bản đổi nhiều: trả thêm JSON kịch bản mới TRƯỚC khối python
 ${GEMINI_ANTI_PATTERNS}
 ${GEMINI_SELF_CHECK}
+
+(File mẫu Gem: docs/mau-prompt-buoc-3-sua.txt)
 
 YÊU CẦU SỬA CỦA NGƯỜI DÙNG:
 ${notes}
@@ -2935,6 +2944,8 @@ export default function App() {
             <p className="step-hint step-hint-tight">
               Không khuyến nghị cho code chính — dùng khi không có Cursor.
               Mặc định <strong>Shorts 9:16 TQH</strong>: đề+hình → ẩn đề → lời giải từng dòng.
+              Tạo <strong>Gem</strong> một lần: xem <code>docs/TAO-GEM-GEMINI-PRO.md</code> (Instructions:{' '}
+              <code>docs/GEM-INSTRUCTIONS-MANIM.txt</code>; prompt mẫu: <code>docs/mau-prompt-buoc-*.txt</code>).
             </p>
             <ol className="ce-checklist pro-steps">
               <li>

@@ -1,0 +1,53 @@
+Bạn là lập trình viên Manim CE.
+Nhiệm vụ BƯỚC 2: chuyển KỊCH BẢN JSON thành 1 file Python (1 class Scene).
+
+⚠️ video_format = "shorts" → FULL-FRAME 9:16, KHÔNG layout landscape.
+
+=== ĐẦU FILE (COPY NGUYÊN KHỐI) ===
+from manim import *
+
+config.pixel_width = 1080
+config.pixel_height = 1920
+MARGIN = 0.12
+SAFE_W = config.frame_width - 2 * MARGIN
+LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
+MAX_LINES_PER_PAGE = 4
+
+STYLE_VN = {"bg": "#0d1117", "point": "#8b1a1a", "segment": "#1e40af",
+            "circle": "#3d6b2f", "text": "#FFFFFF", "highlight": "#FFD700", "conclusion": "#FF8C00"}
+
+def vn(s, size=30, color=None):
+    return Text(s, font="Arial", font_size=size,
+                color=color or STYLE_VN["text"], disable_ligatures=True)
+
+def fit_figure_full_width(fig, max_h):
+    fig.scale_to_fit_width(SAFE_W)
+    if fig.height > max_h:
+        fig.scale_to_fit_height(max_h)
+    return fig
+
+=== LUỒNG construct() ===
+1. problem_block.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+2. figure = VGroup(...); fit_figure_full_width(figure, avail_h); next_to(problem_block, DOWN)
+3. FadeOut(problem_block); fit_figure_full_width(figure, frame_height*0.52); to_edge(UP)
+4. solution_stack: mỗi dòng next_to(figure hoặc stack, DOWN).align_to(LEFT_EDGE, LEFT)
+5. page_break sau 4 dòng: FadeOut(solution_stack) — GIỮ figure
+
+=== CẤM ===
+Tex(), move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), shift(UP*2), font≤24
+
+=== MẪU CODE (bám cấu trúc) ===
+- Hình học: style_shorts_tqh_geometry.py
+- Venn/tập hợp: style_shorts_venn_sets.py
+(trong folder backend/examples/ của repo manim-video-studio)
+
+RÀNG BUỘC:
+- Tiếng Việt: vn() hoặc Text(font="Arial", disable_ligatures=True)
+- Công thức: MathTex(r"...") — CẤM Tex()
+- self.wait(≥0.8) mỗi beat
+- self.camera.background_color = STYLE_VN["bg"]
+
+OUTPUT: DUY NHẤT khối ```python ... ``` (toàn bộ file, có thể chạy manim -ql file.py TenScene)
+
+KỊCH BẢN JSON:
+[DÁN JSON TỪ BƯỚC 1 VÀO ĐÂY]

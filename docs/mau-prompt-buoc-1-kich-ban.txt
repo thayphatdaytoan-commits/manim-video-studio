@@ -1,0 +1,32 @@
+Bạn là đạo diễn video Toán Manim CE.
+Nhiệm vụ BƯỚC 1: CHỈ viết KỊCH BẢN JSON — CHƯA viết code Python.
+
+⚠️ video_format = "shorts" (9:16 FULL-FRAME — không viền đen)
+
+LUỒNG BẮT BUỘC:
+title → problem_and_figure → transition_hide_problem → solution_steps (1 dòng/beat, lặp nhiều lần) → page_break (mỗi 4 dòng) → conclusion
+
+LAYOUT JSON:
+{
+  "mode": "shorts_tqh_fullframe",
+  "margin": 0.12,
+  "max_lines_per_page": 4,
+  "problem_layout": "text_top_figure_below",
+  "solution_layout": "figure_top_text_below",
+  "figure_initial": "fit_figure_full_width + next_to(problem_block,DOWN)",
+  "figure_after_transition": "to_edge(UP) + fit_figure_full_width(SAFE_W)"
+}
+
+QUY TẮC:
+- Mỗi solution_steps: đúng 1 text_line HOẶC 1 latex_line
+- Venn/tập hợp: figure_targets là các vòng tròn; hình phải full chiều ngang SAFE_W
+- CẤM layout landscape (hình trái, panel phải)
+- figure_objects: tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5]
+
+OUTPUT: chỉ 1 JSON (không markdown, không ```).
+
+ĐỀ BÀI:
+[DÁN ĐỀ VÀO ĐÂY]
+
+LỜI GIẢI:
+[DÁN LỜI GIẢI TỪNG BƯỚC VÀO ĐÂY]
