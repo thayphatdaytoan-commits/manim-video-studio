@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from generate import (
     export_figure_reference,
+    fix_canvas_from_error,
     generate_geogebra,
     generate_manim_from_geogebra,
     generate_manim_from_storyboard,
@@ -162,6 +163,25 @@ class CompileResponse(BaseModel):
     job_id: str
     status: str
     message: str
+
+
+class PreviewFrameRequest(BaseModel):
+    code: str = Field(..., min_length=1)
+    scene: str = Field(..., min_length=1)
+    validate_first: bool = Field(default=True)
+    validation_mode: str = Field(default="auto")
+
+
+class FixCanvasRequest(BaseModel):
+    error_log: str = Field(default="", description="Nhật ký validate/biên dịch")
+    revision_prompt: str = Field(default="", description="Mô tả lỗi thêm")
+    problem_text: str = Field(default="")
+    solution_text: str = Field(default="")
+    storyboard: dict | str | None = Field(default=None)
+    geogebra_commands: list[str] | str = Field(default_factory=list)
+    figure_reference_code: str = Field(default="")
+    construction_order: list[str] = Field(default_factory=list)
+    manim_code: str = Field(default="")
 
 
 class GenerateRequest(BaseModel):
@@ -596,6 +616,94 @@ def find_rendered_mp4(media_dir: Path, scene: str) -> Path | None:
     return candidates[0] if candidates else None
 
 
+def find_rendered_png(media_dir: Path, scene: str) -> Path | None:
+    """Tìm PNG sau khi manim --save_last_frame."""
+    candidates = sorted(
+        list(media_dir.rglob("*.png")),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for path in candidates:
+        if scene in path.name:
+            return path
+    return candidates[0] if candidates else None
+
+
+def run_manim_preview_frame(
+    code: str,
+    scene: str,
+    job_id: str,
+) -> dict[str, Any]:
+    """Render nhanh khung cuối (-ql --save_last_frame) để xem bố cục."""
+    work_dir = JOBS_DIR / job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    scene_file = work_dir / "scene.py"
+    scene_file.write_text(code, encoding="utf-8")
+
+    media_dir = work_dir / "media"
+    log_path = work_dir / "preview.log"
+
+    cmd = [
+        "manim",
+        "render",
+        "-ql",
+        "--save_last_frame",
+        "--media_dir",
+        str(media_dir),
+        "--disable_caching",
+        str(scene_file),
+        scene,
+    ]
+
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+
+    logger.info("Preview %s: %s", job_id, " ".join(cmd))
+
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=str(work_dir),
+            capture_output=True,
+            text=True,
+            timeout=180,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        msg = "Timeout: preview vượt quá 3 phút."
+        log_path.write_text(msg, encoding="utf-8")
+        return {"status": "error", "log": msg, "image_path": None}
+    except FileNotFoundError:
+        msg = "Không tìm thấy lệnh `manim`. Hãy cài: pip install manim"
+        log_path.write_text(msg, encoding="utf-8")
+        return {"status": "error", "log": msg, "image_path": None}
+
+    log_text = (result.stdout or "") + "\n" + (result.stderr or "")
+    log_path.write_text(log_text, encoding="utf-8")
+
+    if result.returncode != 0:
+        return {"status": "error", "log": log_text, "image_path": None}
+
+    png = find_rendered_png(media_dir, scene)
+    if not png or not png.exists():
+        return {
+            "status": "error",
+            "log": log_text + "\n\nKhông tìm thấy PNG sau preview.",
+            "image_path": None,
+        }
+
+    out_name = f"{job_id}_{scene}_preview.png"
+    out_path = OUTPUT_DIR / out_name
+    shutil.copy2(png, out_path)
+
+    return {
+        "status": "done",
+        "log": log_text,
+        "image_path": str(out_path),
+        "image_url": f"/api/preview-image/{job_id}",
+    }
+
+
 def run_manim(
     code: str,
     scene: str,
@@ -838,6 +946,99 @@ def get_audio(job_id: str) -> FileResponse:
         filename=f"{job_id}_narration.mp3",
         headers={"Content-Disposition": f'inline; filename="{job_id}_narration.mp3"'},
     )
+
+
+@app.post("/api/preview-frame")
+async def preview_frame(req: PreviewFrameRequest) -> dict[str, Any]:
+    """Preview nhanh: render khung cuối (-ql) để kiểm tra bố cục."""
+    if req.validate_first:
+        validation = validate_manim_code(
+            req.code,
+            mode=_resolve_validation_mode(req.validation_mode),
+        )
+        if not validation["ok"]:
+            raise HTTPException(
+                400,
+                {
+                    "message": "Mã Manim chưa đạt validate trước preview",
+                    "validation": validation,
+                },
+            )
+
+    scenes = extract_scene_names(req.code)
+    if req.scene not in scenes and not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", req.scene):
+        raise HTTPException(400, "Tên scene không hợp lệ")
+
+    job_id = f"pv{uuid.uuid4().hex[:10]}"
+    try:
+        result = await asyncio.to_thread(
+            run_manim_preview_frame,
+            req.code,
+            req.scene,
+            job_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("preview-frame failed")
+        raise HTTPException(502, str(exc)) from exc
+
+    if result["status"] != "done":
+        raise HTTPException(
+            400,
+            {"message": "Preview thất bại", "log": result.get("log", "")},
+        )
+
+    return {
+        "job_id": job_id,
+        "status": "done",
+        "image_url": result["image_url"],
+        "message": "Đã render khung cuối — xem ảnh preview",
+        "log": result.get("log", ""),
+    }
+
+
+@app.get("/api/preview-image/{job_id}")
+def get_preview_image(job_id: str) -> FileResponse:
+    candidates = sorted(
+        OUTPUT_DIR.glob(f"{job_id}_*_preview.png"),
+        key=lambda p: p.stat().st_mtime,
+    )
+    if not candidates:
+        raise HTTPException(404, "Chưa có ảnh preview")
+    path = candidates[-1]
+    return FileResponse(
+        path,
+        media_type="image/png",
+        filename=path.name,
+        headers={"Content-Disposition": f'inline; filename="{path.name}"'},
+    )
+
+
+@app.post("/api/fix-canvas-from-error")
+async def api_fix_canvas_from_error(
+    req: FixCanvasRequest,
+    x_gemini_api_key: str | None = Header(default=None),
+) -> dict[str, Any]:
+    """AI gợi ý sửa GeoGebra + kịch bản từ lỗi (Hướng A)."""
+    api_keys = resolve_gemini_keys(x_gemini_api_key)
+    try:
+        return await asyncio.to_thread(
+            fix_canvas_from_error,
+            api_key=api_keys,
+            error_log=req.error_log,
+            revision_prompt=req.revision_prompt,
+            problem_text=req.problem_text,
+            solution_text=req.solution_text,
+            storyboard=req.storyboard,
+            geogebra_commands=req.geogebra_commands,
+            figure_reference_code=req.figure_reference_code,
+            construction_order=req.construction_order,
+            manim_code=req.manim_code,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("fix-canvas-from-error failed")
+        raise HTTPException(502, str(exc)) from exc
 
 
 @app.post("/api/compile", response_model=CompileResponse)

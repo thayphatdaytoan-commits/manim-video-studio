@@ -1239,6 +1239,106 @@ def revise_manim_code(
     }
 
 
+FIX_CANVAS_FROM_ERROR_PROMPT = """Bạn là trợ lý sửa pipeline Manim Video Studio (GeoGebra → kịch bản JSON → Manim).
+Người dùng gặp lỗi validate/biên dịch. Phân tích lỗi và đề xuất sửa CANVAS (GeoGebra + kịch bản), không viết lại toàn bộ code Manim trừ khi cần ghi chú.
+
+Trả về ĐÚNG 1 JSON (không markdown):
+{
+  "geogebra_commands": ["lệnh GeoGebra đã sửa — mảng hoặc chuỗi nhiều dòng"],
+  "storyboard": { ... JSON kịch bản đầy đủ hoặc null nếu không đổi ... },
+  "figure_reference_code": "mã Python tọa độ Manim (hoặc rỗng nếu không đổi)",
+  "construction_order": ["id1", "id2"],
+  "notes": "giải thích ngắn tiếng Việt"
+}
+
+QUY TẮC:
+- Ưu tiên sửa tọa độ hình / thứ tự beat / figure_targets nếu lỗi liên quan layout hoặc NameError đối tượng hình
+- Giữ video_format và luồng shorts TQH nếu đang shorts
+- GeoGebra: đường phụ SetVisible(..., false); tọa độ trong [-3.5,3.5]×[-2.5,2.5]
+- Nếu chỉ lỗi LaTeX/Tex trong Manim: storyboard null, ghi chú trong notes
+"""
+
+
+def fix_canvas_from_error(
+    *,
+    api_key: str | list[str],
+    error_log: str = "",
+    revision_prompt: str = "",
+    problem_text: str = "",
+    solution_text: str = "",
+    storyboard: dict[str, Any] | str | None = None,
+    geogebra_commands: list[str] | str | None = None,
+    figure_reference_code: str = "",
+    construction_order: list[str] | None = None,
+    manim_code: str = "",
+) -> dict[str, Any]:
+    """Gợi ý sửa GeoGebra + kịch bản từ lỗi validate/biên dịch (Hướng A)."""
+    keys = _normalize_api_keys(api_key)
+    if not keys:
+        raise ValueError("Thiếu Gemini API key")
+    log_text = (error_log or "").strip()
+    prompt_user = (revision_prompt or "").strip()
+    if not log_text and not prompt_user:
+        raise ValueError("Cần nhật ký lỗi hoặc mô tả lỗi để sửa canvas")
+
+    user_prompt = FIX_CANVAS_FROM_ERROR_PROMPT
+    if problem_text.strip():
+        user_prompt += "\n\n--- ĐỀ BÀI ---\n" + problem_text.strip()
+    if solution_text.strip():
+        user_prompt += "\n\n--- LỜI GIẢI ---\n" + solution_text.strip()
+    if prompt_user:
+        user_prompt += "\n\n--- MÔ TẢ LỖI / YÊU CẦU ---\n" + prompt_user
+    if log_text:
+        clipped = log_text[-10000:] if len(log_text) > 10000 else log_text
+        user_prompt += "\n\n--- LỖI VALIDATE / BIÊN DỊCH ---\n" + clipped
+    if storyboard:
+        if isinstance(storyboard, str):
+            user_prompt += "\n\n--- KỊCH BẢN HIỆN TẠI ---\n" + storyboard[:16000]
+        else:
+            user_prompt += "\n\n--- KỊCH BẢN HIỆN TẠI ---\n"
+            user_prompt += json.dumps(storyboard, ensure_ascii=False, indent=2)[:16000]
+    cmds = _normalize_commands(geogebra_commands or [])
+    if cmds:
+        user_prompt += "\n\n--- LỆNH GEOGEBRA ---\n" + "\n".join(cmds)
+    if figure_reference_code.strip():
+        user_prompt += "\n\n--- MÃ TỌA ĐỘ MANIM ---\n" + figure_reference_code.strip()[:8000]
+    if construction_order:
+        user_prompt += "\n\n--- THỨ TỰ DỰNG HÌNH ---\n" + ", ".join(construction_order)
+    if manim_code.strip():
+        user_prompt += "\n\n--- CODE MANIM (tham khảo) ---\n```python\n"
+        user_prompt += manim_code.strip()[:12000]
+        user_prompt += "\n```"
+
+    raw = _gemini_with_fallback(api_key=keys, prompt=user_prompt)
+    data = _extract_json(raw)
+
+    ggb_out = data.get("geogebra_commands")
+    if isinstance(ggb_out, str):
+        ggb_list = [ln.strip() for ln in ggb_out.splitlines() if ln.strip()]
+    elif isinstance(ggb_out, list):
+        ggb_list = [str(x).strip() for x in ggb_out if str(x).strip()]
+    else:
+        ggb_list = []
+
+    sb_out = data.get("storyboard")
+    if isinstance(sb_out, str):
+        try:
+            sb_out = _extract_json(sb_out)
+        except ValueError:
+            sb_out = None
+
+    return {
+        "geogebra_commands": ggb_list,
+        "storyboard": sb_out if isinstance(sb_out, dict) else None,
+        "figure_reference_code": str(data.get("figure_reference_code") or "").strip(),
+        "construction_order": [
+            str(x) for x in (data.get("construction_order") or []) if str(x).strip()
+        ],
+        "notes": str(data.get("notes") or ""),
+        "keys_available": len(keys),
+    }
+
+
 # Giữ tương thích cũ nếu còn chỗ gọi
 def generate_from_problem(**kwargs: Any) -> dict[str, Any]:
     ggb = generate_geogebra(**kwargs)

@@ -24,6 +24,8 @@ import {
   Bot,
   Maximize2,
   Minimize2,
+  Film,
+  Layers,
 } from 'lucide-react'
 import GeoGebraApplet, { sanitizeGgbCommands } from './GeoGebraApplet'
 import {
@@ -33,6 +35,22 @@ import {
   kindLabel,
   manifestToFigureObjects,
 } from './figureReference'
+import SceneTimeline from './SceneTimeline'
+import {
+  applyTimelineToStoryboard,
+  beatsToTimeline,
+  moveTimelineItem,
+  parseStoryboardJson,
+  storyboardWithVisibleBeats,
+  toggleTimelineVisibility,
+} from './storyboardTimeline'
+import {
+  applyLayoutTemplateToStoryboard,
+  getLayoutTemplate,
+  listLayoutTemplates,
+  saveCustomLayoutTemplate,
+} from './layoutTemplates'
+import { getGraphPreset, GRAPH_PRESETS } from './graphPresets'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
@@ -705,6 +723,13 @@ export default function App() {
   const [svgCodePreview, setSvgCodePreview] = useState(null)
   const [exporting, setExporting] = useState(false)
   const [ggbFullscreen, setGgbFullscreen] = useState(false)
+  const [sceneTimeline, setSceneTimeline] = useState([])
+  const [layoutTemplateId, setLayoutTemplateId] = useState('shorts_tqh_fullframe')
+  const [customTemplateName, setCustomTemplateName] = useState('')
+  const [previewImageUrl, setPreviewImageUrl] = useState(null)
+  const [previewing, setPreviewing] = useState(false)
+  const [fixingCanvas, setFixingCanvas] = useState(false)
+  const [canvasFixMsg, setCanvasFixMsg] = useState('')
 
   // Lồng tiếng Edge TTS
   const [voiceScript, setVoiceScript] = useState('')
@@ -795,6 +820,85 @@ export default function App() {
       .filter(Boolean)
       .filter((o) => o.visible !== false)
   }, [figureManifest, constructionOrder])
+
+  const layoutTemplates = useMemo(() => listLayoutTemplates(), [])
+
+  useEffect(() => {
+    const sb = parseStoryboardJson(storyboardText)
+    if (sb?.beats?.length) {
+      setSceneTimeline(beatsToTimeline(sb.beats))
+    } else {
+      setSceneTimeline([])
+    }
+  }, [storyboardText])
+
+  const syncTimelineToStoryboard = useCallback(
+    (nextTimeline) => {
+      const sb = parseStoryboardJson(storyboardText)
+      if (!sb?.beats) return
+      const updated = applyTimelineToStoryboard(sb, nextTimeline)
+      setStoryboardText(JSON.stringify(updated, null, 2))
+      setSceneTimeline(nextTimeline)
+      setManimReady(false)
+    },
+    [storyboardText],
+  )
+
+  const handleTimelineMove = useCallback(
+    (index, direction) => {
+      syncTimelineToStoryboard(moveTimelineItem(sceneTimeline, index, direction))
+    },
+    [sceneTimeline, syncTimelineToStoryboard],
+  )
+
+  const handleTimelineToggle = useCallback(
+    (index) => {
+      syncTimelineToStoryboard(toggleTimelineVisibility(sceneTimeline, index))
+    },
+    [sceneTimeline, syncTimelineToStoryboard],
+  )
+
+  const handleApplyLayoutTemplate = useCallback(
+    (templateId) => {
+      const tpl = getLayoutTemplate(templateId)
+      if (!tpl) return
+      setLayoutTemplateId(templateId)
+      if (tpl.videoFormat) setVideoFormat(tpl.videoFormat)
+      if (tpl.guidance) setManimGuidance(tpl.guidance)
+      const sb = parseStoryboardJson(storyboardText)
+      if (sb) {
+        const { storyboard: nextSb } = applyLayoutTemplateToStoryboard(sb, tpl)
+        setStoryboardText(JSON.stringify(nextSb, null, 2))
+        setStoryboardReady(true)
+      }
+      setManimReady(false)
+    },
+    [storyboardText],
+  )
+
+  const handleSaveCustomTemplate = useCallback(() => {
+    const sb = parseStoryboardJson(storyboardText)
+    const entry = saveCustomLayoutTemplate({
+      name: customTemplateName,
+      videoFormat,
+      guidance: manimGuidance,
+      layout: sb?.layout || {},
+    })
+    if (entry) {
+      setCustomTemplateName('')
+      setCanvasFixMsg(`Đã lưu khung mẫu «${entry.name}»`)
+    }
+  }, [customTemplateName, videoFormat, manimGuidance, storyboardText])
+
+  const handleApplyGraphPreset = useCallback((presetId) => {
+    const preset = getGraphPreset(presetId)
+    if (!preset) return
+    setGgbMode('graphing')
+    setGgbCommandsText(preset.commands)
+    setGgbRevision((r) => r + 1)
+    setManimReady(false)
+    setStoryboardReady(false)
+  }, [])
 
   useEffect(() => {
     if (!ggbFullscreen) return undefined
@@ -975,6 +1079,110 @@ export default function App() {
         )
       }
       setError(err.message)
+    }
+  }
+
+  const handlePreviewFrame = async () => {
+    if (!code.trim() || code.trim().startsWith('#')) {
+      setError('Chưa có mã Manim để preview.')
+      return
+    }
+    if (!scene) {
+      setError('Chưa chọn tên Scene.')
+      return
+    }
+    setPreviewing(true)
+    setError(null)
+    try {
+      const data = await api('/api/preview-frame', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          scene,
+          validate_first: true,
+          validation_mode: effectiveValidationMode,
+        }),
+      })
+      setPreviewImageUrl(`${API_BASE}${data.image_url}?t=${Date.now()}`)
+      if (data.log) setLog((prev) => `${prev}\n--- PREVIEW ---\n${data.log.slice(-4000)}`)
+    } catch (err) {
+      if (err.payload?.validation) {
+        setManimValidation(err.payload.validation)
+      }
+      if (err.payload?.log) {
+        setLog((prev) => `${prev}\n--- PREVIEW LỖI ---\n${err.payload.log.slice(-6000)}`)
+        setShowLog(true)
+      }
+      setError(err.message || 'Preview thất bại')
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
+  const handleFixCanvasFromError = async () => {
+    const validationLog = (manimValidation?.errors || [])
+      .map((e) => `VALIDATE: ${e}`)
+      .join('\n')
+    const errorLog = [validationLog, useLogForRevise ? log : '', revisePrompt]
+      .filter(Boolean)
+      .join('\n')
+      .trim()
+    if (!errorLog) {
+      setError('Chưa có lỗi — hãy Validate hoặc biên dịch thất bại trước, hoặc ghi mô tả lỗi.')
+      return
+    }
+    if (!requireApiKey()) return
+
+    let storyboard
+    try {
+      storyboard = storyboardText.trim() ? JSON.parse(storyboardText) : null
+    } catch {
+      storyboard = null
+    }
+
+    setFixingCanvas(true)
+    setError(null)
+    setCanvasFixMsg('')
+    try {
+      const data = await api('/api/fix-canvas-from-error', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          error_log: errorLog,
+          revision_prompt: revisePrompt.trim(),
+          problem_text: problemText,
+          solution_text: solutionText,
+          storyboard,
+          geogebra_commands: ggbCommands,
+          figure_reference_code: figureReferenceCode,
+          construction_order: constructionOrder,
+          manim_code: code,
+        }),
+      })
+      if (data.geogebra_commands?.length) {
+        setGgbCommandsText(data.geogebra_commands.join('\n'))
+        setGgbRevision((r) => r + 1)
+      }
+      if (data.storyboard) {
+        setStoryboardText(JSON.stringify(data.storyboard, null, 2))
+        setStoryboardReady(true)
+      }
+      if (data.figure_reference_code) {
+        setFigureReferenceCode(data.figure_reference_code)
+        setFigureRefReady(true)
+      }
+      if (data.construction_order?.length) {
+        updateConstructionOrder(data.construction_order)
+      }
+      setCanvasFixMsg(
+        data.notes || 'Đã gợi ý sửa GeoGebra / kịch bản — kiểm tra cột 2 và GeoGebra phía trên.',
+      )
+      setManimReady(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setFixingCanvas(false)
     }
   }
 
@@ -1355,6 +1563,7 @@ export default function App() {
       setError('Kịch bản JSON không hợp lệ — hãy kiểm tra lại hoặc tạo lại kịch bản.')
       return
     }
+    storyboard = storyboardWithVisibleBeats(storyboard)
     if (!requireApiKey()) return
 
     setGeneratingManim(true)
@@ -2051,6 +2260,24 @@ export default function App() {
                 <option value="3d">Hình học 3D</option>
               </select>
             </label>
+            {(ggbMode === 'graphing' || ggbMode === 'geometry') && (
+              <div className="graph-presets-box">
+                <span className="field-label">CHẾ ĐỘ ĐỒ THỊ — PRESET NHANH</span>
+                <div className="graph-presets-row">
+                  {GRAPH_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className="btn ghost graph-preset-btn"
+                      onClick={() => handleApplyGraphPreset(preset.id)}
+                      title={preset.description}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="export-row ggb-export-row">
               <button
                 type="button"
@@ -2340,6 +2567,43 @@ export default function App() {
             </select>
           </label>
 
+          <div className="layout-templates-box">
+            <div className="layout-templates-head">
+              <Layers size={15} />
+              <span className="field-label">KHUNG MẪU BỐ CỤC</span>
+            </div>
+            <div className="layout-templates-row">
+              {layoutTemplates.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  type="button"
+                  className={`btn secondary export-btn ${layoutTemplateId === tpl.id ? 'active-mode' : ''}`}
+                  onClick={() => handleApplyLayoutTemplate(tpl.id)}
+                  title={tpl.guidance}
+                >
+                  {tpl.name}
+                </button>
+              ))}
+            </div>
+            <div className="layout-save-row">
+              <input
+                type="text"
+                className="layout-name-input"
+                placeholder="Tên khung mẫu tùy chỉnh..."
+                value={customTemplateName}
+                onChange={(e) => setCustomTemplateName(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn ghost export-btn"
+                onClick={handleSaveCustomTemplate}
+                disabled={!customTemplateName.trim()}
+              >
+                <Save size={14} /> Lưu khung mẫu
+              </button>
+            </div>
+          </div>
+
           <label className="field">
             <span className="field-label">PROMPT HƯỚNG DẪN (CHO KỊCH BẢN + MANIM)</span>
             <textarea
@@ -2380,8 +2644,16 @@ export default function App() {
               placeholder="Bấm “AI tạo kịch bản video” — mỗi beat = 1 bước lời giải + hiệu ứng hình..."
             />
           </label>
+
+          <SceneTimeline
+            timeline={sceneTimeline}
+            onMove={handleTimelineMove}
+            onToggleVisible={handleTimelineToggle}
+            disabled={!storyboardReady}
+          />
+
           {storyboardReady && (
-            <div className="step-ok">Đã có kịch bản — copy brief Cursor Agent (cột 3) hoặc tạo code Manim.</div>
+            <div className="step-ok">Đã có kịch bản — chỉnh timeline cảnh ở trên, hoặc copy brief Cursor Agent (cột 3).</div>
           )}
 
           <button
@@ -2413,8 +2685,28 @@ export default function App() {
             <div className="export-msg">Đã lưu hình — bấm «Cập nhật mã tọa độ» nếu chưa thấy mã bên trên.</div>
           )}
           {manimReady && (
-            <div className="step-ok">Đã có Manim — sang cột 3 để validate / biên dịch video.</div>
+            <div className="step-ok">Đã có Manim — sang cột 3 để validate / preview / biên dịch video.</div>
           )}
+
+          <div className="canvas-fix-box">
+            <h3 className="voiceover-title">
+              <Wrench size={16} /> Gửi lỗi → sửa canvas (GeoGebra + kịch bản)
+            </h3>
+            <p className="step-hint">
+              Sau Validate hoặc biên dịch lỗi: AI gợi ý sửa lệnh GeoGebra, thứ tự beat và mã tọa độ — không
+              thay toàn bộ code Manim.
+            </p>
+            <button
+              type="button"
+              className="btn secondary export-btn"
+              onClick={handleFixCanvasFromError}
+              disabled={fixingCanvas}
+            >
+              {fixingCanvas ? <Loader2 className="spin" size={15} /> : <Sparkles size={15} />}
+              {fixingCanvas ? 'Đang phân tích lỗi...' : 'AI sửa hình + kịch bản từ lỗi'}
+            </button>
+            {canvasFixMsg && <div className="step-ok">{canvasFixMsg}</div>}
+          </div>
         </section>
 
         {/* Cột 3: Manim + Video */}
@@ -2824,15 +3116,20 @@ export default function App() {
           <div className="preview compact">
             {videoUrl ? (
               <video key={videoUrl} src={videoUrl} controls autoPlay />
+            ) : previewImageUrl ? (
+              <div className="preview-frame-wrap">
+                <img src={previewImageUrl} alt="Preview khung cuối" className="preview-frame-img" />
+                <p className="preview-frame-caption">Preview nhanh — khung cuối scene (chưa phải video đầy đủ)</p>
+              </div>
             ) : (
               <div className="preview-empty">
-                {compiling ? (
+                {compiling || previewing ? (
                   <>
                     <Loader2 className="spin" size={32} />
-                    <p>Đang biên dịch video...</p>
+                    <p>{previewing ? 'Đang render preview...' : 'Đang biên dịch video...'}</p>
                   </>
                 ) : (
-                  <p>Video Manim hiện ở đây sau khi biên dịch</p>
+                  <p>Video hoặc ảnh preview hiện ở đây</p>
                 )}
               </div>
             )}
@@ -2842,9 +3139,19 @@ export default function App() {
 
           <div className="actions">
             <button
+              className="btn secondary"
+              type="button"
+              onClick={handlePreviewFrame}
+              disabled={previewing || compiling || !backend.ready || !scene || !code.trim()}
+              title="Render khung cuối (-ql) — nhanh hơn video đầy đủ"
+            >
+              {previewing ? <Loader2 className="spin" size={18} /> : <Film size={18} />}
+              {previewing ? 'Đang preview...' : 'Preview nhanh (1 khung)'}
+            </button>
+            <button
               className="btn primary"
               onClick={handleCompile}
-              disabled={compiling || !backend.ready || !scene}
+              disabled={compiling || previewing || !backend.ready || !scene}
             >
               {compiling ? <Loader2 className="spin" size={18} /> : <Clapperboard size={18} />}
               {compiling ? 'Đang biên dịch...' : 'Tạo video (biên dịch Manim)'}
