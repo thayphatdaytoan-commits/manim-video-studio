@@ -80,8 +80,8 @@ function round3(n) {
   return Math.round(n * 1000) / 1000
 }
 
-function uid() {
-  return `layer-${Math.random().toString(36).slice(2, 9)}`
+function uid(varName) {
+  return `layer-${varName}`
 }
 
 function inferType(line) {
@@ -130,9 +130,10 @@ export function extractLayersFromCode(code) {
       const name = m[1]
       if (SKIP_NAMES.has(name) || seen.has(name) || name.length < 2) continue
       if (/^[A-Z]$/.test(name)) continue
+      if (name.startsWith('_')) continue
       seen.add(name)
       found.push({
-        id: uid(),
+        id: uid(name),
         varName: name,
         label: inferLabel(name),
         type: inferType(trimmed),
@@ -196,7 +197,7 @@ export function fallbackLayers(videoFormat = 'shorts') {
           { varName: 'solution_stack', label: 'Lời giải', type: 'text' },
         ]
   return names.map((n, i) => ({
-    id: uid(),
+    id: uid(n.varName),
     ...n,
     visible: true,
     zIndex: i,
@@ -292,6 +293,8 @@ export function buildLayersBlock(transforms) {
 export function buildFullframeBlock(varNames, videoFormat = 'shorts') {
   if (videoFormat !== 'shorts' || !varNames?.length) return ''
   const lines = [STUDIO_FULLFRAME_MARKER]
+  lines.push('        config.pixel_width = 1080')
+  lines.push('        config.pixel_height = 1920')
   lines.push('        _ff_margin = 0.12')
   lines.push('        _ff_safe_w = config.frame_width - 2 * _ff_margin')
   lines.push('        _ff_left = LEFT * (config.frame_width / 2 - _ff_margin)')
@@ -330,6 +333,7 @@ function stripMarkedBlock(code, marker) {
         t.startsWith('_obj') ||
         t.startsWith('_ff_') ||
         t.startsWith('if _ff_') ||
+        t.startsWith('config.') ||
         t.includes('.shift(') ||
         t.includes('.scale(') ||
         t.includes('bring_to_front') ||
@@ -464,6 +468,17 @@ export function shiftsFromSlots(layers, baseLayers, videoFormat) {
     out[t.varName] = { ...t.shift, scale: t.scale }
   }
   return out
+}
+
+export function layerVarFingerprint(code) {
+  const extracted = extractLayersFromCode(code)
+  return extracted.map((l) => l.varName).sort().join('|')
+}
+
+export function codeWithoutStudioBlocks(code) {
+  let next = stripMarkedBlock(code || '', STUDIO_LAYERS_MARKER)
+  next = stripMarkedBlock(next, STUDIO_FULLFRAME_MARKER)
+  return next
 }
 
 export function applyShiftsToSlots(layers, baseLayers, shifts, videoFormat) {

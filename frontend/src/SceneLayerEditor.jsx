@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import {
   ChevronDown,
   ChevronUp,
@@ -37,28 +37,11 @@ export default function SceneLayerEditor({
   layersDirty,
   videoFormat,
 }) {
-  const frameRef = useRef(null)
-  const imgRef = useRef(null)
+  const overlayRef = useRef(null)
   const layersRef = useRef(layers)
   const dragRef = useRef(null)
-  const [frameSize, setFrameSize] = useState({ w: 0, h: 0 })
 
   layersRef.current = layers
-
-  const measureFrame = useCallback(() => {
-    const img = imgRef.current
-    if (!img) return
-    setFrameSize({ w: img.clientWidth, h: img.clientHeight })
-  }, [])
-
-  useEffect(() => {
-    measureFrame()
-    const el = frameRef.current
-    if (!el) return undefined
-    const ro = new ResizeObserver(measureFrame)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [imageUrl, measureFrame])
 
   const updateLayerById = useCallback(
     (id, patch) => {
@@ -72,20 +55,20 @@ export default function SceneLayerEditor({
       if (!editMode) return
       e.preventDefault()
       e.stopPropagation()
-      const frame = frameRef.current
+      const container = overlayRef.current
       const layer = layersRef.current.find((l) => l.id === layerId)
-      if (!frame || !layer?.rect) return
+      if (!container || !layer?.rect) return
 
       onSelectLayer(layerId)
-      const rect = frame.getBoundingClientRect()
+      const box = container.getBoundingClientRect()
       dragRef.current = {
         mode: 'move',
         layerId,
         startX: e.clientX,
         startY: e.clientY,
         orig: { ...layer.rect },
-        frameW: rect.width,
-        frameH: rect.height,
+        frameW: box.width,
+        frameH: box.height,
       }
       e.currentTarget.setPointerCapture(e.pointerId)
 
@@ -125,20 +108,20 @@ export default function SceneLayerEditor({
       if (!editMode) return
       e.preventDefault()
       e.stopPropagation()
-      const frame = frameRef.current
+      const container = overlayRef.current
       const layer = layersRef.current.find((l) => l.id === layerId)
-      if (!frame || !layer?.rect) return
+      if (!container || !layer?.rect) return
 
       onSelectLayer(layerId)
-      const rect = frame.getBoundingClientRect()
+      const box = container.getBoundingClientRect()
       dragRef.current = {
         mode: 'resize',
         layerId,
         startX: e.clientX,
         startY: e.clientY,
         orig: { ...layer.rect },
-        frameW: rect.width,
-        frameH: rect.height,
+        frameW: box.width,
+        frameH: box.height,
       }
       e.currentTarget.setPointerCapture(e.pointerId)
 
@@ -181,55 +164,43 @@ export default function SceneLayerEditor({
   return (
     <div className="scene-layer-editor">
       <div className="layer-canvas-col">
-        <div
-          ref={frameRef}
-          className={`layer-canvas-frame ${editMode ? 'is-editing' : ''}`}
-          style={{ width: frameSize.w || undefined, height: frameSize.h || undefined }}
-        >
-          <img
-            ref={imgRef}
-            src={imageUrl}
-            alt="Preview"
-            className="layer-canvas-img"
-            draggable={false}
-            onLoad={measureFrame}
-          />
-          {editMode &&
-            sortedLayers.map((layer, idx) => {
-              if (layer.visible === false || !layer.rect) return null
-              const isSel = layer.id === selectedId
-              const left = layer.rect.x * frameSize.w
-              const top = layer.rect.y * frameSize.h
-              const width = layer.rect.w * frameSize.w
-              const height = layer.rect.h * frameSize.h
-              return (
-                <div
-                  key={layer.id}
-                  className={`layer-overlay ${isSel ? 'is-selected' : ''}`}
-                  style={{
-                    left,
-                    top,
-                    width,
-                    height,
-                    background: layerColor(idx),
-                    borderColor: layerColor(idx).replace('0.4', '1'),
-                    zIndex: 10 + layer.zIndex,
-                  }}
-                  onPointerDown={(e) => onPointerDownDrag(e, layer.id)}
-                >
-                  <span className="layer-overlay-label">
-                    <Move size={11} /> {layer.label}
-                  </span>
-                  {isSel && (
-                    <div
-                      className="layer-resize-handle"
-                      onPointerDown={(e) => onPointerDownResize(e, layer.id)}
-                      title="Kéo để đổi kích thước"
-                    />
-                  )}
-                </div>
-              )
-            })}
+        <div className={`layer-canvas-frame ${editMode ? 'is-editing' : ''}`}>
+          <img src={imageUrl} alt="Preview" className="layer-canvas-img" draggable={false} />
+          <div ref={overlayRef} className="layer-overlay-container">
+            {editMode &&
+              sortedLayers.map((layer, idx) => {
+                if (layer.visible === false || !layer.rect) return null
+                const isSel = layer.id === selectedId
+                const { x, y, w, h } = layer.rect
+                return (
+                  <div
+                    key={layer.id}
+                    className={`layer-overlay ${isSel ? 'is-selected' : ''}`}
+                    style={{
+                      left: `${x * 100}%`,
+                      top: `${y * 100}%`,
+                      width: `${w * 100}%`,
+                      height: `${h * 100}%`,
+                      background: layerColor(idx),
+                      borderColor: layerColor(idx).replace('0.4', '1'),
+                      zIndex: 10 + layer.zIndex,
+                    }}
+                    onPointerDown={(e) => onPointerDownDrag(e, layer.id)}
+                  >
+                    <span className="layer-overlay-label">
+                      <Move size={11} /> {layer.label}
+                    </span>
+                    {isSel && (
+                      <div
+                        className="layer-resize-handle"
+                        onPointerDown={(e) => onPointerDownResize(e, layer.id)}
+                        title="Kéo để đổi kích thước"
+                      />
+                    )}
+                  </div>
+                )
+              })}
+          </div>
         </div>
       </div>
 
@@ -415,8 +386,7 @@ export default function SceneLayerEditor({
             </button>
           </div>
           <p className="step-hint layer-hint">
-            Chọn layer bên phải → kéo trên ảnh hoặc nhập X/Y/Rộng/Cao/Scale → Lưu → Preview lại →
-            Biên dịch.
+            Chọn layer → kéo trên ảnh hoặc nhập số → Lưu → Preview lại → Biên dịch.
           </p>
         </aside>
       )}

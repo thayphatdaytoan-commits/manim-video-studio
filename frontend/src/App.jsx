@@ -59,6 +59,7 @@ import {
   fallbackLayers,
   injectLayersIntoCode,
   layerTransformsFromState,
+  layerVarFingerprint,
   mergeLayersWithCode,
   parseLayersFromCode,
 } from './sceneLayers'
@@ -763,6 +764,10 @@ export default function App() {
   const parseTimer = useRef(null)
   const fileRef = useRef(null)
   const ggbRef = useRef(null)
+  const layerFingerprintRef = useRef('')
+  const layersDirtyRef = useRef(false)
+
+  layersDirtyRef.current = layersDirty
 
   const ggbCommands = useMemo(
     () =>
@@ -848,31 +853,50 @@ export default function App() {
     }
   }, [storyboardText])
 
-  useEffect(() => {
-    const extracted = extractLayersFromCode(code)
-    const baseList = extracted.length ? extracted : fallbackLayers(videoFormat)
-    const baseWithRects = baseList.map((l, i) => ({
-      ...l,
-      rect: l.rect || defaultRectForLayer(i, baseList.length, videoFormat),
-      zIndex: i,
-      scale: l.scale || 1,
-      visible: l.visible !== false,
-    }))
-    setSceneLayersBase(baseWithRects.map((l) => ({ ...l, rect: { ...l.rect } })))
+  const syncLayersFromCode = useCallback(
+    (force = false) => {
+      if (!force && layersDirtyRef.current) return
 
-    const parsed = parseLayersFromCode(code)
-    setSceneLayers((prev) => {
-      let merged = mergeLayersWithCode(prev, baseWithRects, videoFormat)
-      if (parsed.length) {
-        merged = applyTransformsToLayers(merged, baseWithRects, parsed, videoFormat)
-      }
-      return merged
-    })
-  }, [videoFormat, code])
+      const fingerprint = layerVarFingerprint(code)
+      if (!force && fingerprint === layerFingerprintRef.current) return
+      layerFingerprintRef.current = fingerprint
+
+      const extracted = extractLayersFromCode(code)
+      const baseList = extracted.length ? extracted : fallbackLayers(videoFormat)
+      const baseWithRects = baseList.map((l, i) => ({
+        ...l,
+        rect: l.rect || defaultRectForLayer(i, baseList.length, videoFormat),
+        zIndex: i,
+        scale: 1,
+        visible: true,
+      }))
+      setSceneLayersBase(baseWithRects.map((l) => ({ ...l, rect: { ...l.rect } })))
+
+      const parsed = parseLayersFromCode(code)
+      setSceneLayers((prev) => {
+        let merged = mergeLayersWithCode(prev, baseWithRects, videoFormat)
+        if (parsed.length) {
+          merged = applyTransformsToLayers(merged, baseWithRects, parsed, videoFormat)
+        }
+        return merged
+      })
+    },
+    [code, videoFormat],
+  )
+
+  useEffect(() => {
+    syncLayersFromCode(false)
+  }, [syncLayersFromCode])
+
+  useEffect(() => {
+    layerFingerprintRef.current = ''
+    syncLayersFromCode(true)
+  }, [videoFormat])
 
   const handleLayersChange = useCallback((next) => {
     setSceneLayers(next)
     setLayersDirty(true)
+    layersDirtyRef.current = true
   }, [])
 
   const handleSaveLayers = useCallback(
@@ -886,6 +910,8 @@ export default function App() {
       })
       setCode(nextCode)
       setLayersDirty(false)
+      layersDirtyRef.current = false
+      layerFingerprintRef.current = layerVarFingerprint(nextCode)
       setLayoutMsg(
         `Đã lưu ${transforms.length} layer${withFullframe ? ' + fullframe Shorts' : ''} — bấm Preview lại rồi Biên dịch video.`,
       )
@@ -908,6 +934,7 @@ export default function App() {
     setSceneLayers(baseWithRects)
     setSelectedLayerId(baseWithRects[0]?.id || null)
     setLayersDirty(true)
+    layerFingerprintRef.current = layerVarFingerprint(code)
     setLayoutMsg(`Đã quét ${baseWithRects.length} layer từ code.`)
   }, [code, videoFormat])
 
