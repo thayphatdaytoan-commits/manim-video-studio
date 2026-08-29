@@ -25,7 +25,6 @@ import {
   Maximize2,
   Minimize2,
   Film,
-  Move,
   Layers,
 } from 'lucide-react'
 import GeoGebraApplet, { sanitizeGgbCommands } from './GeoGebraApplet'
@@ -52,14 +51,17 @@ import {
   saveCustomLayoutTemplate,
 } from './layoutTemplates'
 import { getGraphPreset, GRAPH_PRESETS } from './graphPresets'
-import DraggableLayoutPreview from './DraggableLayoutPreview'
+import SceneLayerEditor from './SceneLayerEditor'
 import {
-  applyShiftsToSlots,
-  defaultLayoutSlots,
-  injectLayoutShiftsIntoCode,
-  parseLayoutShiftsFromCode,
-  shiftsFromSlots,
-} from './layoutEditor'
+  applyTransformsToLayers,
+  defaultRectForLayer,
+  extractLayersFromCode,
+  fallbackLayers,
+  injectLayersIntoCode,
+  layerTransformsFromState,
+  mergeLayersWithCode,
+  parseLayersFromCode,
+} from './sceneLayers'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
@@ -740,11 +742,11 @@ export default function App() {
   const [fixingCanvas, setFixingCanvas] = useState(false)
   const [canvasFixMsg, setCanvasFixMsg] = useState('')
   const [layoutEditMode, setLayoutEditMode] = useState(false)
-  const [layoutSlots, setLayoutSlots] = useState(() => defaultLayoutSlots('shorts'))
-  const [layoutBaseSlots, setLayoutBaseSlots] = useState(() => defaultLayoutSlots('shorts'))
-  const [layoutDirty, setLayoutDirty] = useState(false)
+  const [sceneLayers, setSceneLayers] = useState(() => fallbackLayers('shorts'))
+  const [sceneLayersBase, setSceneLayersBase] = useState(() => fallbackLayers('shorts'))
+  const [selectedLayerId, setSelectedLayerId] = useState(null)
+  const [layersDirty, setLayersDirty] = useState(false)
   const [layoutMsg, setLayoutMsg] = useState('')
-
   // Lồng tiếng Edge TTS
   const [voiceScript, setVoiceScript] = useState('')
   const [voiceTitle, setVoiceTitle] = useState('')
@@ -847,34 +849,71 @@ export default function App() {
   }, [storyboardText])
 
   useEffect(() => {
-    const base = defaultLayoutSlots(videoFormat)
-    setLayoutBaseSlots(base)
-    const parsed = parseLayoutShiftsFromCode(code)
-    if (Object.keys(parsed).length) {
-      setLayoutSlots(applyShiftsToSlots(base, base, parsed, videoFormat))
-    } else {
-      setLayoutSlots(base)
-    }
-    setLayoutDirty(false)
+    const extracted = extractLayersFromCode(code)
+    const baseList = extracted.length ? extracted : fallbackLayers(videoFormat)
+    const baseWithRects = baseList.map((l, i) => ({
+      ...l,
+      rect: l.rect || defaultRectForLayer(i, baseList.length, videoFormat),
+      zIndex: i,
+      scale: l.scale || 1,
+      visible: l.visible !== false,
+    }))
+    setSceneLayersBase(baseWithRects.map((l) => ({ ...l, rect: { ...l.rect } })))
+
+    const parsed = parseLayersFromCode(code)
+    setSceneLayers((prev) => {
+      let merged = mergeLayersWithCode(prev, baseWithRects, videoFormat)
+      if (parsed.length) {
+        merged = applyTransformsToLayers(merged, baseWithRects, parsed, videoFormat)
+      }
+      return merged
+    })
   }, [videoFormat, code])
 
-  const handleLayoutSlotsChange = useCallback((next) => {
-    setLayoutSlots(next)
-    setLayoutDirty(true)
+  const handleLayersChange = useCallback((next) => {
+    setSceneLayers(next)
+    setLayersDirty(true)
   }, [])
 
-  const handleSaveLayout = useCallback(() => {
-    const shifts = shiftsFromSlots(layoutSlots, layoutBaseSlots, videoFormat)
-    const nextCode = injectLayoutShiftsIntoCode(code, shifts)
-    setCode(nextCode)
-    setLayoutDirty(false)
-    setLayoutMsg(
-      Object.keys(shifts).length
-        ? `Đã lưu bố cục (${Object.keys(shifts).join(', ')}) — bấm Preview lại rồi Biên dịch video.`
-        : 'Đã xóa offset kéo thả — bố cục về mặc định.',
-    )
-    setManimReady(true)
-  }, [layoutSlots, layoutBaseSlots, videoFormat, code])
+  const handleSaveLayers = useCallback(
+    (withFullframe = false) => {
+      const transforms = layerTransformsFromState(sceneLayers, sceneLayersBase, videoFormat)
+      const varNames = sceneLayers.filter((l) => l.visible !== false).map((l) => l.varName)
+      const nextCode = injectLayersIntoCode(code, transforms, {
+        fullframe: withFullframe,
+        varNames,
+        videoFormat,
+      })
+      setCode(nextCode)
+      setLayersDirty(false)
+      setLayoutMsg(
+        `Đã lưu ${transforms.length} layer${withFullframe ? ' + fullframe Shorts' : ''} — bấm Preview lại rồi Biên dịch video.`,
+      )
+      setManimReady(true)
+    },
+    [sceneLayers, sceneLayersBase, videoFormat, code],
+  )
+
+  const handleRescanLayers = useCallback(() => {
+    const extracted = extractLayersFromCode(code)
+    const baseList = extracted.length ? extracted : fallbackLayers(videoFormat)
+    const baseWithRects = baseList.map((l, i) => ({
+      ...l,
+      rect: defaultRectForLayer(i, baseList.length, videoFormat),
+      zIndex: i,
+      scale: 1,
+      visible: true,
+    }))
+    setSceneLayersBase(baseWithRects.map((l) => ({ ...l, rect: { ...l.rect } })))
+    setSceneLayers(baseWithRects)
+    setSelectedLayerId(baseWithRects[0]?.id || null)
+    setLayersDirty(true)
+    setLayoutMsg(`Đã quét ${baseWithRects.length} layer từ code.`)
+  }, [code, videoFormat])
+
+  const handleApplyFullframe = useCallback(() => {
+    handleSaveLayers(true)
+  }, [handleSaveLayers])
 
   const syncTimelineToStoryboard = useCallback(
     (nextTimeline) => {
@@ -3162,26 +3201,38 @@ export default function App() {
               <video key={videoUrl} src={videoUrl} controls autoPlay />
             ) : previewImageUrl ? (
               <div className="preview-frame-wrap">
-                <DraggableLayoutPreview
+                <SceneLayerEditor
                   imageUrl={previewImageUrl}
-                  slots={layoutSlots}
-                  onSlotsChange={handleLayoutSlotsChange}
+                  layers={sceneLayers}
+                  onLayersChange={handleLayersChange}
+                  selectedId={selectedLayerId}
+                  onSelectLayer={setSelectedLayerId}
                   editMode={layoutEditMode}
-                  onSaveLayout={handleSaveLayout}
-                  layoutDirty={layoutDirty}
+                  onSaveLayers={() => handleSaveLayers(false)}
+                  onApplyFullframe={handleApplyFullframe}
+                  onRescanLayers={handleRescanLayers}
+                  layersDirty={layersDirty}
+                  videoFormat={videoFormat}
                 />
                 <div className="layout-edit-toggle-row">
                   <button
                     type="button"
                     className={`btn secondary export-btn ${layoutEditMode ? 'active-mode' : ''}`}
-                    onClick={() => setLayoutEditMode((v) => !v)}
+                    onClick={() => {
+                      setLayoutEditMode((v) => {
+                        if (!v && sceneLayers.length && !selectedLayerId) {
+                          setSelectedLayerId(sceneLayers[0].id)
+                        }
+                        return !v
+                      })
+                    }}
                   >
-                    <Move size={15} />
-                    {layoutEditMode ? 'Tắt kéo thả' : 'Bật kéo thả chữ & hình'}
+                    <Layers size={15} />
+                    {layoutEditMode ? 'Tắt chỉnh layers' : 'Bật chỉnh layers (kéo thả)'}
                   </button>
                   {!layoutEditMode && (
                     <span className="preview-frame-caption">
-                      Preview khung cuối — bật kéo thả để chỉnh vị trí hình/chữ
+                      Preview khung cuối — bật layers để kéo hình/chữ, đổi thứ tự, scale
                     </span>
                   )}
                 </div>
