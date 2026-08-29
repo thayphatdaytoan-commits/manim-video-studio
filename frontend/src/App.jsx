@@ -25,6 +25,7 @@ import {
   Maximize2,
   Minimize2,
   Film,
+  Move,
   Layers,
 } from 'lucide-react'
 import GeoGebraApplet, { sanitizeGgbCommands } from './GeoGebraApplet'
@@ -51,6 +52,14 @@ import {
   saveCustomLayoutTemplate,
 } from './layoutTemplates'
 import { getGraphPreset, GRAPH_PRESETS } from './graphPresets'
+import DraggableLayoutPreview from './DraggableLayoutPreview'
+import {
+  applyShiftsToSlots,
+  defaultLayoutSlots,
+  injectLayoutShiftsIntoCode,
+  parseLayoutShiftsFromCode,
+  shiftsFromSlots,
+} from './layoutEditor'
 import './App.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE || ''
@@ -730,6 +739,11 @@ export default function App() {
   const [previewing, setPreviewing] = useState(false)
   const [fixingCanvas, setFixingCanvas] = useState(false)
   const [canvasFixMsg, setCanvasFixMsg] = useState('')
+  const [layoutEditMode, setLayoutEditMode] = useState(false)
+  const [layoutSlots, setLayoutSlots] = useState(() => defaultLayoutSlots('shorts'))
+  const [layoutBaseSlots, setLayoutBaseSlots] = useState(() => defaultLayoutSlots('shorts'))
+  const [layoutDirty, setLayoutDirty] = useState(false)
+  const [layoutMsg, setLayoutMsg] = useState('')
 
   // Lồng tiếng Edge TTS
   const [voiceScript, setVoiceScript] = useState('')
@@ -831,6 +845,36 @@ export default function App() {
       setSceneTimeline([])
     }
   }, [storyboardText])
+
+  useEffect(() => {
+    const base = defaultLayoutSlots(videoFormat)
+    setLayoutBaseSlots(base)
+    const parsed = parseLayoutShiftsFromCode(code)
+    if (Object.keys(parsed).length) {
+      setLayoutSlots(applyShiftsToSlots(base, base, parsed, videoFormat))
+    } else {
+      setLayoutSlots(base)
+    }
+    setLayoutDirty(false)
+  }, [videoFormat, code])
+
+  const handleLayoutSlotsChange = useCallback((next) => {
+    setLayoutSlots(next)
+    setLayoutDirty(true)
+  }, [])
+
+  const handleSaveLayout = useCallback(() => {
+    const shifts = shiftsFromSlots(layoutSlots, layoutBaseSlots, videoFormat)
+    const nextCode = injectLayoutShiftsIntoCode(code, shifts)
+    setCode(nextCode)
+    setLayoutDirty(false)
+    setLayoutMsg(
+      Object.keys(shifts).length
+        ? `Đã lưu bố cục (${Object.keys(shifts).join(', ')}) — bấm Preview lại rồi Biên dịch video.`
+        : 'Đã xóa offset kéo thả — bố cục về mặc định.',
+    )
+    setManimReady(true)
+  }, [layoutSlots, layoutBaseSlots, videoFormat, code])
 
   const syncTimelineToStoryboard = useCallback(
     (nextTimeline) => {
@@ -3118,8 +3162,30 @@ export default function App() {
               <video key={videoUrl} src={videoUrl} controls autoPlay />
             ) : previewImageUrl ? (
               <div className="preview-frame-wrap">
-                <img src={previewImageUrl} alt="Preview khung cuối" className="preview-frame-img" />
-                <p className="preview-frame-caption">Preview nhanh — khung cuối scene (chưa phải video đầy đủ)</p>
+                <DraggableLayoutPreview
+                  imageUrl={previewImageUrl}
+                  slots={layoutSlots}
+                  onSlotsChange={handleLayoutSlotsChange}
+                  editMode={layoutEditMode}
+                  onSaveLayout={handleSaveLayout}
+                  layoutDirty={layoutDirty}
+                />
+                <div className="layout-edit-toggle-row">
+                  <button
+                    type="button"
+                    className={`btn secondary export-btn ${layoutEditMode ? 'active-mode' : ''}`}
+                    onClick={() => setLayoutEditMode((v) => !v)}
+                  >
+                    <Move size={15} />
+                    {layoutEditMode ? 'Tắt kéo thả' : 'Bật kéo thả chữ & hình'}
+                  </button>
+                  {!layoutEditMode && (
+                    <span className="preview-frame-caption">
+                      Preview khung cuối — bật kéo thả để chỉnh vị trí hình/chữ
+                    </span>
+                  )}
+                </div>
+                {layoutMsg && <div className="step-ok">{layoutMsg}</div>}
               </div>
             ) : (
               <div className="preview-empty">

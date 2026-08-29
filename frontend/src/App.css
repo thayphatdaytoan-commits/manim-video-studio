@@ -1178,3 +1178,117 @@
   margin: 0;
   font-size: 0.82rem;
 }
+
+.layout-preview-root {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.layout-preview-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.layout-preview-frame.is-editing {
+  cursor: crosshair;
+  box-shadow: 0 0 0 2px rgba(45, 212, 191, 0.45);
+}
+
+.layout-preview-img {
+  max-width: 100%;
+  max-height: min(52vh, 520px);
+  width: auto;
+  height: auto;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.layout-drag-slot {
+  position: absolute;
+  border: 2px dashed;
+  border-radius: 6px;
+  cursor: grab;
+  touch-action: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px 6px;
+  min-height: 36px;
+}
+
+.layout-drag-slot:active {
+  cursor: grabbing;
+}
+
+.layout-drag-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.layout-drag-var {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: ui-monospace, monospace;
+}
+
+.layout-edit-toolbar {
+  width: 100%;
+  max-width: 480px;
+  text-align: center;
+}
+
+.layout-var-names {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+  text-align: left;
+}
+
+.layout-var-field {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+}
+
+.layout-var-input {
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: inherit;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+.layout-edit-hint {
+  margin: 4px 0 8px;
+  font-size: 0.8rem;
+}
+
+.layout-edit-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+  width: 100%;
+}
