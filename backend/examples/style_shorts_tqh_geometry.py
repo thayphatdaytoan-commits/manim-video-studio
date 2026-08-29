@@ -1,13 +1,13 @@
-"""Shorts 9:16 — hình học phong cách TQH (đề+hình → ẩn đề → lời giải từng dòng).
+"""Shorts 9:16 — hình học TQH, FULL MÀN HÌNH (đề trên → hình dưới; lời giải: hình trên → chữ dưới).
 
-Render dọc (tuỳ chọn trong file hoặc CLI):
+Render dọc:
   manim -pq style_shorts_tqh_geometry.py ShortsTQHGeometryDemo
 """
 
 from manim import *
 
-# config.pixel_width = 1080
-# config.pixel_height = 1920
+config.pixel_width = 1080
+config.pixel_height = 1920
 
 STYLE_VN = {
     "bg": "#0d1117",
@@ -19,10 +19,11 @@ STYLE_VN = {
     "conclusion": "#FF8C00",
 }
 
+MARGIN = 0.18
 MAX_LINES_PER_PAGE = 4
 
 
-def vn(text, size=26, color=None):
+def vn(text, size=28, color=None):
     return Text(
         text,
         font="Arial",
@@ -32,57 +33,74 @@ def vn(text, size=26, color=None):
     )
 
 
+def shorts_safe_width():
+    return config.frame_width - 2 * MARGIN
+
+
+def shorts_left_edge():
+    return LEFT * (config.frame_width / 2 - MARGIN)
+
+
+def fit_figure_full_width(figure, max_height):
+    """Phóng hình tối đa trong khung portrait — không để viền đen hai bên."""
+    figure.scale_to_fit_width(shorts_safe_width())
+    if figure.height > max_height:
+        figure.scale_to_fit_height(max_height)
+    return figure
+
+
 class ShortsTQHGeometryDemo(Scene):
-    """Mẫu luồng: đề + hình → ẩn đề, hình lên cao → lời giải từng dòng + Indicate."""
+    """Mẫu full-frame: đề+chữ trên / hình dưới → ẩn đề → hình trên / lời giải dưới."""
 
     def construct(self):
         self.camera.background_color = STYLE_VN["bg"]
+        left = shorts_left_edge()
+        safe_w = shorts_safe_width()
 
-        # --- Giai đoạn 1: ĐỀ + HÌNH cùng lúc ---
-        title = vn("Bài toán hình học", 28, STYLE_VN["highlight"]).to_edge(UP, buff=0.35)
+        # --- Giai đoạn 1: ĐỀ (trên) + HÌNH (dưới đề) ---
+        title = vn("Bài toán hình học", 30, STYLE_VN["highlight"])
         problem_lines = VGroup(
-            vn("Cho đường tròn (O), đường kính AB.", 24),
-            vn("C là điểm trên cung. Chứng minh:", 24),
-            vn("góc ACB vuông.", 24, STYLE_VN["highlight"]),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
-        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=LEFT, buff=0.2)
-        problem_block.to_edge(UP, buff=0.3)
+            vn("Cho đường tròn (O), đường kính AB.", 28),
+            vn("C là điểm trên cung. Chứng minh:", 28),
+            vn("góc ACB vuông.", 28, STYLE_VN["highlight"]),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
+        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=LEFT, buff=0.15)
+        problem_block.to_edge(UP, buff=MARGIN).align_to(left, LEFT)
 
-        O = ORIGIN + DOWN * 0.5
-        circle = Circle(radius=1.35, color=STYLE_VN["circle"], stroke_width=3).move_to(O)
-        A = Dot(O + LEFT * 1.35, color=STYLE_VN["point"])
-        B = Dot(O + RIGHT * 1.35, color=STYLE_VN["point"])
-        C = Dot(O + UP * 1.35, color=STYLE_VN["point"])
-        AC = Line(A.get_center(), C.get_center(), color=STYLE_VN["segment"])
-        BC = Line(B.get_center(), C.get_center(), color=STYLE_VN["segment"])
-        AB = Line(A.get_center(), B.get_center(), color=STYLE_VN["segment"], stroke_width=5)
-        la = vn("A", 22).next_to(A, DL, buff=0.06)
-        lb = vn("B", 22).next_to(B, DR, buff=0.06)
-        lc = vn("C", 22).next_to(C, UP, buff=0.06)
-        lo = vn("O", 22).next_to(O, DOWN, buff=0.06)
+        O = ORIGIN
+        circle = Circle(radius=1.35, color=STYLE_VN["circle"], stroke_width=4)
+        A = Dot(LEFT * 1.35, color=STYLE_VN["point"])
+        B = Dot(RIGHT * 1.35, color=STYLE_VN["point"])
+        C = Dot(UP * 1.35, color=STYLE_VN["point"])
+        AC = Line(A.get_center(), C.get_center(), color=STYLE_VN["segment"], stroke_width=3)
+        BC = Line(B.get_center(), C.get_center(), color=STYLE_VN["segment"], stroke_width=3)
+        AB = Line(A.get_center(), B.get_center(), color=STYLE_VN["segment"], stroke_width=4)
+        la = vn("A", 26).next_to(A, DL, buff=0.05)
+        lb = vn("B", 26).next_to(B, DR, buff=0.05)
+        lc = vn("C", 26).next_to(C, UP, buff=0.05)
+        lo = vn("O", 26).next_to(O, DOWN, buff=0.05)
         figure = VGroup(circle, AB, AC, BC, A, B, C, la, lb, lc, lo)
-        figure.scale_to_fit_height(3.6).move_to(DOWN * 0.9)
+
+        avail_h = config.frame_height / 2 - problem_block.height - 0.35
+        fit_figure_full_width(figure, max(avail_h, 2.8))
+        figure.next_to(problem_block, DOWN, buff=0.2).align_to(left, LEFT)
 
         self.play(Write(title))
-        self.play(LaggedStart(*[Write(l) for l in problem_lines], lag_ratio=0.2))
-        self.wait(0.6)
-        self.play(
-            Create(circle),
-            FadeIn(A),
-            FadeIn(B),
-            FadeIn(C),
-            run_time=1.2,
-        )
-        self.play(Create(AB), Create(AC), Create(BC), Write(la), Write(lb), Write(lc), Write(lo))
-        self.wait(1.0)
-
-        # --- Giai đoạn 2: Ẩn đề, đẩy hình lên ---
-        self.play(FadeOut(problem_block))
-        self.play(figure.animate.shift(UP * 2.0))
+        self.play(LaggedStart(*[Write(l) for l in problem_lines], lag_ratio=0.15))
         self.wait(0.5)
+        self.play(Create(circle), FadeIn(A), FadeIn(B), FadeIn(C), run_time=1.0)
+        self.play(Create(AB), Create(AC), Create(BC), Write(la), Write(lb), Write(lc), Write(lo))
+        self.wait(0.8)
+
+        # --- Giai đoạn 2: Ẩn đề → hình phóng full phía trên ---
+        self.play(FadeOut(problem_block))
+        fig_h = config.frame_height * 0.52
+        fit_figure_full_width(figure, fig_h)
+        figure.to_edge(UP, buff=MARGIN).align_to(left, LEFT)
+        self.play(figure.animate)
+        self.wait(0.4)
 
         solution_stack = VGroup()
-        stack_anchor = figure.get_bottom() + DOWN * 0.45
 
         steps = [
             ("Ta có AB là đường kính.", None, None),
@@ -91,43 +109,44 @@ class ShortsTQHGeometryDemo(Scene):
             ("Kết luận: góc ACB vuông.", None, "ACB"),
         ]
 
+        bottom_limit = -config.frame_height / 2 + MARGIN
+
         for text_vi, latex, indicate_targets in steps:
             new_parts = VGroup()
             if text_vi:
-                new_parts.add(vn(text_vi, 24))
+                new_parts.add(vn(text_vi, 28))
             if latex:
-                new_parts.add(MathTex(latex).scale(0.9))
-            new_parts.arrange(DOWN, aligned_edge=LEFT, buff=0.08)
+                new_parts.add(MathTex(latex))
+            new_parts.arrange(DOWN, aligned_edge=LEFT, buff=0.06)
 
-            if len(solution_stack) >= MAX_LINES_PER_PAGE:
+            if len(solution_stack) >= MAX_LINES_PER_PAGE or (
+                solution_stack and solution_stack.get_bottom().y < bottom_limit + 0.5
+            ):
                 self.play(FadeOut(solution_stack))
                 solution_stack = VGroup()
-                stack_anchor = figure.get_bottom() + DOWN * 0.45
 
             if len(solution_stack) == 0:
-                new_parts.move_to(stack_anchor, aligned_edge=UP + LEFT)
+                new_parts.next_to(figure, DOWN, buff=0.15).align_to(left, LEFT)
             else:
-                new_parts.next_to(solution_stack, DOWN, aligned_edge=LEFT, buff=0.18)
+                new_parts.next_to(solution_stack, DOWN, aligned_edge=LEFT, buff=0.12)
+                new_parts.align_to(left, LEFT)
 
             anims = [Write(new_parts)]
             if indicate_targets:
-                if isinstance(indicate_targets, str):
-                    targets = [figure] if indicate_targets == "ACB" else []
-                    if indicate_targets == "ACB":
-                        ang = RightAngle(AC, BC, length=0.22, color=STYLE_VN["highlight"])
-                        targets = [ang]
-                        figure.add(ang)
-                else:
+                if isinstance(indicate_targets, str) and indicate_targets == "ACB":
+                    ang = RightAngle(AC, BC, length=0.25, color=STYLE_VN["highlight"])
+                    figure.add(ang)
+                    anims.append(Indicate(ang, color=STYLE_VN["highlight"]))
+                elif isinstance(indicate_targets, tuple):
                     targets = [AC if t == "AC" else BC for t in indicate_targets]
-                if targets:
                     anims.append(Indicate(VGroup(*targets), color=STYLE_VN["highlight"]))
 
             self.play(*anims)
             solution_stack.add(new_parts)
-            self.wait(0.85)
+            self.wait(0.8)
 
-        conclusion = vn("ĐPCM.", 28, STYLE_VN["conclusion"])
-        conclusion.next_to(solution_stack, DOWN, buff=0.25, aligned_edge=LEFT)
-        box = SurroundingRectangle(conclusion, color=STYLE_VN["highlight"], buff=0.12)
+        conclusion = vn("ĐPCM.", 30, STYLE_VN["conclusion"])
+        conclusion.next_to(solution_stack, DOWN, buff=0.15, aligned_edge=LEFT).align_to(left, LEFT)
+        box = SurroundingRectangle(conclusion, color=STYLE_VN["highlight"], buff=0.1)
         self.play(Write(conclusion), Create(box))
         self.wait(2.0)

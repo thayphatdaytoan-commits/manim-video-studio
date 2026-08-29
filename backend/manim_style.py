@@ -38,38 +38,56 @@ BEAT_ORDER_SHORTS_TQH_GEOMETRY: list[str] = [
 ]
 
 SHORTS_TQH_LAYOUT_RULES = """
-=== SHORTS 9:16 — HÌNH HỌC (PHONG CÁCH TQH — MẶC ĐỊNH) ===
+=== SHORTS 9:16 — FULL MÀN HÌNH (BẮT BUỘC — KHÔNG VIỀN ĐEN) ===
 Render dọc: config.pixel_width=1080, pixel_height=1920 (hoặc manim -pq).
+Khung Manim portrait: frame_width ≈ 4.5, frame_height = 8 — KHÔNG dùng tọa độ landscape 14×8.
 
-【GIAI ĐOẠN 1 — problem_and_figure: ĐỀ + HÌNH CÙNG LÚC】
-- problem_block: to_edge(UP, buff=0.3), font 24–28, tối đa 3–4 dòng đề
-- figure: scale_to_fit_height(3.6), move_to(DOWN * 0.8) — nằm dưới đề
-- Dựng hình tuần tự (Create) trong cùng giai đoạn hoặc ngay sau khi hiện đề
+【CẤU HÌNH & HẰNG SỐ — copy vào đầu file】
+config.pixel_width = 1080
+config.pixel_height = 1920
+MARGIN = 0.18
+SAFE_W = config.frame_width - 2*MARGIN      # ~4.1 — phóng hình/chữ gần hết chiều ngang
+LEFT_EDGE = LEFT * (config.frame_width/2 - MARGIN)
 
-【GIAI ĐOẠN 2 — transition_hide_problem: ẨN ĐỀ, ĐẨY HÌNH LÊN】
+def fit_figure_full_width(fig, max_h):
+    fig.scale_to_fit_width(SAFE_W)
+    if fig.height > max_h: fig.scale_to_fit_height(max_h)
+    return fig
+
+【FONT — đủ lớn cho điện thoại】
+- Đề / lời giải: font_size 28–32 (CẤM ≤24)
+- Nhãn điểm: 26–28 (CẤM 22)
+- MathTex: scale 1.0 (CẤM scale 0.9 hoặc panel.scale 0.38)
+
+【GIAI ĐOẠN 1 — problem_and_figure: CHỮ TRÊN → HÌNH DƯỚI】
+- problem_block.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+- avail_h = config.frame_height/2 - problem_block.height - 0.35
+- figure = fit_figure_full_width(figure, avail_h)
+- figure.next_to(problem_block, DOWN, buff=0.2).align_to(LEFT_EDGE, LEFT)
+- CẤM: move_to(DOWN*0.8), scale_to_fit_height(3.6) không kèm scale_to_fit_width(SAFE_W)
+- CẤM: đặt hình giữa màn hình khi còn trống trên/dưới
+
+【GIAI ĐOẠN 2 — transition_hide_problem: ẨN ĐỀ, HÌNH LÊN TRÊN (phóng to)】
 - self.play(FadeOut(problem_block))
-- self.play(figure.animate.shift(UP * 2.0))   # hình cố định phía trên
-- KHÔNG FadeOut hình khi sang lời giải
+- fig_h = config.frame_height * 0.52   # ~55% khung cho hình
+- fit_figure_full_width(figure, fig_h)
+- figure.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+- CẤM: figure.animate.shift(UP*2) mù — không phóng to, gây viền đen
 
-【GIAI ĐOẠN 3 — solution_steps: TỪNG DÒNG + HIỆU ỨNG HÌNH】
-- solution_stack = VGroup(), xếp DOWN dưới figure (buff≈0.35)
-- MỖI bước: Write 1 dòng (vn hoặc MathTex) + Indicate/RightAngle/Create trên hình
-- 1 dòng / animation; self.wait(0.8)
+【GIAI ĐOẠN 3 — solution_steps: HÌNH TRÊN → CHỮ DƯỚI】
+- Dòng đầu: new_line.next_to(figure, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
+- Các dòng sau: next_to(solution_stack, DOWN, buff=0.12).align_to(LEFT_EDGE, LEFT)
+- Mỗi bước: Write 1 dòng + Indicate/RightAngle; self.wait(0.8)
 
-【GIAI ĐOẠN 4 — page_break: HẾT KHUNG MÀN HÌNH】
-- MAX_LINES_PER_PAGE = 4 (shorts 9:16)
-- Khi đủ 4 dòng HOẶC stack tràn mép dưới (y < -3.5):
-  FadeOut(solution_stack) → reset stack rỗng → GIỮ figure ở vị trí trên
-  Tiếp tục lời giải (có thể lặp page_break nhiều lần)
+【GIAI ĐOẠN 4 — page_break】
+- MAX_LINES_PER_PAGE = 4
+- Khi đủ 4 dòng HOẶC stack.get_bottom().y < -config.frame_height/2 + MARGIN:
+  FadeOut(solution_stack) — GIỮ figure
 
-【Kết luận】
-- 1 dòng ngắn + SurroundingRectangle vàng
-
-CODE KHUNG:
-  problem_block.to_edge(UP)
-  figure.scale_to_fit_height(3.6).move_to(DOWN*0.8)
-  # sau transition: figure.shift(UP*2.0)
-  # solution: next_to(figure, DOWN, buff=0.35)
+【Tự kiểm tra full-frame】
+- Không có khoảng trống lớn trên/dưới/trái/phải
+- Hình chiếm gần hết SAFE_W
+- Chữ canh trái LEFT_EDGE, không thu nhỏ scale(0.38)
 """
 
 GEMINI_ANTI_PATTERNS = """
@@ -86,6 +104,11 @@ GEMINI_ANTI_PATTERNS = """
 10. MathTex(r"$x^2$") — không bọc $ trong MathTex
 11. latex_lines có tiếng Việt hoặc bọc $ trong JSON
 12. Dump toàn bộ lời giải một lúc thay vì từng dòng + Indicate
+13. Hình/chữ nhỏ giữa màn + viền đen dư → THIẾU scale_to_fit_width(SAFE_W) và config portrait
+14. move_to(DOWN*0.8) + scale_to_fit_height(3.6) — layout cũ gây trống trên/dưới
+15. shift(UP*2) không kèm phóng to hình — lời giải bị chèn giữa khoảng trống
+16. panel.scale(0.38), font_size≤24, MathTex.scale(0.9) — chữ quá nhỏ trên Shorts
+17. Thiếu config.pixel_width=1080, pixel_height=1920 ở đầu file
 """
 
 GEMINI_SELF_CHECK = """
@@ -96,7 +119,8 @@ GEMINI_SELF_CHECK = """
 □ Bước nói cạnh/góc có indicate_targets hoặc actions right_angle?
 □ Code có vn(), STYLE_VN, MAX_LINES_PER_PAGE=4, self.wait(≥0.8) mỗi beat?
 □ Không Tex(), Label(), MovingCameraScene, ThreeDScene?
-□ Hình scale_to_fit_height(3.6) ở DOWN*0.8 rồi shift UP*2.0 — không tràn mép?
+□ Hình đã scale_to_fit_width(SAFE_W) + chữ font≥28 — không viền đen dư?
+□ config.pixel_width=1080, pixel_height=1920 ở đầu file?
 """
 
 GEMINI_ACTION_MAP = """
@@ -105,7 +129,7 @@ GEMINI_ACTION_MAP = """
 | write_problem | Write(problem_block) hoặc LaggedStart từng dòng đề |
 | create_figure | Create(circle), FadeIn(dots), Create(segments) tuần tự |
 | fade_out_problem | self.play(FadeOut(problem_block)) |
-| shift_figure_up | self.play(figure.animate.shift(UP * 2.0)) |
+| shift_figure_up | fit_figure_full_width + figure.to_edge(UP).align_to(LEFT_EDGE, LEFT) |
 | write_line | Write(new_line) — 1 dòng vn() hoặc MathTex |
 | indicate:AB | Indicate(segment_AB, color=STYLE_VN["highlight"]) |
 | right_angle:ACB | RightAngle(AC, BC, length=0.22, color=STYLE_VN["highlight"]) |
@@ -133,14 +157,14 @@ Ví dụ beat solution_steps:
  "actions": ["write_line", "right_angle:ACB"], "indicate_targets": ["ACB"]}
 
 === GEMINI — CODE PYTHON (video_format=shorts) ===
-1. Đầu file: from manim import *; STYLE_VN; MAX_LINES_PER_PAGE=4; def vn(...)
-2. problem_block.to_edge(UP) + figure.scale_to_fit_height(3.6).move_to(DOWN*0.8) — CÙNG LÚC
-3. FadeOut(problem_block); figure.animate.shift(UP*2.0)
-4. solution_stack = VGroup(); stack_anchor = figure.get_bottom() + DOWN*0.45
-5. Vòng lặp beats: Write 1 dòng + Indicate/RightAngle; len(stack)>=4 → page_break
-6. Kết: vn("ĐPCM.") + SurroundingRectangle
-Mẫu bắt buộc tham khảo: backend/examples/style_shorts_tqh_geometry.py
-CẤM Tex(). CẤM layout landscape khi shorts.
+1. Đầu file: config 1080×1920; MARGIN; SAFE_W; LEFT_EDGE; fit_figure_full_width(); vn(size=28+)
+2. Đề: problem_block.to_edge(UP).align_to(LEFT_EDGE, LEFT)
+3. Hình dưới đề: fit_figure_full_width + next_to(problem_block, DOWN)
+4. FadeOut đề → fit_figure_full_width(figure, frame_height*0.52) + to_edge(UP) — KHÔNG shift(UP*2)
+5. Lời giải: next_to(figure, DOWN), align LEFT_EDGE; font 28–32
+6. page_break khi ≥4 dòng
+Mẫu: backend/examples/style_shorts_tqh_geometry.py
+CẤM Tex(). CẤM landscape. CẤM hình/chữ nhỏ giữa màn hình.
 """
     + GEMINI_SELF_CHECK
 )
@@ -293,7 +317,7 @@ CHANNEL_STYLE_PROMPT = """
 
 【Kênh hình học Shorts 9:16 — phong cách TQH (MẶC ĐỊNH cho hình học)】
 - Beat problem_and_figure: đề bài + dựng hình CÙNG LÚC (đề trên, hình dưới)
-- Beat transition_hide_problem: FadeOut đề → figure.animate.shift(UP*2)
+- Beat transition_hide_problem: FadeOut đề → fit_figure_full_width + to_edge(UP) — KHÔNG shift(UP*2)
 - Beat solution_steps: từng dòng lời giải + Indicate/RightAngle trên hình
 - Beat page_break: khi ≥4 dòng hoặc tràn mép → FadeOut chữ, GIỮ hình, tiếp tục
 - Tham khảo: backend/examples/style_shorts_tqh_geometry.py

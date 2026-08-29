@@ -31,17 +31,26 @@ Bạn là **lập trình viên Manim Community Edition (ManimCE)** chuyên video
 
 ---
 
-## 1f. Mặc định Shorts 9:16 — luồng TQH hình học (Gemini BẮT BUỘC)
+## 1f. Mặc định Shorts 9:16 — FULL MÀN HÌNH (Gemini BẮT BUỘC)
 
-Khi `video_format: "shorts"` (mặc định trên Studio):
+Khi `video_format: "shorts"` — **không để viền đen / hình chữ nhỏ giữa màn hình**:
 
-| Giai đoạn | Beat | Gemini phải làm |
-|-----------|------|-----------------|
-| 1 | `problem_and_figure` | Đề + hình **cùng lúc** (đề trên, hình `DOWN*0.8`) |
-| 2 | `transition_hide_problem` | `FadeOut` đề → `figure.shift(UP*2)` |
-| 3 | `solution_steps` | **1 dòng** lời giải + `Indicate`/`RightAngle` trên hình |
-| 4 | `page_break` | Sau **4 dòng** → xóa chữ, **giữ hình**, tiếp tục |
-| 5 | `conclusion` | Khung vàng |
+```python
+config.pixel_width = 1080
+config.pixel_height = 1920
+MARGIN = 0.18
+SAFE_W = config.frame_width - 2 * MARGIN   # ~4.1
+LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
+```
+
+| Giai đoạn | Bố cục | Gemini phải làm |
+|-----------|--------|-----------------|
+| 1 `problem_and_figure` | **Chữ đề TRÊN → hình DƯỚI** | `problem_block.to_edge(UP)`; `figure.next_to(problem_block, DOWN)` + `scale_to_fit_width(SAFE_W)` |
+| 2 `transition_hide_problem` | Ẩn đề, hình **phóng to mép trên** | `FadeOut` đề → `fit_figure_full_width` + `to_edge(UP)` — **CẤM** `shift(UP*2)` |
+| 3 `solution_steps` | **Hình TRÊN → chữ DƯỚI** | `next_to(figure, DOWN)`, font **28–32**, `align_to(LEFT_EDGE, LEFT)` |
+| 4 `page_break` | Hết chỗ chữ | Sau 4 dòng → xóa chữ, **giữ hình** |
+
+**CẤM:** `move_to(DOWN*0.8)`, `scale_to_fit_height(3.6)` không kèm `SAFE_W`, `panel.scale(0.38)`, font≤24.
 
 Mẫu code: `backend/examples/style_shorts_tqh_geometry.py`
 
@@ -368,8 +377,8 @@ manim -ql scene.py TenScene     # video thử 480p
 | Công thức xấu / Tex thay MathTex | Gemini dùng `Tex()` hoặc `MathTex` thiếu `r"..."` | Bật **Local + LaTeX**; Validate sẽ báo **Cấm Tex()**; copy lại Bước 2 |
 | LaTeX error / blank formula | Thiếu `r"..."` hoặc chưa cài MiKTeX | Sửa chuỗi; cài MiKTeX; chạy lại backend |
 | Validate báo cấm MathTex | Đang chế độ Render Free | Bật **Local + LaTeX** trên web |
-| Hình bị cắt / điểm K tràn mép | Hình quá lớn hoặc đặt sai vị trí | `scale_to_fit_height(4.0).move_to(LEFT*2.8)`; nhãn `next_to` buff nhỏ |
-| Chữ đè lên tiêu đề / hình | Không tách vùng title/figure/panel | Dùng Bước 3: "tiêu đề lên trên, panel phải, FadeOut panel cũ" |
+| Hình/chữ nhỏ, viền đen | Layout cũ DOWN*0.8 / shift UP*2 | "FULL FRAME: scale_to_fit_width(SAFE_W), to_edge(UP), font≥28" |
+| Hình bị cắt | Quá lớn | `fit_figure_full_width(figure, max_h)` |
 | Video quá nhanh | Thiếu wait | Thêm `self.wait(1)` sau mỗi bước |
 
 ---
@@ -380,28 +389,19 @@ manim -ql scene.py TenScene     # video thử 480p
 
 **Bước 1 — Kịch bản:**
 ```
-CHỈ trả JSON. video_format: "shorts"
-BEAT_ORDER: problem_and_figure → transition_hide_problem → solution_steps → page_break → conclusion
-- problem_and_figure: đề + hình cùng lúc
-- transition: ẩn đề, shift hình lên UP*2
-- solution_steps: 1 dòng/beat + indicate_targets trên hình
-- page_break: mỗi 4 dòng lời giải
+CHỈ trả JSON. video_format: "shorts" — FULL MÀN HÌNH
+- Đề: chữ TRÊN, hình DƯỚI (scale_to_fit_width SAFE_W)
+- Lời giải: hình TRÊN, chữ DƯỚI — font ≥28
+- CẤM shift(UP*2), move_to(DOWN*0.8), panel.scale(0.38)
 KHÔNG code Python
-
-ĐỀ: [dán đề]
-LỜI GIẢI: [dán lời giải từng dòng]
 ```
 
 **Bước 2 — Code:**
 ```
-Chuyển JSON thành 1 file Manim CE (class Scene), video_format=shorts.
-- Text font="Arial" + MathTex(r"...") — CẤM Tex()
-- Đề+hình cùng lúc → FadeOut đề → figure.shift(UP*2)
-- Lời giải từng dòng + Indicate; MAX_LINES_PER_PAGE=4
-- Tham khảo style_shorts_tqh_geometry.py
-Chỉ trả ```python ... ```
-
-KỊCH BẢN: [dán JSON]
+Shorts full-frame: config 1080×1920, SAFE_W, LEFT_EDGE, fit_figure_full_width()
+- Đề trên → hình dưới → FadeOut đề → hình to_edge(UP) phóng to
+- Chữ lời giải next_to(figure, DOWN), font 28–32
+- CẤM Tex(); tham khảo style_shorts_tqh_geometry.py
 ```
 
 **Bước 3 — Sửa:**
@@ -420,8 +420,7 @@ YÊU CẦU: [ghi chú]
 | Dùng `Tex()` | "CẤM Tex — chỉ MathTex(r'...')" |
 | Layout landscape khi shorts | "GIỮ luồng TQH — không hình trái/panel phải" |
 | Lời giải dump một lúc | "Tách từng dòng + Indicate, page_break mỗi 4 dòng" |
-| Quên ẩn đề | "Thêm FadeOut(problem_block) + figure.shift(UP*2)" |
-| Hình bị cắt | "scale_to_fit_height(3.6), kiểm tra mép" |
+| Quên ẩn đề | Thiếu FadeOut | "FadeOut(problem_block) + fit_figure_full_width + to_edge(UP)" |
 
 **Landscape 16:9 (nếu chọn):**
 ```

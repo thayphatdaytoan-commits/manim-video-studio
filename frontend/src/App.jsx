@@ -115,159 +115,135 @@ BIẾN ĐỔI: TransformMatchingTex(eq1, eq2) khi đổi dòng công thức.
 `
 
 const CHANNEL_STYLE_HINT = `
-=== PHONG CÁCH MẶC ĐỊNH: SHORTS 9:16 HÌNH HỌC (TQH) ===
-1. problem_and_figure: ĐỀ + HÌNH cùng lúc (đề trên, hình dưới)
-2. transition_hide_problem: FadeOut đề → figure.shift(UP*2)
-3. solution_steps: từng dòng lời giải + Indicate/RightAngle trên hình
-4. page_break: ≥4 dòng hoặc tràn mép → FadeOut chữ, GIỮ hình, tiếp tục
+=== PHONG CÁCH MẶC ĐỊNH: SHORTS 9:16 HÌNH HỌC (TQH) — FULL MÀN HÌNH ===
+1. problem_and_figure: CHỮ ĐỀ trên → HÌNH dưới (phóng full chiều ngang SAFE_W)
+2. transition_hide_problem: ẩn đề → hình phóng to sát mép trên (KHÔNG shift UP*2 mù)
+3. solution_steps: HÌNH trên → CHỮ lời giải dưới, canh trái, font 28–32
+4. page_break: ≥4 dòng — không để viền đen dư trên/dưới/hai bên
 Tham khảo: backend/examples/style_shorts_tqh_geometry.py
 `
 
 const SHORTS_TQH_LAYOUT_RULES = `
-=== SHORTS 9:16 — HÌNH HỌC TQH (MẶC ĐỊNH) ===
-Render: config.pixel_width=1080, pixel_height=1920 (hoặc manim -pq).
+=== SHORTS 9:16 — FULL MÀN HÌNH (BẮT BUỘC — KHÔNG VIỀN ĐEN) ===
+config.pixel_width=1080, pixel_height=1920 (hoặc manim -pq).
+Khung portrait: frame_width≈4.5, frame_height=8 — KHÔNG layout landscape 14×8.
 
-【GIAI ĐOẠN 1 — problem_and_figure】ĐỀ + HÌNH CÙNG LÚC:
-- problem_block.to_edge(UP, buff=0.3) — tối đa 3–4 dòng đề, font 24–28
-- figure.scale_to_fit_height(3.6).move_to(DOWN * 0.8) — dưới đề
-- Create hình tuần tự (đường tròn → điểm → cạnh) TRONG beat này
-- KHÔNG hiện lời giải ở giai đoạn này
+【HẰNG SỐ】MARGIN=0.18 | SAFE_W=config.frame_width-2*MARGIN (~4.1)
+LEFT_EDGE=LEFT*(config.frame_width/2-MARGIN)
 
-【GIAI ĐOẠN 2 — transition_hide_problem】ẨN ĐỀ, ĐẨY HÌNH LÊN:
-- self.play(FadeOut(problem_block))
-- self.play(figure.animate.shift(UP * 2.0))
-- GIỮ figure — không FadeOut hình
+【GIAI ĐOẠN 1 — problem_and_figure: CHỮ TRÊN → HÌNH DƯỚI】
+- problem_block.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT); font 28–32
+- fit_figure_full_width(figure, avail_h); figure.next_to(problem_block, DOWN, buff=0.2)
+- CẤM move_to(DOWN*0.8), scale_to_fit_height(3.6) không kèm scale_to_fit_width(SAFE_W)
 
-【GIAI ĐOẠN 3 — solution_steps】TỪNG DÒNG + HIỆU ỨNG HÌNH:
-- solution_stack = VGroup() xếp DOWN dưới figure (buff≈0.35)
-- MỖI bước lời giải = 1 dòng (1 text_line hoặc 1 latex_line) + 1 animation
-- Kèm Indicate(cạnh/góc) hoặc RightAngle/Angle vàng trên hình
-- self.wait(0.8) sau mỗi dòng
+【GIAI ĐOẠN 2 — transition: ẨN ĐỀ, HÌNH PHÓNG LÊN TRÊN】
+- FadeOut(problem_block)
+- fit_figure_full_width(figure, config.frame_height*0.52); to_edge(UP, buff=MARGIN)
+- CẤM figure.animate.shift(UP*2) — gây hình nhỏ + viền đen
 
-【GIAI ĐOẠN 4 — page_break】HẾT KHUNG:
-- MAX_LINES_PER_PAGE = 4
-- Khi len(solution_stack) >= 4 HOẶC stack.get_bottom().y < -3.5:
-  FadeOut(solution_stack) → solution_stack = VGroup() → tiếp dòng tiếp theo
-- KHÔNG xóa/reset figure
+【GIAI ĐOẠN 3 — solution_steps: HÌNH TRÊN → CHỮ DƯỚI】
+- new_line.next_to(figure, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT); font 28–32
+- MathTex scale 1.0; CẤM panel.scale(0.38)
 
-【Kết luận】1 dòng + SurroundingRectangle vàng
+【GIAI ĐOẠN 4 — page_break】MAX_LINES_PER_PAGE=4; bottom_limit=-frame_height/2+MARGIN
 `
 
 const GEMINI_SHORTS_TQH_JSON_GUIDE = `
-=== KỊCH BẢN JSON — SHORTS TQH (BẮT BUỘC KHI video_format="shorts") ===
+=== KỊCH BẢN JSON — SHORTS TQH FULL-FRAME ===
 {
   "video_format": "shorts",
   "layout": {
-    "mode": "shorts_tqh_geometry",
+    "mode": "shorts_tqh_fullframe",
+    "margin": 0.18,
+    "safe_width": "config.frame_width - 2*margin",
     "max_lines_per_page": 4,
-    "figure_initial": "DOWN*0.8 scale 3.6",
-    "figure_after_transition": "shift UP*2.0"
+    "problem_layout": "text_top_figure_below",
+    "solution_layout": "figure_top_text_below",
+    "figure_initial": "next_to(problem_block,DOWN) + scale_to_fit_width(SAFE_W)",
+    "figure_after_transition": "to_edge(UP) + scale_to_fit_width(SAFE_W) + height 52% frame"
   },
-  "beats": [
-    {"phase": "title", "text_lines": ["Bài toán hình học"], "actions": ["write_text"]},
-    {"phase": "problem_and_figure", "text_lines": ["Cho đường tròn...", "Chứng minh..."],
-     "actions": ["write_problem", "create_figure"], "figure_targets": ["circle","A","B","C"]},
-    {"phase": "transition_hide_problem", "actions": ["fade_out_problem", "shift_figure_up"]},
-    {"phase": "solution_steps", "text_lines": ["Ta có AB là đường kính."], "latex_lines": [],
-     "actions": ["write_line", "indicate:AB"], "indicate_targets": ["AB"]},
-    {"phase": "solution_steps", "text_lines": [], "latex_lines": ["\\\\Rightarrow \\\\angle ACB = 90^\\\\circ"],
-     "actions": ["write_line", "right_angle:ACB"]},
-    {"phase": "page_break", "actions": ["fade_out_solution_stack"]},
-    {"phase": "conclusion", "text_lines": ["Vậy góc ACB vuông. ĐPCM."], "actions": ["surround_rect"]}
-  ]
+  ...
 }
-QUY TẮC JSON:
-- Mỗi dòng lời giải = 1 beat phase=solution_steps (1 text_line HOẶC 1 latex_line)
-- latex_lines: LaTeX thuần, KHÔNG bọc $, KHÔNG tiếng Việt
-- actions ghi rõ indicate_targets / right_angle cho hiệu ứng hình
-- Chèn page_break sau mỗi 4 dòng solution_steps
 `
 
 const GEMINI_SHORTS_TQH_CODE_SKELETON = `
-=== CODE PYTHON — SHORTS TQH (BẮT BUỘC BÁM KHUNG) ===
-MAX_LINES_PER_PAGE = 4
+=== CODE PYTHON — SHORTS FULL-FRAME ===
+config.pixel_width = 1080
+config.pixel_height = 1920
+MARGIN = 0.18
+SAFE_W = config.frame_width - 2 * MARGIN
+LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
 
-# Giai đoạn 1: đề + hình
-problem_block.to_edge(UP, buff=0.3)
-figure.scale_to_fit_height(3.6).move_to(DOWN * 0.8)
-self.play(Write(problem_block), Create(...))  # đề và hình cùng lúc
+def fit_figure_full_width(fig, max_h):
+    fig.scale_to_fit_width(SAFE_W)
+    if fig.height > max_h: fig.scale_to_fit_height(max_h)
+    return fig
 
-# Giai đoạn 2: ẩn đề, đẩy hình
+# Đề trên, hình dưới
+problem_block.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+avail_h = config.frame_height/2 - problem_block.height - 0.35
+fit_figure_full_width(figure, avail_h)
+figure.next_to(problem_block, DOWN, buff=0.2).align_to(LEFT_EDGE, LEFT)
+
+# Ẩn đề → hình trên (phóng to)
 self.play(FadeOut(problem_block))
-self.play(figure.animate.shift(UP * 2.0))
+fit_figure_full_width(figure, config.frame_height * 0.52)
+figure.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
 
-# Giai đoạn 3–4: lời giải từng dòng
-solution_stack = VGroup()
-stack_anchor = figure.get_bottom() + DOWN * 0.45
-for each step in storyboard.solution_steps:
-    if len(solution_stack) >= MAX_LINES_PER_PAGE:
-        self.play(FadeOut(solution_stack))
-        solution_stack = VGroup()
-    new_line = vn(...) hoặc MathTex(r"...")
-    self.play(Write(new_line), Indicate(target_on_figure))
-    solution_stack.add(new_line)
-    self.wait(0.8)
-
-Tham khảo file mẫu: backend/examples/style_shorts_tqh_geometry.py
-CẤM Tex(). CẤM landscape layout (hình trái/panel phải) khi video_format=shorts.
+# Lời giải dưới hình
+new_line.next_to(figure, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)  # vn(size=28)
 `
 
 const GEMINI_ANTI_PATTERNS = `
 === LỖI GEMINI THƯỜNG GẶP — TUYỆT ĐỐI TRÁNH ===
-1. Tex(...) → CẤM; chỉ MathTex(r"...") cho công thức
-2. Tiếng Việt trong MathTex → ô vuông □; dùng vn() / Text(font="Arial")
-3. shorts mà layout landscape (figure LEFT*2.8 + panel RIGHT) → SAI
-4. problem_and_figure hiện lời giải → SAI (chỉ đề + dựng hình)
-5. Quên FadeOut(problem_block) hoặc figure.animate.shift(UP*2.0)
-6. Gộp 2+ dòng lời giải vào 1 beat → SAI (1 dòng/beat)
-7. page_break FadeOut cả figure → SAI (chỉ FadeOut solution_stack)
-8. Không page_break sau mỗi 4 dòng solution_steps
-9. Label("A") → vn("A", 22).next_to(dot, buff=0.06)
-10. MathTex(r"$x^2$") — không bọc $ trong MathTex
-11. latex_lines trong JSON có tiếng Việt hoặc dấu $
-12. Dump cả lời giải một lúc — phải từng dòng + Indicate/RightAngle
+1. Tex(...) → CẤM; chỉ MathTex(r"...")
+2. Tiếng Việt trong MathTex → ô vuông □
+3. shorts mà layout landscape (LEFT*2.8 + panel RIGHT) → SAI
+4. Hình/chữ nhỏ giữa màn + viền đen dư → THIẾU scale_to_fit_width(SAFE_W)
+5. move_to(DOWN*0.8) + scale_to_fit_height(3.6) — layout cũ, trống trên/dưới
+6. shift(UP*2) không phóng to hình — lời giải lọt giữa khoảng trống
+7. panel.scale(0.38), font≤24, MathTex.scale(0.9) — chữ quá nhỏ
+8. Thiếu config.pixel_width=1080, pixel_height=1920 đầu file
+9. problem_and_figure hiện lời giải → SAI
+10. page_break FadeOut cả figure → SAI
+11. Label("A") → vn("A", 26)
+12. Dump cả lời giải một lúc
 `
 
 const GEMINI_ACTION_MAP = `
-=== ÁNH XẠ actions → CODE MANIM (shorts TQH) ===
-write_problem → Write(problem_block) / LaggedStart từng dòng đề
-create_figure → Create(circle), FadeIn(dots), Create(cạnh) tuần tự
-fade_out_problem → self.play(FadeOut(problem_block))
-shift_figure_up → self.play(figure.animate.shift(UP * 2.0))
-write_line → Write(new_line) — 1 dòng vn() hoặc MathTex
-indicate:AB → Indicate(segment_AB, color=STYLE_VN["highlight"])
-right_angle:ACB → RightAngle(AC, BC, length=0.22, color=STYLE_VN["highlight"])
-fade_out_solution_stack → FadeOut(solution_stack); solution_stack = VGroup()
-surround_rect → SurroundingRectangle(conclusion, color=STYLE_VN["highlight"])
+=== ÁNH XẠ actions → CODE (shorts full-frame) ===
+fade_out_problem → FadeOut(problem_block)
+shift_figure_up → fit_figure_full_width + figure.to_edge(UP).align_to(LEFT_EDGE, LEFT)
+write_line → next_to(figure/solution_stack, DOWN).align_to(LEFT_EDGE, LEFT); font 28+
 `
 
 const GEMINI_SELF_CHECK = `
-=== TỰ KIỂM TRA TRƯỚC KHI TRẢ LỜI ===
-□ video_format đúng ("shorts" mặc định)?
-□ shorts: có problem_and_figure → transition_hide_problem → solution_steps → page_break?
-□ Mỗi solution_steps = 1 text_line HOẶC 1 latex_line?
-□ Bước nói cạnh/góc có indicate_targets?
-□ Code có vn(), STYLE_VN, MAX_LINES_PER_PAGE=4, self.wait(≥0.8)?
-□ Không Tex(), Label(), MovingCameraScene?
-□ Hình ở DOWN*0.8 scale 3.6 → shift UP*2.0 — không tràn mép?
+=== TỰ KIỂM TRA ===
+□ config 1080×1920 + SAFE_W + LEFT_EDGE?
+□ Đề trên / hình dưới (giai đoạn 1); hình trên / chữ dưới (lời giải)?
+□ scale_to_fit_width(SAFE_W) — không viền đen hai bên?
+□ Font ≥28, không scale(0.38)?
+□ Không shift(UP*2) mù?
 `
 
 const GEMINI_CODE_FILE_HEADER = `
-=== ĐẦU FILE PYTHON BẮT BUỘC (shorts) ===
+=== ĐẦU FILE PYTHON (shorts full-frame) ===
 from manim import *
-
-STYLE_VN = {"bg": "#0d1117", "circle": "#3d6b2f", "segment": "#1e40af",
-            "point": "#8b1a1a", "text": "#FFFFFF", "highlight": "#FFD700", "conclusion": "#FF8C00"}
+config.pixel_width = 1080
+config.pixel_height = 1920
+MARGIN = 0.18
+SAFE_W = config.frame_width - 2 * MARGIN
+LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
 MAX_LINES_PER_PAGE = 4
 
-def vn(text, size=26, color=None):
+def vn(text, size=28, color=None):
     return Text(text, font="Arial", font_size=size,
-                color=color or STYLE_VN["text"], disable_ligatures=True)
+                color=color or "#FFFFFF", disable_ligatures=True)
 
-class TenClassScene(Scene):
-    def construct(self):
-        self.camera.background_color = STYLE_VN["bg"]
-        # Mỗi phase: comment # phase: ... + animation + self.wait(≥0.8)
+def fit_figure_full_width(fig, max_h):
+    fig.scale_to_fit_width(SAFE_W)
+    if fig.height > max_h: fig.scale_to_fit_height(max_h)
+    return fig
 `
 
 function layoutRulesForFormat(videoFormat) {
@@ -346,7 +322,7 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
   const local = mode === 'local_latex'
 
   const shortsCodeRules = videoFormat === 'shorts'
-    ? `- SHORTS TQH: problem_and_figure → FadeOut đề → figure.shift(UP*2) → solution từng dòng + page_break
+    ? `- SHORTS full-frame: đề trên/hình dưới → FadeOut đề → hình phóng to_edge(UP) → chữ dưới hình
 - Bám GEMINI_SHORTS_TQH_CODE_SKELETON; tham khảo style_shorts_tqh_geometry.py
 ${GEMINI_CODE_FILE_HEADER}
 ${GEMINI_SHORTS_TQH_CODE_SKELETON}
@@ -827,7 +803,9 @@ export default function App() {
     }
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKey)
+    const resizeTimer = setTimeout(() => window.dispatchEvent(new Event('resize')), 200)
     return () => {
+      clearTimeout(resizeTimer)
       document.body.style.overflow = ''
       window.removeEventListener('keydown', onKey)
     }

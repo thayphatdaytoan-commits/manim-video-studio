@@ -149,7 +149,7 @@ Trả về ĐÚNG 1 JSON (không markdown):
 2. Tọa độ Manim: x∈[-3.5,3.5], y∈[-2.5,2.5]; dùng Dot/Line/Circle/RightAngle/Angle.
 3. Tiếng Việt nhãn: vn("A", 22).next_to(dot, buff=0.06) — CẤM Tex().
 4. Công thức góc: MathTex(r"\\\\angle ABC = 90^\\\\circ") nếu cần.
-5. figure = VGroup(...).scale_to_fit_height(3.6).move_to(DOWN*0.8)
+5. figure = fit_figure_full_width(...); figure.next_to(problem_block, DOWN) — full-frame shorts
 6. Cuối file: CONSTRUCTION_ORDER = [...] và comment hướng dẫn Create tuần tự.
 7. Màu STYLE_VN: điểm #8b1a1a, cạnh #1e40af, tròn #3d6b2f, highlight #FFD700.
 8. Góc vuông: RightAngle; góc thường: Angle — ghi rõ id đối tượng góc.
@@ -259,8 +259,8 @@ Trả về ĐÚNG 1 JSON:
   "layout": {{
     "mode": "shorts_tqh_geometry",
     "max_lines_per_page": 4,
-    "figure_initial": "DOWN*0.8 scale 3.6",
-    "figure_after_transition": "shift UP*2.0",
+    "figure_initial": "next_to(problem_block,DOWN) + scale_to_fit_width(SAFE_W)",
+    "figure_after_transition": "to_edge(UP) + scale_to_fit_width(SAFE_W) + height 52% frame",
     "shorts_single_frame": true
   }},
   "beats": [
@@ -313,8 +313,8 @@ class TenClassScene(Scene):
         # Mỗi beat: comment # phase + animation + self.wait(≥0.8)
 
 === FORMAT ===
-- video_format "shorts" (MẶC ĐỊNH): TQH geometry — đề+hình → FadeOut đề → figure.shift(UP*2) → lời giải từng dòng + page_break
-  figure.scale_to_fit_height(3.6).move_to(DOWN*0.8) rồi shift lên; MAX_LINES_PER_PAGE=4
+- video_format "shorts" (MẶC ĐỊNH): full-frame TQH — đề trên/hình dưới → FadeOut đề → hình to_edge(UP) → chữ dưới hình
+  scale_to_fit_width(SAFE_W); MARGIN=0.18; font≥28; MAX_LINES_PER_PAGE=4
 - video_format "landscape": figure.scale_to_fit_height(4.0).move_to(LEFT*2.8); panel.to_edge(RIGHT, buff=0.4).scale(0.38)
 """
     + GEMINI_SHORTS_TQH_PROMPT
