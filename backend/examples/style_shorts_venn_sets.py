@@ -1,6 +1,6 @@
 """Shorts 9:16 — Venn / tập hợp / bao hàm loại trừ — FULL MÀN HÌNH.
 
-Mẫu cho Gemini Pro / Gem: hình Venn phóng full SAFE_W, lời giải dưới hình.
+Mẫu cho Gemini Pro / Gem: hình Venn phóng full SAFE_W, lời giải canh giữa dưới hình.
 
 Render:
   manim -pq style_shorts_venn_sets.py ShortsVennSetsDemo
@@ -21,10 +21,17 @@ STYLE_VN = {
     "conclusion": "#FF8C00",
 }
 
-MARGIN = 0.12
+TOP_BUFF = 0.05
+BOTTOM_BUFF = 0.05
+MARGIN = 0.08
+FIGURE_RATIO = 0.58
 MAX_LINES_PER_PAGE = 4
 SAFE_W = config.frame_width - 2 * MARGIN
-LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
+
+
+def center_x(mob):
+    mob.set_x(0)
+    return mob
 
 
 def vn(text, size=30, color=None):
@@ -45,20 +52,21 @@ def fit_figure_full_width(fig, max_h):
 
 
 class ShortsVennSetsDemo(Scene):
-    """Venn 3 tập — đề trên, hình full width, lời giải từng dòng dưới hình."""
+    """Venn 3 tập — đề trên, hình full width canh giữa, lời giải canh giữa dưới hình."""
 
     def construct(self):
         self.camera.background_color = STYLE_VN["bg"]
 
-        # --- Đề ---
+        # --- Đề (canh giữa) ---
         title = vn("Bài toán tập hợp", 30, STYLE_VN["highlight"])
         problem_lines = VGroup(
             vn("Lớp có 33 HS giỏi ít nhất 1 trong 3 môn: Toán, Văn, Anh.", 28),
             vn("Biết |T|=15, |V|=18, |A|=20 và các giao hai tập như hình.", 28),
             vn("Tính số HS giỏi ít nhất 1 môn.", 28, STYLE_VN["highlight"]),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.08)
-        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
-        problem_block.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+        ).arrange(DOWN, aligned_edge=ORIGIN, buff=0.08)
+        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=ORIGIN, buff=0.12)
+        problem_block.to_edge(UP, buff=TOP_BUFF)
+        center_x(problem_block)
 
         # --- Hình Venn (3 vòng) ---
         r = 1.15
@@ -70,23 +78,25 @@ class ShortsVennSetsDemo(Scene):
         la = vn("A (20)", 24).next_to(c_a, DOWN, buff=0.05)
         figure = VGroup(c_t, c_v, c_a, lt, lv, la)
 
-        avail_h = config.frame_height / 2 - problem_block.height - 0.3
+        avail_h = config.frame_height / 2 - problem_block.height - 0.2
         fit_figure_full_width(figure, max(avail_h, 2.5))
-        figure.next_to(problem_block, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
+        figure.next_to(problem_block, DOWN, buff=0.1)
+        center_x(figure)
 
         self.play(Write(title), LaggedStart(*[Write(l) for l in problem_lines], lag_ratio=0.12))
         self.wait(0.4)
         self.play(Create(c_t), Create(c_v), Create(c_a), Write(lt), Write(lv), Write(la))
         self.wait(0.8)
 
-        # --- Ẩn đề, hình lên trên ---
+        # --- Ẩn đề, hình lên trên (phóng to, sát mép trên) ---
         self.play(FadeOut(problem_block))
-        fit_figure_full_width(figure, config.frame_height * 0.48)
-        figure.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+        fit_figure_full_width(figure, config.frame_height * FIGURE_RATIO)
+        figure.to_edge(UP, buff=TOP_BUFF)
+        center_x(figure)
         self.wait(0.3)
 
         solution_stack = VGroup()
-        bottom_limit = -config.frame_height / 2 + MARGIN
+        bottom_limit = -config.frame_height / 2 + BOTTOM_BUFF
 
         steps = [
             vn("Gọi T, V, A là tập HS giỏi Toán, Văn, Anh.", 28),
@@ -102,15 +112,16 @@ class ShortsVennSetsDemo(Scene):
                 solution_stack = VGroup()
 
             if len(solution_stack) == 0:
-                part.next_to(figure, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
+                part.next_to(figure, DOWN, buff=0.08)
             else:
-                part.next_to(solution_stack, DOWN, aligned_edge=LEFT, buff=0.1)
-                part.align_to(LEFT_EDGE, LEFT)
+                part.next_to(solution_stack, DOWN, buff=0.08)
+            center_x(part)
 
             self.play(Write(part))
             solution_stack.add(part)
             self.wait(0.85)
 
         box = SurroundingRectangle(solution_stack[-1], color=STYLE_VN["highlight"], buff=0.08)
+        center_x(box)
         self.play(Create(box))
         self.wait(2.0)

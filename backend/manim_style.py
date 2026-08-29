@@ -45,9 +45,15 @@ Khung Manim portrait: frame_width ≈ 4.5, frame_height = 8 — KHÔNG dùng t�
 【CẤU HÌNH & HẰNG SỐ — copy vào đầu file】
 config.pixel_width = 1080
 config.pixel_height = 1920
-MARGIN = 0.18
-SAFE_W = config.frame_width - 2*MARGIN      # ~4.1 — phóng hình/chữ gần hết chiều ngang
-LEFT_EDGE = LEFT * (config.frame_width/2 - MARGIN)
+TOP_BUFF = 0.05          # mép trên — NHỎ để bớt khoảng trống dư
+BOTTOM_BUFF = 0.05       # mép dưới
+MARGIN = 0.08            # chỉ tính SAFE_W ngang
+SAFE_W = config.frame_width - 2*MARGIN
+FIGURE_RATIO = 0.58      # % chiều cao khung cho hình (sau ẩn đề) — tận dụng khung, bớt viền đen
+
+def center_x(mob):
+    mob.set_x(0)
+    return mob
 
 def fit_figure_full_width(fig, max_h):
     fig.scale_to_fit_width(SAFE_W)
@@ -59,35 +65,41 @@ def fit_figure_full_width(fig, max_h):
 - Nhãn điểm: 26–28 (CẤM 22)
 - MathTex: scale 1.0 (CẤM scale 0.9 hoặc panel.scale 0.38)
 
+【CANH GIỮA — BẮT BUỘC (không canh trái)】
+- Mọi khối chữ (đề, lời giải, kết luận): sau khi đặt vị trí dọc → center_x(mob)
+- VGroup.arrange(DOWN, aligned_edge=ORIGIN) — KHÔNG aligned_edge=LEFT
+- Hình Venn/hình học: center_x(figure) sau next_to / to_edge
+- CẤM: align_to(LEFT_EDGE, LEFT) cho đề và lời giải (gây lệch trái như ảnh mẫu lỗi)
+
 【GIAI ĐOẠN 1 — problem_and_figure: CHỮ TRÊN → HÌNH DƯỚI】
-- problem_block.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
-- avail_h = config.frame_height/2 - problem_block.height - 0.35
+- problem_block.to_edge(UP, buff=TOP_BUFF); center_x(problem_block)
+- avail_h = config.frame_height/2 - problem_block.height - 0.2
 - figure = fit_figure_full_width(figure, avail_h)
-- figure.next_to(problem_block, DOWN, buff=0.2).align_to(LEFT_EDGE, LEFT)
+- figure.next_to(problem_block, DOWN, buff=0.1); center_x(figure)
 - CẤM: move_to(DOWN*0.8), scale_to_fit_height(3.6) không kèm scale_to_fit_width(SAFE_W)
-- CẤM: đặt hình giữa màn hình khi còn trống trên/dưới
+- CẤM: khoảng trống lớn trên/dưới — dùng TOP_BUFF nhỏ + FIGURE_RATIO lớn
 
 【GIAI ĐOẠN 2 — transition_hide_problem: ẨN ĐỀ, HÌNH LÊN TRÊN (phóng to)】
 - self.play(FadeOut(problem_block))
-- fig_h = config.frame_height * 0.52   # ~55% khung cho hình
+- fig_h = config.frame_height * FIGURE_RATIO
 - fit_figure_full_width(figure, fig_h)
-- figure.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+- figure.to_edge(UP, buff=TOP_BUFF); center_x(figure)
 - CẤM: figure.animate.shift(UP*2) mù — không phóng to, gây viền đen
 
-【GIAI ĐOẠN 3 — solution_steps: HÌNH TRÊN → CHỮ DƯỚI】
-- Dòng đầu: new_line.next_to(figure, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
-- Các dòng sau: next_to(solution_stack, DOWN, buff=0.12).align_to(LEFT_EDGE, LEFT)
+【GIAI ĐOẠN 3 — solution_steps: HÌNH TRÊN → CHỮ DƯỚI, CANH GIỮA】
+- Dòng đầu: new_line.next_to(figure, DOWN, buff=0.08); center_x(new_line)
+- Các dòng sau: next_to(solution_stack, DOWN, buff=0.08); center_x(new_line)
 - Mỗi bước: Write 1 dòng + Indicate/RightAngle; self.wait(0.8)
 
 【GIAI ĐOẠN 4 — page_break】
 - MAX_LINES_PER_PAGE = 4
-- Khi đủ 4 dòng HOẶC stack.get_bottom().y < -config.frame_height/2 + MARGIN:
+- Khi đủ 4 dòng HOẶC stack.get_bottom().y < -config.frame_height/2 + BOTTOM_BUFF:
   FadeOut(solution_stack) — GIỮ figure
 
 【Tự kiểm tra full-frame】
-- Không có khoảng trống lớn trên/dưới/trái/phải
-- Hình chiếm gần hết SAFE_W
-- Chữ canh trái LEFT_EDGE, không thu nhỏ scale(0.38)
+- Không có khoảng trống lớn trên/dưới (TOP_BUFF/BOTTOM_BUFF ≤ 0.06)
+- Hình chiếm gần hết SAFE_W và FIGURE_RATIO ≥ 0.55
+- Chữ canh GIỮA (center_x), không thu nhỏ scale(0.38)
 """
 
 GEMINI_ANTI_PATTERNS = """
@@ -109,6 +121,8 @@ GEMINI_ANTI_PATTERNS = """
 15. shift(UP*2) không kèm phóng to hình — lời giải bị chèn giữa khoảng trống
 16. panel.scale(0.38), font_size≤24, MathTex.scale(0.9) — chữ quá nhỏ trên Shorts
 17. Thiếu config.pixel_width=1080, pixel_height=1920 ở đầu file
+18. align_to(LEFT_EDGE, LEFT) cho đề/lời giải Shorts → SAI; dùng center_x(mob)
+19. TOP_BUFF > 0.12 hoặc FIGURE_RATIO < 0.52 → viền đen trên/dưới quá lớn
 """
 
 GEMINI_SELF_CHECK = """
@@ -119,7 +133,7 @@ GEMINI_SELF_CHECK = """
 □ Bước nói cạnh/góc có indicate_targets hoặc actions right_angle?
 □ Code có vn(), STYLE_VN, MAX_LINES_PER_PAGE=4, self.wait(≥0.8) mỗi beat?
 □ Không Tex(), Label(), MovingCameraScene, ThreeDScene?
-□ Hình đã scale_to_fit_width(SAFE_W) + chữ font≥28 — không viền đen dư?
+□ Hình đã scale_to_fit_width(SAFE_W) + chữ font≥28 + center_x — không viền đen dư?
 □ config.pixel_width=1080, pixel_height=1920 ở đầu file?
 """
 
@@ -129,8 +143,8 @@ GEMINI_ACTION_MAP = """
 | write_problem | Write(problem_block) hoặc LaggedStart từng dòng đề |
 | create_figure | Create(circle), FadeIn(dots), Create(segments) tuần tự |
 | fade_out_problem | self.play(FadeOut(problem_block)) |
-| shift_figure_up | fit_figure_full_width + figure.to_edge(UP).align_to(LEFT_EDGE, LEFT) |
-| write_line | Write(new_line) — 1 dòng vn() hoặc MathTex |
+| shift_figure_up | fit_figure_full_width + figure.to_edge(UP, buff=TOP_BUFF) + center_x(figure) |
+| write_line | Write(new_line) — 1 dòng vn()/MathTex; center_x sau next_to |
 | indicate:AB | Indicate(segment_AB, color=STYLE_VN["highlight"]) |
 | right_angle:ACB | RightAngle(AC, BC, length=0.22, color=STYLE_VN["highlight"]) |
 | fade_out_solution_stack | self.play(FadeOut(solution_stack)); solution_stack = VGroup() |
@@ -140,12 +154,12 @@ GEMINI_ACTION_MAP = """
 SHORTS_VENN_SET_RULES = """
 === SHORTS — VENN / TẬP HỢP / BAO HÀM LOẠI TRỪ (FULL-FRAME) ===
 - figure = VGroup(circle_T, circle_V, circle_A, labels...) — KHÔNG để nhỏ bên trái
-- fit_figure_full_width(figure, config.frame_height * 0.45) sau khi dựng xong
-- figure.next_to(problem_block, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
-- Sau FadeOut đề: fit_figure_full_width(figure, config.frame_height * 0.5); to_edge(UP)
-- solution_stack = VGroup(); mỗi dòng MathTex/Text next_to(figure hoặc stack, DOWN).align_to(LEFT_EDGE, LEFT)
-- Công thức |T∪V∪A|: MathTex(r"n(T \\cup V \\cup A) = ...") — font scale 1.0, không thu nhỏ
-- CẤM: figure.move_to(LEFT*2.8), figure ở ORIGIN nhỏ, panel bên phải trống
+- fit_figure_full_width(figure, config.frame_height * FIGURE_RATIO) sau khi dựng xong
+- figure.next_to(problem_block, DOWN, buff=0.1); center_x(figure)
+- Sau FadeOut đề: fit_figure_full_width(figure, config.frame_height * FIGURE_RATIO); to_edge(UP, buff=TOP_BUFF); center_x(figure)
+- solution_stack = VGroup(); mỗi dòng next_to(figure/stack, DOWN, buff=0.08) + center_x(dòng)
+- Công thức |T∪V∪A|: MathTex(r"n(T \\cup V \\cup A) = ...") — font scale 1.0, canh GIỮA
+- CẤM: align_to(LEFT_EDGE, LEFT) cho lời giải; CẤM khoảng trống lớn trên/dưới
 """
 
 GEMINI_SHORTS_TQH_PROMPT = (
@@ -169,14 +183,14 @@ Ví dụ beat solution_steps:
  "actions": ["write_line", "right_angle:ACB"], "indicate_targets": ["ACB"]}
 
 === GEMINI — CODE PYTHON (video_format=shorts) ===
-1. Đầu file: config 1080×1920; MARGIN; SAFE_W; LEFT_EDGE; fit_figure_full_width(); vn(size=28+)
-2. Đề: problem_block.to_edge(UP).align_to(LEFT_EDGE, LEFT)
-3. Hình dưới đề: fit_figure_full_width + next_to(problem_block, DOWN)
-4. FadeOut đề → fit_figure_full_width(figure, frame_height*0.52) + to_edge(UP) — KHÔNG shift(UP*2)
-5. Lời giải: next_to(figure, DOWN), align LEFT_EDGE; font 28–32
+1. Đầu file: config 1080×1920; TOP_BUFF; BOTTOM_BUFF; MARGIN; SAFE_W; FIGURE_RATIO; center_x(); fit_figure_full_width(); vn(size=28+)
+2. Đề: problem_block.to_edge(UP, buff=TOP_BUFF); center_x(problem_block)
+3. Hình dưới đề: fit_figure_full_width + next_to(problem_block, DOWN); center_x(figure)
+4. FadeOut đề → fit_figure_full_width(figure, frame_height*FIGURE_RATIO) + to_edge(UP, buff=TOP_BUFF) + center_x — KHÔNG shift(UP*2)
+5. Lời giải: next_to(figure, DOWN, buff=0.08), center_x; font 28–32 — CANH GIỮA, không align LEFT
 6. page_break khi ≥4 dòng
-Mẫu: backend/examples/style_shorts_tqh_geometry.py
-CẤM Tex(). CẤM landscape. CẤM hình/chữ nhỏ giữa màn hình.
+Mẫu: backend/examples/style_shorts_tqh_geometry.py, style_shorts_venn_sets.py
+CẤM Tex(). CẤM landscape. CẤM viền đen trên/dưới do buff lớn.
 """
     + GEMINI_SELF_CHECK
 )

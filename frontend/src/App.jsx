@@ -148,8 +148,8 @@ const CHANNEL_STYLE_HINT = `
 === PHONG CÁCH MẶC ĐỊNH: SHORTS 9:16 HÌNH HỌC (TQH) — FULL MÀN HÌNH ===
 1. problem_and_figure: CHỮ ĐỀ trên → HÌNH dưới (phóng full chiều ngang SAFE_W)
 2. transition_hide_problem: ẩn đề → hình phóng to sát mép trên (KHÔNG shift UP*2 mù)
-3. solution_steps: HÌNH trên → CHỮ lời giải dưới, canh trái, font 28–32
-4. page_break: ≥4 dòng — không để viền đen dư trên/dưới/hai bên
+3. solution_steps: HÌNH trên → CHỮ lời giải dưới, CANH GIỮA (center_x), font 28–32
+4. page_break: ≥4 dòng — TOP_BUFF/BOTTOM_BUFF nhỏ (0.05) để bớt viền đen trên/dưới
 Tham khảo: backend/examples/style_shorts_tqh_geometry.py
 `
 
@@ -158,24 +158,28 @@ const SHORTS_TQH_LAYOUT_RULES = `
 config.pixel_width=1080, pixel_height=1920 (hoặc manim -pq).
 Khung portrait: frame_width≈4.5, frame_height=8 — KHÔNG layout landscape 14×8.
 
-【HẰNG SỐ】MARGIN=0.18 | SAFE_W=config.frame_width-2*MARGIN (~4.1)
-LEFT_EDGE=LEFT*(config.frame_width/2-MARGIN)
+【HẰNG SỐ】TOP_BUFF=0.05 | BOTTOM_BUFF=0.05 | MARGIN=0.08 | FIGURE_RATIO=0.58
+SAFE_W=config.frame_width-2*MARGIN
+
+def center_x(mob):
+    mob.set_x(0); return mob
+
+【CANH GIỮA — BẮT BUỘC】Mọi đề/lời giải: center_x() sau next_to — CẤM align_to(LEFT_EDGE, LEFT)
 
 【GIAI ĐOẠN 1 — problem_and_figure: CHỮ TRÊN → HÌNH DƯỚI】
-- problem_block.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT); font 28–32
-- fit_figure_full_width(figure, avail_h); figure.next_to(problem_block, DOWN, buff=0.2)
-- CẤM move_to(DOWN*0.8), scale_to_fit_height(3.6) không kèm scale_to_fit_width(SAFE_W)
+- problem_block.to_edge(UP, buff=TOP_BUFF); center_x(problem_block); font 28–32
+- fit_figure_full_width(figure, avail_h); figure.next_to(problem_block, DOWN, buff=0.1); center_x(figure)
 
 【GIAI ĐOẠN 2 — transition: ẨN ĐỀ, HÌNH PHÓNG LÊN TRÊN】
 - FadeOut(problem_block)
-- fit_figure_full_width(figure, config.frame_height*0.52); to_edge(UP, buff=MARGIN)
+- fit_figure_full_width(figure, config.frame_height*FIGURE_RATIO); to_edge(UP, buff=TOP_BUFF); center_x(figure)
 - CẤM figure.animate.shift(UP*2) — gây hình nhỏ + viền đen
 
-【GIAI ĐOẠN 3 — solution_steps: HÌNH TRÊN → CHỮ DƯỚI】
-- new_line.next_to(figure, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT); font 28–32
+【GIAI ĐOẠN 3 — solution_steps: HÌNH TRÊN → CHỮ DƯỚI, CANH GIỮA】
+- new_line.next_to(figure, DOWN, buff=0.08); center_x(new_line); font 28–32
 - MathTex scale 1.0; CẤM panel.scale(0.38)
 
-【GIAI ĐOẠN 4 — page_break】MAX_LINES_PER_PAGE=4; bottom_limit=-frame_height/2+MARGIN
+【GIAI ĐOẠN 4 — page_break】MAX_LINES_PER_PAGE=4; bottom_limit=-frame_height/2+BOTTOM_BUFF
 `
 
 const GEMINI_SHORTS_TQH_JSON_GUIDE = `
@@ -184,13 +188,16 @@ const GEMINI_SHORTS_TQH_JSON_GUIDE = `
   "video_format": "shorts",
   "layout": {
     "mode": "shorts_tqh_fullframe",
-    "margin": 0.18,
-    "safe_width": "config.frame_width - 2*margin",
+    "margin": 0.08,
+    "top_buff": 0.05,
+    "bottom_buff": 0.05,
+    "figure_ratio": 0.58,
+    "text_align": "center",
     "max_lines_per_page": 4,
-    "problem_layout": "text_top_figure_below",
-    "solution_layout": "figure_top_text_below",
-    "figure_initial": "next_to(problem_block,DOWN) + scale_to_fit_width(SAFE_W)",
-    "figure_after_transition": "to_edge(UP) + scale_to_fit_width(SAFE_W) + height 52% frame"
+    "problem_layout": "text_top_figure_below_center",
+    "solution_layout": "figure_top_text_below_center",
+    "figure_initial": "next_to(problem_block,DOWN) + scale_to_fit_width(SAFE_W) + center_x",
+    "figure_after_transition": "to_edge(UP, buff=TOP_BUFF) + scale_to_fit_width(SAFE_W) + FIGURE_RATIO + center_x"
   },
   ...
 }
@@ -202,10 +209,16 @@ from manim import *
 
 config.pixel_width = 1080
 config.pixel_height = 1920
-MARGIN = 0.12
+TOP_BUFF = 0.05
+BOTTOM_BUFF = 0.05
+MARGIN = 0.08
+FIGURE_RATIO = 0.58
 SAFE_W = config.frame_width - 2 * MARGIN
-LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
 MAX_LINES_PER_PAGE = 4
+
+def center_x(mob):
+    mob.set_x(0)
+    return mob
 
 def vn(s, size=30, color=None):
     return Text(s, font_size=size, font="Arial", color=color or "#FFFFFF", disable_ligatures=True)
@@ -218,21 +231,21 @@ def fit_figure_full_width(fig, max_h):
 class TenBaiScene(Scene):
     def construct(self):
         self.camera.background_color = "#0d1117"
-        # --- Giai đoạn 1: đề trên, hình dưới (Venn/hình học đều dùng fit_figure_full_width) ---
-        problem_block = VGroup(...).to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
+        # --- Giai đoạn 1: đề trên, hình dưới (canh giữa) ---
+        problem_block = VGroup(...).to_edge(UP, buff=TOP_BUFF); center_x(problem_block)
         figure = VGroup(...)  # Venn hoặc hình học
-        avail_h = config.frame_height / 2 - problem_block.height - 0.3
+        avail_h = config.frame_height / 2 - problem_block.height - 0.2
         fit_figure_full_width(figure, avail_h)
-        figure.next_to(problem_block, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
-        # --- Giai đoạn 2: ẩn đề, hình phóng lên ---
+        figure.next_to(problem_block, DOWN, buff=0.1); center_x(figure)
+        # --- Giai đoạn 2: ẩn đề, hình phóng lên sát mép trên ---
         self.play(FadeOut(problem_block))
-        fit_figure_full_width(figure, config.frame_height * 0.52)
-        figure.to_edge(UP, buff=MARGIN).align_to(LEFT_EDGE, LEFT)
-        # --- Giai đoạn 3: lời giải DƯỚI hình, canh trái full SAFE_W ---
+        fit_figure_full_width(figure, config.frame_height * FIGURE_RATIO)
+        figure.to_edge(UP, buff=TOP_BUFF); center_x(figure)
+        # --- Giai đoạn 3: lời giải DƯỚI hình, CANH GIỮA ---
         solution_stack = VGroup()
-        new_line = vn("...", 30).next_to(figure, DOWN, buff=0.15).align_to(LEFT_EDGE, LEFT)
+        new_line = vn("...", 30).next_to(figure, DOWN, buff=0.08); center_x(new_line)
 
-CẤM: move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), figure nhỏ giữa/trái với viền đen phải.
+CẤM: align_to(LEFT_EDGE, LEFT), move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), TOP_BUFF>0.12.
 `
 
 const GEMINI_ANTI_PATTERNS = `
@@ -249,20 +262,22 @@ const GEMINI_ANTI_PATTERNS = `
 10. page_break FadeOut cả figure → SAI
 11. Label("A") → vn("A", 26)
 12. Dump cả lời giải một lúc
+13. align_to(LEFT_EDGE, LEFT) cho đề/lời giải Shorts → SAI; dùng center_x()
+14. TOP_BUFF > 0.12 hoặc FIGURE_RATIO < 0.52 → viền đen trên/dưới quá lớn
 `
 
 const GEMINI_ACTION_MAP = `
 === ÁNH XẠ actions → CODE (shorts full-frame) ===
 fade_out_problem → FadeOut(problem_block)
-shift_figure_up → fit_figure_full_width + figure.to_edge(UP).align_to(LEFT_EDGE, LEFT)
-write_line → next_to(figure/solution_stack, DOWN).align_to(LEFT_EDGE, LEFT); font 28+
+shift_figure_up → fit_figure_full_width + figure.to_edge(UP, buff=TOP_BUFF) + center_x(figure)
+write_line → next_to(figure/solution_stack, DOWN, buff=0.08) + center_x(); font 28+
 `
 
 const GEMINI_SELF_CHECK = `
 === TỰ KIỂM TRA ===
-□ config 1080×1920 + SAFE_W + LEFT_EDGE?
-□ Đề trên / hình dưới (giai đoạn 1); hình trên / chữ dưới (lời giải)?
-□ scale_to_fit_width(SAFE_W) — không viền đen hai bên?
+□ config 1080×1920 + SAFE_W + TOP_BUFF + FIGURE_RATIO?
+□ Đề/hình/lời giải đều center_x — không canh trái?
+□ scale_to_fit_width(SAFE_W) — không viền đen trên/dưới/hai bên?
 □ Font ≥28, không scale(0.38)?
 □ Không shift(UP*2) mù?
 `
@@ -272,10 +287,16 @@ const GEMINI_CODE_FILE_HEADER = `
 from manim import *
 config.pixel_width = 1080
 config.pixel_height = 1920
-MARGIN = 0.18
+TOP_BUFF = 0.05
+BOTTOM_BUFF = 0.05
+MARGIN = 0.08
+FIGURE_RATIO = 0.58
 SAFE_W = config.frame_width - 2 * MARGIN
-LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
 MAX_LINES_PER_PAGE = 4
+
+def center_x(mob):
+    mob.set_x(0)
+    return mob
 
 def vn(text, size=28, color=None):
     return Text(text, font="Arial", font_size=size,
@@ -365,12 +386,12 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
   const local = mode === 'local_latex'
 
   const shortsCodeRules = videoFormat === 'shorts'
-    ? `- SHORTS 9:16 FULL-FRAME — BẮT BUỘC (không viền đen):
+    ? `- SHORTS 9:16 FULL-FRAME — BẮT BUỘC (không viền đen trên/dưới):
   • config.pixel_width=1080, pixel_height=1920 ở đầu file
-  • MARGIN=0.12, SAFE_W, LEFT_EDGE, fit_figure_full_width()
-  • Đề trên → hình dưới (fit SAFE_W) → FadeOut đề → hình to_edge(UP) → chữ dưới hình align LEFT_EDGE
-  • Venn/tập hợp: figure = VGroup(các vòng); fit_figure_full_width — CẤM hình nhỏ bên trái
-  • CẤM: move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), font≤24
+  • TOP_BUFF=0.05, BOTTOM_BUFF=0.05, FIGURE_RATIO=0.58, SAFE_W, center_x(), fit_figure_full_width()
+  • Đề trên → hình dưới (fit SAFE_W, center_x) → FadeOut đề → hình to_edge(UP, buff=TOP_BUFF) → chữ dưới hình CANH GIỮA (center_x)
+  • Venn/tập hợp: figure = VGroup(các vòng); fit_figure_full_width + center_x — CẤM hình nhỏ bên trái
+  • CẤM: align_to(LEFT_EDGE, LEFT), move_to(LEFT*2.8), to_edge(RIGHT), scale(0.38), font≤24, TOP_BUFF>0.12
 - Bám skeleton + file mẫu trong repo:
   • Hình học: backend/examples/style_shorts_tqh_geometry.py
   • Venn/tập hợp: backend/examples/style_shorts_venn_sets.py

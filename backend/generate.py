@@ -262,8 +262,11 @@ Trả về ĐÚNG 1 JSON:
   "layout": {{
     "mode": "shorts_tqh_geometry",
     "max_lines_per_page": 4,
-    "figure_initial": "next_to(problem_block,DOWN) + scale_to_fit_width(SAFE_W)",
-    "figure_after_transition": "to_edge(UP) + scale_to_fit_width(SAFE_W) + height 52% frame",
+    "figure_initial": "next_to(problem_block,DOWN) + scale_to_fit_width(SAFE_W) + center_x",
+    "figure_after_transition": "to_edge(UP, buff=TOP_BUFF) + scale_to_fit_width(SAFE_W) + FIGURE_RATIO + center_x",
+    "text_align": "center",
+    "top_buff": 0.05,
+    "figure_ratio": 0.58,
     "shorts_single_frame": true
   }},
   "beats": [
@@ -316,8 +319,8 @@ class TenClassScene(Scene):
         # Mỗi beat: comment # phase + animation + self.wait(≥0.8)
 
 === FORMAT ===
-- video_format "shorts" (MẶC ĐỊNH): full-frame TQH — đề trên/hình dưới → FadeOut đề → hình to_edge(UP) → chữ dưới hình
-  scale_to_fit_width(SAFE_W); MARGIN=0.12; font≥30; MAX_LINES_PER_PAGE=4
+- video_format "shorts" (MẶC ĐỊNH): full-frame TQH — đề trên/hình dưới → FadeOut đề → hình to_edge(UP) → chữ dưới hình CANH GIỮA (center_x)
+  scale_to_fit_width(SAFE_W); TOP_BUFF=0.05; FIGURE_RATIO=0.58; font≥30; MAX_LINES_PER_PAGE=4
   CẤM landscape: LEFT*2.8, to_edge(RIGHT), scale(0.38)
 """
     + SHORTS_GEMINI_MANDATORY

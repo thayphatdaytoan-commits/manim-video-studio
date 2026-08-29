@@ -11,32 +11,48 @@ Không nhảy thẳng sang code khi chưa có kịch bản JSON.
 Đầu file BẮT BUỘC:
   config.pixel_width = 1080
   config.pixel_height = 1920
-  MARGIN = 0.12
+  TOP_BUFF = 0.05
+  BOTTOM_BUFF = 0.05
+  MARGIN = 0.08
   SAFE_W = config.frame_width - 2 * MARGIN
-  LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
+  FIGURE_RATIO = 0.58
   MAX_LINES_PER_PAGE = 4
 
 Hàm bắt buộc:
+  def center_x(mob):
+      mob.set_x(0)
+      return mob
   def vn(s, size=30): return Text(s, font="Arial", font_size=size, disable_ligatures=True, color="#FFFFFF")
   def fit_figure_full_width(fig, max_h):
       fig.scale_to_fit_width(SAFE_W)
       if fig.height > max_h: fig.scale_to_fit_height(max_h)
       return fig
 
+CANH GIỮA (BẮT BUỘC — không canh trái):
+  - Mọi đề, lời giải, kết luận: sau next_to → center_x(mob)
+  - VGroup.arrange(DOWN, aligned_edge=ORIGIN) — KHÔNG aligned_edge=LEFT
+  - Hình Venn/hình học: center_x(figure) sau đặt vị trí
+  - CẤM: align_to(LEFT_EDGE, LEFT) cho đề và lời giải
+
 Luồng TQH (hình học, Venn, đồ thị đều dùng):
-  1) problem_and_figure: đề CHỮ TRÊN → hình DƯỚI (fit_figure_full_width + next_to đề)
-  2) transition: FadeOut(problem_block) → fit_figure_full_width → figure.to_edge(UP).align_to(LEFT_EDGE, LEFT)
-  3) solution_steps: 1 dòng/beat, next_to(figure, DOWN).align_to(LEFT_EDGE, LEFT), font 28–32
+  1) problem_and_figure: đề TRÊN (center_x) → hình DƯỚI (fit_figure_full_width + center_x)
+  2) transition: FadeOut(problem_block) → fit_figure_full_width(FIGURE_RATIO) → to_edge(UP, buff=TOP_BUFF) → center_x(figure)
+  3) solution_steps: 1 dòng/beat, next_to(figure, DOWN, buff=0.08) → center_x; font 28–32
   4) page_break: sau 4 dòng → FadeOut(solution_stack), GIỮ figure
 
-VENN / TẬP HỢP:
-  figure = VGroup(các Circle + nhãn); LUÔN fit_figure_full_width(SAFE_W)
-  Công thức: MathTex(r"n(T \cup V \cup A) = ...") — scale 1.0
-  CẤM: hình nhỏ bên trái, khoảng trống lớn bên phải
+BỚT VIỀN ĐEN TRÊN/DƯỚI:
+  - TOP_BUFF và BOTTOM_BUFF ≤ 0.06 (không dùng 0.12–0.18)
+  - FIGURE_RATIO = 0.58 (hình chiếm ~58% chiều cao khung sau ẩn đề)
+  - buff giữa hình và chữ = 0.08 (không 0.15–0.2)
 
-=== CẤM TUYỆT ĐỐI (gây viền đen / hình nhỏ) ===
+VENN / TẬP HỢP:
+  figure = VGroup(các Circle + nhãn); LUÔN fit_figure_full_width + center_x
+  Công thức: MathTex(r"n(T \cup V \cup A) = ...") — scale 1.0, canh GIỮA
+
+=== CẤM TUYỆT ĐỐI (gây viền đen / hình nhỏ / chữ lệch trái) ===
+- align_to(LEFT_EDGE, LEFT) cho đề/lời giải Shorts
 - move_to(LEFT * 2.8), to_edge(RIGHT), panel.scale(0.38) — chỉ dùng cho landscape
-- scale_to_fit_height(4.0) không kèm scale_to_fit_width(SAFE_W)
+- TOP_BUFF > 0.12 hoặc FIGURE_RATIO < 0.52 — viền đen trên/dưới quá lớn
 - figure.animate.shift(UP*2) không phóng to
 - move_to(DOWN*0.8), font_size ≤ 24
 - Tex() — CẤM; chỉ MathTex(r"...") cho công thức
@@ -62,7 +78,7 @@ Bước 1: chỉ JSON thuần, không markdown.
 Bước 2–3: chỉ ```python ... ``` — class Scene, self.wait(≥0.8) mỗi beat.
 
 === TỰ KIỂM TRA TRƯỚC KHI TRẢ LỜI ===
-□ config 1080×1920?
-□ fit_figure_full_width(SAFE_W)?
+□ config 1080×1920 + TOP_BUFF + FIGURE_RATIO?
+□ fit_figure_full_width(SAFE_W) + center_x cho đề/hình/chữ?
 □ Không layout landscape khi shorts?
 □ Font ≥ 28?

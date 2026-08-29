@@ -72,7 +72,7 @@ manim -pq backend/examples/style_shorts_venn_sets.py ShortsVennSetsDemo
 
 | Lỗi | Cách nhắc Gem (Bước 3) |
 |-----|-------------------------|
-| Viền đen, hình nhỏ bên trái | "Full-frame Shorts: fit_figure_full_width(SAFE_W), CẤM LEFT*2.8" |
+| Viền đen trên/dưới, chữ lệch trái | TOP_BUFF lớn / align LEFT | "center_x() cho đề+lời giải; TOP_BUFF=0.05; FIGURE_RATIO=0.58" |
 | Ô vuông thay chữ Việt | "CẤM Tex; tiếng Việt dùng vn(), công thức MathTex(r'...')" |
 | Lời giải hiện một lúc | "Tách từng dòng solution_steps + self.wait(0.8)" |
 

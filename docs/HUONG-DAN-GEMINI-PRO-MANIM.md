@@ -40,19 +40,25 @@ Khi `video_format: "shorts"` — **không để viền đen / hình chữ nhỏ 
 ```python
 config.pixel_width = 1080
 config.pixel_height = 1920
-MARGIN = 0.18
-SAFE_W = config.frame_width - 2 * MARGIN   # ~4.1
-LEFT_EDGE = LEFT * (config.frame_width / 2 - MARGIN)
+TOP_BUFF = 0.05
+BOTTOM_BUFF = 0.05
+MARGIN = 0.08
+SAFE_W = config.frame_width - 2 * MARGIN   # ~4.34
+FIGURE_RATIO = 0.58
+
+def center_x(mob):
+    mob.set_x(0)
+    return mob
 ```
 
 | Giai đoạn | Bố cục | Gemini phải làm |
 |-----------|--------|-----------------|
-| 1 `problem_and_figure` | **Chữ đề TRÊN → hình DƯỚI** | `problem_block.to_edge(UP)`; `figure.next_to(problem_block, DOWN)` + `scale_to_fit_width(SAFE_W)` |
-| 2 `transition_hide_problem` | Ẩn đề, hình **phóng to mép trên** | `FadeOut` đề → `fit_figure_full_width` + `to_edge(UP)` — **CẤM** `shift(UP*2)` |
-| 3 `solution_steps` | **Hình TRÊN → chữ DƯỚI** | `next_to(figure, DOWN)`, font **28–32**, `align_to(LEFT_EDGE, LEFT)` |
+| 1 `problem_and_figure` | **Chữ đề TRÊN → hình DƯỚI** | `problem_block.to_edge(UP, buff=TOP_BUFF)` + `center_x`; `figure.next_to(problem_block, DOWN)` + `scale_to_fit_width(SAFE_W)` + `center_x` |
+| 2 `transition_hide_problem` | Ẩn đề, hình **phóng to sát mép trên** | `FadeOut` đề → `fit_figure_full_width(FIGURE_RATIO)` + `to_edge(UP, buff=TOP_BUFF)` + `center_x` — **CẤM** `shift(UP*2)` |
+| 3 `solution_steps` | **Hình TRÊN → chữ DƯỚI, CANH GIỮA** | `next_to(figure, DOWN, buff=0.08)` + `center_x(dòng)`, font **28–32** |
 | 4 `page_break` | Hết chỗ chữ | Sau 4 dòng → xóa chữ, **giữ hình** |
 
-**CẤM:** `move_to(DOWN*0.8)`, `scale_to_fit_height(3.6)` không kèm `SAFE_W`, `panel.scale(0.38)`, font≤24.
+**CẤM:** `align_to(LEFT_EDGE, LEFT)` cho đề/lời giải; `TOP_BUFF > 0.12`; `FIGURE_RATIO < 0.52`.
 
 Mẫu code:
 - Hình học: `backend/examples/style_shorts_tqh_geometry.py`
