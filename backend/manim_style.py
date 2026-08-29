@@ -72,6 +72,24 @@ CODE KHUNG:
   # solution: next_to(figure, DOWN, buff=0.35)
 """
 
+GEMINI_SHORTS_TQH_PROMPT = (
+    SHORTS_TQH_LAYOUT_RULES
+    + """
+
+=== GEMINI — KỊCH BẢN JSON (video_format=shorts) ===
+beats BẮT BUỘC: problem_and_figure → transition_hide_problem → solution_steps (1 dòng/beat)
+→ page_break (mỗi 4 dòng) → conclusion.
+Mỗi solution_steps: text_lines HOẶC latex_lines + indicate_targets trên hình.
+
+=== GEMINI — CODE PYTHON (video_format=shorts) ===
+1. problem_block.to_edge(UP) + figure.move_to(DOWN*0.8) — hiện CÙNG LÚC
+2. FadeOut(problem_block); figure.animate.shift(UP*2.0)
+3. Vòng lặp: Write 1 dòng + Indicate; if len(stack)>=4: FadeOut(stack)
+Mẫu: backend/examples/style_shorts_tqh_geometry.py
+CẤM Tex(). CẤM layout landscape khi shorts.
+"""
+)
+
 VIDEO_FORMATS: dict[str, dict[str, str | int | list[str]]] = {
     "shorts": {
         "aspect": "9:16",

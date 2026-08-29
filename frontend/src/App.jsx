@@ -116,11 +116,91 @@ Tham khảo: backend/examples/style_shorts_tqh_geometry.py
 
 const SHORTS_TQH_LAYOUT_RULES = `
 === SHORTS 9:16 — HÌNH HỌC TQH (MẶC ĐỊNH) ===
-- problem_block.to_edge(UP); figure.scale_to_fit_height(3.6).move_to(DOWN*0.8)
-- FadeOut(problem_block) → figure.animate.shift(UP*2.0)
-- solution_stack dưới hình; 1 dòng/animation + Indicate trên hình
-- MAX_LINES_PER_PAGE=4 → FadeOut(stack), giữ hình, tiếp tục
-- Render: 1080×1920 hoặc manim -pq
+Render: config.pixel_width=1080, pixel_height=1920 (hoặc manim -pq).
+
+【GIAI ĐOẠN 1 — problem_and_figure】ĐỀ + HÌNH CÙNG LÚC:
+- problem_block.to_edge(UP, buff=0.3) — tối đa 3–4 dòng đề, font 24–28
+- figure.scale_to_fit_height(3.6).move_to(DOWN * 0.8) — dưới đề
+- Create hình tuần tự (đường tròn → điểm → cạnh) TRONG beat này
+- KHÔNG hiện lời giải ở giai đoạn này
+
+【GIAI ĐOẠN 2 — transition_hide_problem】ẨN ĐỀ, ĐẨY HÌNH LÊN:
+- self.play(FadeOut(problem_block))
+- self.play(figure.animate.shift(UP * 2.0))
+- GIỮ figure — không FadeOut hình
+
+【GIAI ĐOẠN 3 — solution_steps】TỪNG DÒNG + HIỆU ỨNG HÌNH:
+- solution_stack = VGroup() xếp DOWN dưới figure (buff≈0.35)
+- MỖI bước lời giải = 1 dòng (1 text_line hoặc 1 latex_line) + 1 animation
+- Kèm Indicate(cạnh/góc) hoặc RightAngle/Angle vàng trên hình
+- self.wait(0.8) sau mỗi dòng
+
+【GIAI ĐOẠN 4 — page_break】HẾT KHUNG:
+- MAX_LINES_PER_PAGE = 4
+- Khi len(solution_stack) >= 4 HOẶC stack.get_bottom().y < -3.5:
+  FadeOut(solution_stack) → solution_stack = VGroup() → tiếp dòng tiếp theo
+- KHÔNG xóa/reset figure
+
+【Kết luận】1 dòng + SurroundingRectangle vàng
+`
+
+const GEMINI_SHORTS_TQH_JSON_GUIDE = `
+=== KỊCH BẢN JSON — SHORTS TQH (BẮT BUỘC KHI video_format="shorts") ===
+{
+  "video_format": "shorts",
+  "layout": {
+    "mode": "shorts_tqh_geometry",
+    "max_lines_per_page": 4,
+    "figure_initial": "DOWN*0.8 scale 3.6",
+    "figure_after_transition": "shift UP*2.0"
+  },
+  "beats": [
+    {"phase": "title", "text_lines": ["Bài toán hình học"], "actions": ["write_text"]},
+    {"phase": "problem_and_figure", "text_lines": ["Cho đường tròn...", "Chứng minh..."],
+     "actions": ["write_problem", "create_figure"], "figure_targets": ["circle","A","B","C"]},
+    {"phase": "transition_hide_problem", "actions": ["fade_out_problem", "shift_figure_up"]},
+    {"phase": "solution_steps", "text_lines": ["Ta có AB là đường kính."], "latex_lines": [],
+     "actions": ["write_line", "indicate:AB"], "indicate_targets": ["AB"]},
+    {"phase": "solution_steps", "text_lines": [], "latex_lines": ["\\\\Rightarrow \\\\angle ACB = 90^\\\\circ"],
+     "actions": ["write_line", "right_angle:ACB"]},
+    {"phase": "page_break", "actions": ["fade_out_solution_stack"]},
+    {"phase": "conclusion", "text_lines": ["Vậy góc ACB vuông. ĐPCM."], "actions": ["surround_rect"]}
+  ]
+}
+QUY TẮC JSON:
+- Mỗi dòng lời giải = 1 beat phase=solution_steps (1 text_line HOẶC 1 latex_line)
+- latex_lines: LaTeX thuần, KHÔNG bọc $, KHÔNG tiếng Việt
+- actions ghi rõ indicate_targets / right_angle cho hiệu ứng hình
+- Chèn page_break sau mỗi 4 dòng solution_steps
+`
+
+const GEMINI_SHORTS_TQH_CODE_SKELETON = `
+=== CODE PYTHON — SHORTS TQH (BẮT BUỘC BÁM KHUNG) ===
+MAX_LINES_PER_PAGE = 4
+
+# Giai đoạn 1: đề + hình
+problem_block.to_edge(UP, buff=0.3)
+figure.scale_to_fit_height(3.6).move_to(DOWN * 0.8)
+self.play(Write(problem_block), Create(...))  # đề và hình cùng lúc
+
+# Giai đoạn 2: ẩn đề, đẩy hình
+self.play(FadeOut(problem_block))
+self.play(figure.animate.shift(UP * 2.0))
+
+# Giai đoạn 3–4: lời giải từng dòng
+solution_stack = VGroup()
+stack_anchor = figure.get_bottom() + DOWN * 0.45
+for each step in storyboard.solution_steps:
+    if len(solution_stack) >= MAX_LINES_PER_PAGE:
+        self.play(FadeOut(solution_stack))
+        solution_stack = VGroup()
+    new_line = vn(...) hoặc MathTex(r"...")
+    self.play(Write(new_line), Indicate(target_on_figure))
+    solution_stack.add(new_line)
+    self.wait(0.8)
+
+Tham khảo file mẫu: backend/examples/style_shorts_tqh_geometry.py
+CẤM Tex(). CẤM landscape layout (hình trái/panel phải) khi video_format=shorts.
 `
 
 function layoutRulesForFormat(videoFormat) {
@@ -142,9 +222,13 @@ function buildGeminiProStoryboardPrompt(problem, solution, videoFormat = 'shorts
   return `Bạn là đạo diễn video Toán Manim CE (Math-To-Manim).
 Nhiệm vụ BƯỚC 1: CHỈ viết KỊCH BẢN JSON — CHƯA viết code Python.
 
+⚠️ MẶC ĐỊNH: video_format = "${videoFormat === 'shorts' ? 'shorts' : 'landscape'}"
+${videoFormat === 'shorts' ? 'HÌNH HỌC → BẮT BUỘC luồng TQH shorts (đề+hình → ẩn đề → lời giải từng dòng + page_break).' : ''}
+
 ĐỊNH DẠNG: ${fmt}
 
 ${layoutRulesForFormat(videoFormat)}
+${videoFormat === 'shorts' ? GEMINI_SHORTS_TQH_JSON_GUIDE : ''}
 
 BEAT_ORDER: ${beatOrder}
 STYLE_VN: nền #0d1117; điểm #8b1a1a; cạnh #1e40af; tròn #3d6b2f; highlight #FFD700
@@ -152,11 +236,12 @@ STYLE_VN: nền #0d1117; điểm #8b1a1a; cạnh #1e40af; tròn #3d6b2f; highlig
 ${CHANNEL_STYLE_HINT}
 
 Trả về ĐÚNG 1 JSON (không markdown) gồm:
-- scene_name, title, video_format
-- layout: { figure_area, text_area, title_zone, safe_margins }
+- scene_name, title, video_format ("${videoFormat}")
+- layout: { mode, max_lines_per_page (shorts=4), figure_initial, figure_after_transition }
 - figure_objects (tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5])
-- beats[]: mỗi beat có phase, comment_vi, text_lines (≤2 dòng), latex_lines (công thức LaTeX thuần), actions, camera_hint
-- Ghi rõ vùng title / figure / panel để code không chồng chéo
+- beats[]: phase, comment_vi, text_lines (shorts: 1 dòng/beat ở solution_steps),
+  latex_lines, actions, indicate_targets, figure_targets
+${videoFormat === 'shorts' ? '- BẮT BUỘC có beats: problem_and_figure, transition_hide_problem, solution_steps, page_break' : ''}
 
 OUTPUT: chỉ JSON. KHÔNG code Python.
 
@@ -174,19 +259,29 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
   const sb = (storyboard || '').trim() || '(dán kịch bản JSON từ Bước 1 vào đây)'
   const local = mode === 'local_latex'
 
+  const shortsCodeRules = videoFormat === 'shorts'
+    ? `- SHORTS TQH: problem_and_figure → FadeOut đề → figure.shift(UP*2) → solution từng dòng + page_break
+- Bám GEMINI_SHORTS_TQH_CODE_SKELETON; tham khảo style_shorts_tqh_geometry.py
+${GEMINI_SHORTS_TQH_CODE_SKELETON}`
+    : ''
+
   const constraints = local
     ? `RÀNG BUỘC CODE (Local + LaTeX):
 - Bám ĐÚNG kịch bản JSON — không đổi thứ tự beat trừ khi JSON ghi khác
+- video_format trong JSON: ${videoFormat}
 - Tiếng Việt: Text(..., font="Arial", disable_ligatures=True)
 - Công thức: MathTex(r"...") — CẤM Tex() hoàn toàn
 - latex_lines trong JSON → MathTex(r"..."); text_lines → Text/vn()
 - class Scene; self.camera.background_color = "#0d1117"
+${shortsCodeRules}
 ${MATH_LATEX_RULES}
 ${layoutRulesForFormat(videoFormat)}
 `
     : `RÀNG BUỘC CODE (Render Free):
 - Bám kịch bản JSON; chỉ Text/MarkupText, không MathTex
-${LAYOUT_SAFE_RULES}`
+- video_format: ${videoFormat}
+${shortsCodeRules}
+${layoutRulesForFormat(videoFormat)}`
 
   return `Bạn là lập trình viên Manim CE.
 Nhiệm vụ BƯỚC 2: chuyển KỊCH BẢN JSON thành 1 file Python (1 class Scene).
@@ -213,15 +308,16 @@ function buildGeminiProRevisePrompt(problem, solution, storyboard, code, revisio
   const local = mode === 'local_latex'
 
   return `Bạn là lập trình viên Manim CE.
-Nhiệm vụ BƯỚC 3 (SỬA): người dùng muốn chỉnh KỊCH BẢN / bố cục một chút → cập nhật code cho khớp.
+Nhiệm vụ BƯỚC 3 (SỬA): người dùng muốn chỉnh KỊCH BẢN / bố cục → cập nhật code cho khớp.
 
 QUY TẮC:
 1. Đọc YÊU CẦU SỬA và áp dụng vào kịch bản + code
 2. ${local ? 'Giữ font="Arial" + MathTex(r"..."); CẤM Tex()' : 'Giữ Text/MarkupText'}
 3. ${local ? MATH_LATEX_RULES : ''}
 4. ${layoutRulesForFormat(videoFormat)}
-5. Trả về TOÀN BỘ file Python đã sửa trong \`\`\`python ... \`\`\`
-6. Nếu kịch bản đổi nhiều: trả thêm JSON kịch bản mới TRƯỚC khối python (trong cùng câu trả lời)
+5. ${videoFormat === 'shorts' ? 'GIỮ luồng TQH: đề+hình → ẩn đề → figure lên → lời giải từng dòng → page_break mỗi 4 dòng. KHÔNG đổi sang landscape.' : 'Giữ layout landscape hình trái / panel phải.'}
+6. Trả về TOÀN BỘ file Python đã sửa trong \`\`\`python ... \`\`\`
+7. Nếu kịch bản đổi nhiều: trả thêm JSON kịch bản mới TRƯỚC khối python
 
 YÊU CẦU SỬA CỦA NGƯỜI DÙNG:
 ${notes}
@@ -2059,7 +2155,8 @@ export default function App() {
             {showGeminiWorkflow && (
               <>
             <p className="step-hint step-hint-tight">
-              Không khuyến nghị cho code chính — dùng khi không có Cursor. Luồng 3 bước: kịch bản → code → sửa.
+              Không khuyến nghị cho code chính — dùng khi không có Cursor.
+              Mặc định <strong>Shorts 9:16 TQH</strong>: đề+hình → ẩn đề → lời giải từng dòng.
             </p>
             <ol className="ce-checklist pro-steps">
               <li>

@@ -31,7 +31,23 @@ Bạn là **lập trình viên Manim Community Edition (ManimCE)** chuyên video
 
 ---
 
-## 1c. Canh khung — hình không ra ngoài, chữ không đè nhau
+## 1f. Mặc định Shorts 9:16 — luồng TQH hình học (Gemini BẮT BUỘC)
+
+Khi `video_format: "shorts"` (mặc định trên Studio):
+
+| Giai đoạn | Beat | Gemini phải làm |
+|-----------|------|-----------------|
+| 1 | `problem_and_figure` | Đề + hình **cùng lúc** (đề trên, hình `DOWN*0.8`) |
+| 2 | `transition_hide_problem` | `FadeOut` đề → `figure.shift(UP*2)` |
+| 3 | `solution_steps` | **1 dòng** lời giải + `Indicate`/`RightAngle` trên hình |
+| 4 | `page_break` | Sau **4 dòng** → xóa chữ, **giữ hình**, tiếp tục |
+| 5 | `conclusion` | Khung vàng |
+
+Mẫu code: `backend/examples/style_shorts_tqh_geometry.py`
+
+---
+
+## 1c. Canh khung — landscape 16:9 (khi chọn Landscape)
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -360,7 +376,44 @@ manim -ql scene.py TenScene     # video thử 480p
 
 ## 11. Prompt ngắn (dán kèm đề mỗi lần)
 
+**Mặc định: Shorts 9:16 TQH hình học**
+
 **Bước 1 — Kịch bản:**
+```
+CHỈ trả JSON. video_format: "shorts"
+BEAT_ORDER: problem_and_figure → transition_hide_problem → solution_steps → page_break → conclusion
+- problem_and_figure: đề + hình cùng lúc
+- transition: ẩn đề, shift hình lên UP*2
+- solution_steps: 1 dòng/beat + indicate_targets trên hình
+- page_break: mỗi 4 dòng lời giải
+KHÔNG code Python
+
+ĐỀ: [dán đề]
+LỜI GIẢI: [dán lời giải từng dòng]
+```
+
+**Bước 2 — Code:**
+```
+Chuyển JSON thành 1 file Manim CE (class Scene), video_format=shorts.
+- Text font="Arial" + MathTex(r"...") — CẤM Tex()
+- Đề+hình cùng lúc → FadeOut đề → figure.shift(UP*2)
+- Lời giải từng dòng + Indicate; MAX_LINES_PER_PAGE=4
+- Tham khảo style_shorts_tqh_geometry.py
+Chỉ trả ```python ... ```
+
+KỊCH BẢN: [dán JSON]
+```
+
+**Bước 3 — Sửa:**
+```
+Sửa code shorts TQH — giữ luồng đề+hình → ẩn đề → lời giải từng dòng.
+CẤM đổi sang landscape (hình trái/panel phải).
+Trả toàn bộ ```python ... ```
+
+YÊU CẦU: [ghi chú]
+```
+
+**Landscape 16:9 (nếu chọn):**
 ```
 CHỈ trả JSON kịch bản video Manim (beats, layout, tọa độ hình).
 - title trên, figure trái scale 4.0, panel phải ≤2 dòng/beat

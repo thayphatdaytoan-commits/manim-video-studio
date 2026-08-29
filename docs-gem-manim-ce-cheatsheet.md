@@ -27,7 +27,8 @@
 - Angle, RightAngle, VGroup, ImageMobject
 - SurroundingRectangle, BackgroundRectangle
 - Create, Write, FadeIn, FadeOut, Indicate, ReplacementTransform
-- Layout: figure LEFT, text RIGHT; scale_to_fit_height(5)
+- **Shorts 9:16 TQH (mặc định):** đề+hình → ẩn đề → lời giải từng dòng; page_break/4 dòng
+- Landscape: figure LEFT, text RIGHT; scale_to_fit_height(4.0)
 
 ## Đồng bộ bài giảng
 - Mỗi bước lời giải = 1 khối animation + self.wait()

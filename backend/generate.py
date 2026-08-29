@@ -14,6 +14,7 @@ from manim_style import (
     BEAT_ORDER,
     BEAT_ORDER_SHORTS_TQH_GEOMETRY,
     CHANNEL_STYLE_PROMPT,
+    GEMINI_SHORTS_TQH_PROMPT,
     LAYOUT_SAFE_RULES,
     MATH_LATEX_RULES,
     SHORTS_TQH_LAYOUT_RULES,
@@ -229,6 +230,7 @@ Trả về ĐÚNG 1 JSON:
 14. Mỗi beat solution_steps: text_lines + latex_lines (LaTeX thuần, không $).
 """
     + CHANNEL_STYLE_PROMPT
+    + GEMINI_SHORTS_TQH_PROMPT
     + SHORTS_TQH_LAYOUT_RULES
     + LAYOUT_SAFE_RULES
 )
@@ -268,8 +270,8 @@ class TenClassScene(Scene):
   figure.scale_to_fit_height(3.6).move_to(DOWN*0.8) rồi shift lên; MAX_LINES_PER_PAGE=4
 - video_format "landscape": figure.scale_to_fit_height(4.0).move_to(LEFT*2.8); panel.to_edge(RIGHT, buff=0.4).scale(0.38)
 """
-    + SHORTS_TQH_LAYOUT_RULES
-    + LAYOUT_SAFE_RULES
+    +     GEMINI_SHORTS_TQH_PROMPT,
+    LAYOUT_SAFE_RULES,
     + """
 
 === API ===
