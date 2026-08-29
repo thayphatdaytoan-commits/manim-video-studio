@@ -413,6 +413,16 @@ Trả toàn bộ ```python ... ```
 YÊU CẦU: [ghi chú]
 ```
 
+### Lỗi thường gặp — nhắc Gemini tránh
+
+| Lỗi | Cách sửa trong prompt Bước 3 |
+|-----|------------------------------|
+| Dùng `Tex()` | "CẤM Tex — chỉ MathTex(r'...')" |
+| Layout landscape khi shorts | "GIỮ luồng TQH — không hình trái/panel phải" |
+| Lời giải dump một lúc | "Tách từng dòng + Indicate, page_break mỗi 4 dòng" |
+| Quên ẩn đề | "Thêm FadeOut(problem_block) + figure.shift(UP*2)" |
+| Hình bị cắt | "scale_to_fit_height(3.6), kiểm tra mép" |
+
 **Landscape 16:9 (nếu chọn):**
 ```
 CHỈ trả JSON kịch bản video Manim (beats, layout, tọa độ hình).

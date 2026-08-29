@@ -203,6 +203,64 @@ Tham khảo file mẫu: backend/examples/style_shorts_tqh_geometry.py
 CẤM Tex(). CẤM landscape layout (hình trái/panel phải) khi video_format=shorts.
 `
 
+const GEMINI_ANTI_PATTERNS = `
+=== LỖI GEMINI THƯỜNG GẶP — TUYỆT ĐỐI TRÁNH ===
+1. Tex(...) → CẤM; chỉ MathTex(r"...") cho công thức
+2. Tiếng Việt trong MathTex → ô vuông □; dùng vn() / Text(font="Arial")
+3. shorts mà layout landscape (figure LEFT*2.8 + panel RIGHT) → SAI
+4. problem_and_figure hiện lời giải → SAI (chỉ đề + dựng hình)
+5. Quên FadeOut(problem_block) hoặc figure.animate.shift(UP*2.0)
+6. Gộp 2+ dòng lời giải vào 1 beat → SAI (1 dòng/beat)
+7. page_break FadeOut cả figure → SAI (chỉ FadeOut solution_stack)
+8. Không page_break sau mỗi 4 dòng solution_steps
+9. Label("A") → vn("A", 22).next_to(dot, buff=0.06)
+10. MathTex(r"$x^2$") — không bọc $ trong MathTex
+11. latex_lines trong JSON có tiếng Việt hoặc dấu $
+12. Dump cả lời giải một lúc — phải từng dòng + Indicate/RightAngle
+`
+
+const GEMINI_ACTION_MAP = `
+=== ÁNH XẠ actions → CODE MANIM (shorts TQH) ===
+write_problem → Write(problem_block) / LaggedStart từng dòng đề
+create_figure → Create(circle), FadeIn(dots), Create(cạnh) tuần tự
+fade_out_problem → self.play(FadeOut(problem_block))
+shift_figure_up → self.play(figure.animate.shift(UP * 2.0))
+write_line → Write(new_line) — 1 dòng vn() hoặc MathTex
+indicate:AB → Indicate(segment_AB, color=STYLE_VN["highlight"])
+right_angle:ACB → RightAngle(AC, BC, length=0.22, color=STYLE_VN["highlight"])
+fade_out_solution_stack → FadeOut(solution_stack); solution_stack = VGroup()
+surround_rect → SurroundingRectangle(conclusion, color=STYLE_VN["highlight"])
+`
+
+const GEMINI_SELF_CHECK = `
+=== TỰ KIỂM TRA TRƯỚC KHI TRẢ LỜI ===
+□ video_format đúng ("shorts" mặc định)?
+□ shorts: có problem_and_figure → transition_hide_problem → solution_steps → page_break?
+□ Mỗi solution_steps = 1 text_line HOẶC 1 latex_line?
+□ Bước nói cạnh/góc có indicate_targets?
+□ Code có vn(), STYLE_VN, MAX_LINES_PER_PAGE=4, self.wait(≥0.8)?
+□ Không Tex(), Label(), MovingCameraScene?
+□ Hình ở DOWN*0.8 scale 3.6 → shift UP*2.0 — không tràn mép?
+`
+
+const GEMINI_CODE_FILE_HEADER = `
+=== ĐẦU FILE PYTHON BẮT BUỘC (shorts) ===
+from manim import *
+
+STYLE_VN = {"bg": "#0d1117", "circle": "#3d6b2f", "segment": "#1e40af",
+            "point": "#8b1a1a", "text": "#FFFFFF", "highlight": "#FFD700", "conclusion": "#FF8C00"}
+MAX_LINES_PER_PAGE = 4
+
+def vn(text, size=26, color=None):
+    return Text(text, font="Arial", font_size=size,
+                color=color or STYLE_VN["text"], disable_ligatures=True)
+
+class TenClassScene(Scene):
+    def construct(self):
+        self.camera.background_color = STYLE_VN["bg"]
+        # Mỗi phase: comment # phase: ... + animation + self.wait(≥0.8)
+`
+
 function layoutRulesForFormat(videoFormat) {
   if (videoFormat === 'shorts') return SHORTS_TQH_LAYOUT_RULES
   return LAYOUT_SAFE_RULES
@@ -229,6 +287,8 @@ ${videoFormat === 'shorts' ? 'HÌNH HỌC → BẮT BUỘC luồng TQH shorts (�
 
 ${layoutRulesForFormat(videoFormat)}
 ${videoFormat === 'shorts' ? GEMINI_SHORTS_TQH_JSON_GUIDE : ''}
+${videoFormat === 'shorts' ? GEMINI_ACTION_MAP : ''}
+${GEMINI_ANTI_PATTERNS}
 
 BEAT_ORDER: ${beatOrder}
 STYLE_VN: nền #0d1117; điểm #8b1a1a; cạnh #1e40af; tròn #3d6b2f; highlight #FFD700
@@ -244,6 +304,7 @@ Trả về ĐÚNG 1 JSON (không markdown) gồm:
 ${videoFormat === 'shorts' ? '- BẮT BUỘC có beats: problem_and_figure, transition_hide_problem, solution_steps, page_break' : ''}
 
 OUTPUT: chỉ JSON. KHÔNG code Python.
+${GEMINI_SELF_CHECK}
 
 ĐỀ BÀI:
 ${p}
@@ -262,7 +323,10 @@ function buildGeminiProCodePrompt(problem, solution, storyboard, mode = 'local_l
   const shortsCodeRules = videoFormat === 'shorts'
     ? `- SHORTS TQH: problem_and_figure → FadeOut đề → figure.shift(UP*2) → solution từng dòng + page_break
 - Bám GEMINI_SHORTS_TQH_CODE_SKELETON; tham khảo style_shorts_tqh_geometry.py
-${GEMINI_SHORTS_TQH_CODE_SKELETON}`
+${GEMINI_CODE_FILE_HEADER}
+${GEMINI_SHORTS_TQH_CODE_SKELETON}
+${GEMINI_ACTION_MAP}
+${GEMINI_ANTI_PATTERNS}`
     : ''
 
   const constraints = local
@@ -289,6 +353,7 @@ Nhiệm vụ BƯỚC 2: chuyển KỊCH BẢN JSON thành 1 file Python (1 class
 ${constraints}
 
 OUTPUT: DUY NHẤT khối \`\`\`python ... \`\`\`
+${GEMINI_SELF_CHECK}
 
 ĐỀ (tham khảo):
 ${p}
@@ -318,6 +383,8 @@ QUY TẮC:
 5. ${videoFormat === 'shorts' ? 'GIỮ luồng TQH: đề+hình → ẩn đề → figure lên → lời giải từng dòng → page_break mỗi 4 dòng. KHÔNG đổi sang landscape.' : 'Giữ layout landscape hình trái / panel phải.'}
 6. Trả về TOÀN BỘ file Python đã sửa trong \`\`\`python ... \`\`\`
 7. Nếu kịch bản đổi nhiều: trả thêm JSON kịch bản mới TRƯỚC khối python
+${GEMINI_ANTI_PATTERNS}
+${GEMINI_SELF_CHECK}
 
 YÊU CẦU SỬA CỦA NGƯỜI DÙNG:
 ${notes}

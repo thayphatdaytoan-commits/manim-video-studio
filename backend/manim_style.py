@@ -72,22 +72,77 @@ CODE KHUNG:
   # solution: next_to(figure, DOWN, buff=0.35)
 """
 
+GEMINI_ANTI_PATTERNS = """
+=== LỖI GEMINI THƯỜNG GẶP — TUYỆT ĐỐI TRÁNH ===
+1. Tex(...) cho công thức → CẤM; chỉ MathTex(r"...")
+2. Tiếng Việt / nhãn điểm trong MathTex → ô vuông □; dùng vn() hoặc Text(font="Arial")
+3. shorts mà dùng layout landscape (figure LEFT*2.8 + panel RIGHT) → SAI
+4. problem_and_figure hiện lời giải → SAI (chỉ đề + dựng hình)
+5. Quên FadeOut(problem_block) hoặc quên figure.animate.shift(UP*2.0)
+6. Gộp 2+ dòng lời giải vào 1 beat solution_steps → SAI (1 dòng/beat)
+7. page_break FadeOut cả figure → SAI (chỉ FadeOut solution_stack)
+8. Không chèn page_break sau mỗi 4 dòng solution_steps
+9. Label("A") → dùng vn("A", 22).next_to(dot, buff=0.06)
+10. MathTex(r"$x^2$") — không bọc $ trong MathTex
+11. latex_lines có tiếng Việt hoặc bọc $ trong JSON
+12. Dump toàn bộ lời giải một lúc thay vì từng dòng + Indicate
+"""
+
+GEMINI_SELF_CHECK = """
+=== TỰ KIỂM TRA TRƯỚC KHI TRẢ LỜI ===
+□ video_format đúng ("shorts" mặc định)?
+□ shorts: có beats problem_and_figure → transition_hide_problem → solution_steps → page_break → conclusion?
+□ Mỗi solution_steps = đúng 1 text_line HOẶC 1 latex_line?
+□ Bước nói cạnh/góc có indicate_targets hoặc actions right_angle?
+□ Code có vn(), STYLE_VN, MAX_LINES_PER_PAGE=4, self.wait(≥0.8) mỗi beat?
+□ Không Tex(), Label(), MovingCameraScene, ThreeDScene?
+□ Hình scale_to_fit_height(3.6) ở DOWN*0.8 rồi shift UP*2.0 — không tràn mép?
+"""
+
+GEMINI_ACTION_MAP = """
+=== ÁNH XẠ actions JSON → CODE MANIM (shorts TQH) ===
+| action JSON | Code Manim |
+| write_problem | Write(problem_block) hoặc LaggedStart từng dòng đề |
+| create_figure | Create(circle), FadeIn(dots), Create(segments) tuần tự |
+| fade_out_problem | self.play(FadeOut(problem_block)) |
+| shift_figure_up | self.play(figure.animate.shift(UP * 2.0)) |
+| write_line | Write(new_line) — 1 dòng vn() hoặc MathTex |
+| indicate:AB | Indicate(segment_AB, color=STYLE_VN["highlight"]) |
+| right_angle:ACB | RightAngle(AC, BC, length=0.22, color=STYLE_VN["highlight"]) |
+| fade_out_solution_stack | self.play(FadeOut(solution_stack)); solution_stack = VGroup() |
+| surround_rect | SurroundingRectangle(conclusion, color=STYLE_VN["highlight"]) |
+"""
+
 GEMINI_SHORTS_TQH_PROMPT = (
     SHORTS_TQH_LAYOUT_RULES
+    + GEMINI_ACTION_MAP
+    + GEMINI_ANTI_PATTERNS
     + """
 
 === GEMINI — KỊCH BẢN JSON (video_format=shorts) ===
-beats BẮT BUỘC: problem_and_figure → transition_hide_problem → solution_steps (1 dòng/beat)
-→ page_break (mỗi 4 dòng) → conclusion.
-Mỗi solution_steps: text_lines HOẶC latex_lines + indicate_targets trên hình.
+beats BẮT BUỘC: title → problem_and_figure → transition_hide_problem
+→ solution_steps (1 dòng/beat, lặp nhiều lần)
+→ page_break (sau mỗi 4 dòng solution_steps)
+→ conclusion.
+Mỗi solution_steps: text_lines HOẶC latex_lines (không cả hai dài) + indicate_targets.
+
+Ví dụ beat solution_steps:
+{"phase": "solution_steps", "text_lines": ["Ta có AB là đường kính."],
+ "actions": ["write_line", "indicate:AB"], "indicate_targets": ["AB"]}
+{"phase": "solution_steps", "latex_lines": ["\\\\Rightarrow \\\\angle ACB = 90^\\\\circ"],
+ "actions": ["write_line", "right_angle:ACB"], "indicate_targets": ["ACB"]}
 
 === GEMINI — CODE PYTHON (video_format=shorts) ===
-1. problem_block.to_edge(UP) + figure.move_to(DOWN*0.8) — hiện CÙNG LÚC
-2. FadeOut(problem_block); figure.animate.shift(UP*2.0)
-3. Vòng lặp: Write 1 dòng + Indicate; if len(stack)>=4: FadeOut(stack)
-Mẫu: backend/examples/style_shorts_tqh_geometry.py
+1. Đầu file: from manim import *; STYLE_VN; MAX_LINES_PER_PAGE=4; def vn(...)
+2. problem_block.to_edge(UP) + figure.scale_to_fit_height(3.6).move_to(DOWN*0.8) — CÙNG LÚC
+3. FadeOut(problem_block); figure.animate.shift(UP*2.0)
+4. solution_stack = VGroup(); stack_anchor = figure.get_bottom() + DOWN*0.45
+5. Vòng lặp beats: Write 1 dòng + Indicate/RightAngle; len(stack)>=4 → page_break
+6. Kết: vn("ĐPCM.") + SurroundingRectangle
+Mẫu bắt buộc tham khảo: backend/examples/style_shorts_tqh_geometry.py
 CẤM Tex(). CẤM layout landscape khi shorts.
 """
+    + GEMINI_SELF_CHECK
 )
 
 VIDEO_FORMATS: dict[str, dict[str, str | int | list[str]]] = {

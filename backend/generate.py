@@ -17,7 +17,6 @@ from manim_style import (
     GEMINI_SHORTS_TQH_PROMPT,
     LAYOUT_SAFE_RULES,
     MATH_LATEX_RULES,
-    SHORTS_TQH_LAYOUT_RULES,
     STYLE_VN,
     STYLE_VN_PROMPT,
     VIDEO_FORMATS,
@@ -228,10 +227,33 @@ Trả về ĐÚNG 1 JSON:
 12. Không viết code Manim/Python. Bỏ object GeoGebra đã ẩn.
 13. layout JSON: title_zone, figure_area, text_area, max_lines_per_page (shorts=4).
 14. Mỗi beat solution_steps: text_lines + latex_lines (LaTeX thuần, không $).
+
+=== MẪU JSON KHI video_format="shorts" (THAY layout/beats landscape ở trên) ===
+{{
+  "video_format": "shorts",
+  "layout": {{
+    "mode": "shorts_tqh_geometry",
+    "max_lines_per_page": 4,
+    "figure_initial": "DOWN*0.8 scale 3.6",
+    "figure_after_transition": "shift UP*2.0",
+    "shorts_single_frame": true
+  }},
+  "beats": [
+    {{"phase": "title", "text_lines": ["Bài toán hình học"], "actions": ["write_text"]}},
+    {{"phase": "problem_and_figure", "text_lines": ["Cho đường tròn...", "Chứng minh..."],
+      "actions": ["write_problem", "create_figure"], "figure_targets": ["circle","A","B","C"]}},
+    {{"phase": "transition_hide_problem", "actions": ["fade_out_problem", "shift_figure_up"]}},
+    {{"phase": "solution_steps", "text_lines": ["Ta có AB là đường kính."],
+      "actions": ["write_line", "indicate:AB"], "indicate_targets": ["AB"]}},
+    {{"phase": "solution_steps", "latex_lines": ["\\\\Rightarrow \\\\angle ACB = 90^\\\\circ"],
+      "actions": ["write_line", "right_angle:ACB"]}},
+    {{"phase": "page_break", "actions": ["fade_out_solution_stack"]}},
+    {{"phase": "conclusion", "text_lines": ["Vậy góc ACB vuông. ĐPCM."], "actions": ["surround_rect"]}}
+  ]
+}}
 """
     + CHANNEL_STYLE_PROMPT
     + GEMINI_SHORTS_TQH_PROMPT
-    + SHORTS_TQH_LAYOUT_RULES
     + LAYOUT_SAFE_RULES
 )
 
@@ -270,8 +292,8 @@ class TenClassScene(Scene):
   figure.scale_to_fit_height(3.6).move_to(DOWN*0.8) rồi shift lên; MAX_LINES_PER_PAGE=4
 - video_format "landscape": figure.scale_to_fit_height(4.0).move_to(LEFT*2.8); panel.to_edge(RIGHT, buff=0.4).scale(0.38)
 """
-    +     GEMINI_SHORTS_TQH_PROMPT,
-    LAYOUT_SAFE_RULES,
+    + GEMINI_SHORTS_TQH_PROMPT
+    + LAYOUT_SAFE_RULES
     + """
 
 === API ===
