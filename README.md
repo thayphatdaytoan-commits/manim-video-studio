@@ -82,6 +82,18 @@ git pull origin main
 Kiểm tra phiên bản: `git log -1 --oneline`  
 - `bac187c` trở lên = Cursor Agent (Hướng A) + MathTex rules
 
+### Cài manim-voiceover (giọng khớp từng câu)
+
+**Không** chạy lệnh trong `C:\WINDOWS\System32`. Vào đúng folder repo trước:
+
+```powershell
+cd C:\Users\ADMIN\manim-video-studio
+.\.venv\Scripts\Activate.ps1
+pip install -r backend\requirements.txt
+```
+
+Chi tiết / xử lý lỗi: [docs/HUONG-DAN-MANIM-VOICEOVER.md](docs/HUONG-DAN-MANIM-VOICEOVER.md)
+
 ### Luồng làm video (Hướng A — khuyến nghị)
 
 1. **Studio** (trình duyệt): đề + lời giải, GeoGebra, **Copy brief cho Cursor** (cột 3)

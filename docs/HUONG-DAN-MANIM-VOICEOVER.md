@@ -8,10 +8,66 @@ Plugin chính thức của cộng đồng Manim: [voiceover.manim.community](htt
 
 ## 1. Cài trên máy Windows (một lần)
 
-Mở PowerShell trong thư mục `manim-video-studio`:
+### Lỗi thường gặp
+
+Bạn đang ở `C:\WINDOWS\System32` → lệnh `cd manim-video-studio` **không tìm thấy** folder.
+
+Phải `cd` tới **đúng chỗ đã clone repo**, ví dụ:
+
+`C:\Users\ADMIN\manim-video-studio`
+
+### Bước 1 — Mở đúng thư mục
+
+```powershell
+cd C:\Users\ADMIN\manim-video-studio
+```
+
+Nếu báo *Cannot find path*: tìm folder trên máy:
+
+```powershell
+Get-ChildItem -Path C:\Users\ADMIN -Filter manim-video-studio -Recurse -Directory -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+```
+
+Hoặc mở File Explorer → tìm `manim-video-studio` → trong thanh địa chỉ gõ `powershell` + Enter.
+
+### Bước 2 — Kích hoạt môi trường Python (`.venv`)
+
+```powershell
+cd C:\Users\ADMIN\manim-video-studio
+.\.venv\Scripts\Activate.ps1
+```
+
+Nếu báo *ExecutionPolicy*:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Nếu **chưa có** `.venv` (lần đầu cài Studio):
+
+```powershell
+cd C:\Users\ADMIN\manim-video-studio
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r backend\requirements.txt
+```
+
+(`requirements.txt` đã gồm `manim-voiceover` — bước 3 có thể bỏ qua sau `pip install -r`.)
+
+### Bước 3 — Cài manim-voiceover (nếu chưa có trong requirements)
 
 ```powershell
 pip install "manim-voiceover[gtts]"
+```
+
+Phải thấy `(.venv)` ở đầu dòng PowerShell trước khi chạy `pip`.
+
+### Bước 4 — Cập nhật code + mở Studio
+
+```powershell
+cd C:\Users\ADMIN\manim-video-studio
+git pull
+.\Mo-Manim-Studio.bat
 ```
 
 | Gói cài thêm | Dùng cho |
