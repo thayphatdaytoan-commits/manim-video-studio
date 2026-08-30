@@ -1,6 +1,6 @@
 """Shorts 9:16 — Venn / tập hợp / bao hàm loại trừ — FULL MÀN HÌNH.
 
-Mẫu cho Gemini Pro / Gem: hình Venn phóng full SAFE_W, lời giải canh giữa dưới hình.
+Mẫu cho Gemini Pro / Gem: hình Venn phóng full SAFE_W, khối chữ giữa màn (canh trái bên trong).
 
 Render:
   manim -pq style_shorts_venn_sets.py ShortsVennSetsDemo
@@ -27,6 +27,12 @@ MARGIN = 0.08
 FIGURE_RATIO = 0.58
 MAX_LINES_PER_PAGE = 4
 SAFE_W = config.frame_width - 2 * MARGIN
+TEXT_W = SAFE_W
+
+
+def center_block(mob):
+    mob.set_x(0)
+    return mob
 
 
 def center_x(mob):
@@ -34,14 +40,16 @@ def center_x(mob):
     return mob
 
 
-def vn(text, size=30, color=None):
-    return Text(
-        text,
+def vn(text, size=30, color=None, justify=False):
+    kw = dict(
         font="Arial",
         font_size=size,
         color=color or STYLE_VN["text"],
         disable_ligatures=True,
     )
+    if justify:
+        return Text(text, width=TEXT_W, justify=True, **kw)
+    return Text(text, **kw)
 
 
 def fit_figure_full_width(fig, max_h):
@@ -52,21 +60,25 @@ def fit_figure_full_width(fig, max_h):
 
 
 class ShortsVennSetsDemo(Scene):
-    """Venn 3 tập — đề trên, hình full width canh giữa, lời giải canh giữa dưới hình."""
+    """Venn 3 tập — đề trên, hình full width, khối lời giải giữa màn."""
 
     def construct(self):
         self.camera.background_color = STYLE_VN["bg"]
 
-        # --- Đề (canh giữa) ---
+        # --- Đề (khối giữa màn, canh trái bên trong) ---
         title = vn("Bài toán tập hợp", 30, STYLE_VN["highlight"])
         problem_lines = VGroup(
-            vn("Lớp có 33 HS giỏi ít nhất 1 trong 3 môn: Toán, Văn, Anh.", 28),
+            vn(
+                "Lớp có 33 HS giỏi ít nhất 1 trong 3 môn: Toán, Văn, Anh.",
+                28,
+                justify=True,
+            ),
             vn("Biết |T|=15, |V|=18, |A|=20 và các giao hai tập như hình.", 28),
             vn("Tính số HS giỏi ít nhất 1 môn.", 28, STYLE_VN["highlight"]),
-        ).arrange(DOWN, aligned_edge=ORIGIN, buff=0.08)
-        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=ORIGIN, buff=0.12)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.08)
+        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
         problem_block.to_edge(UP, buff=TOP_BUFF)
-        center_x(problem_block)
+        center_block(problem_block)
 
         # --- Hình Venn (3 vòng) ---
         r = 1.15
@@ -96,7 +108,6 @@ class ShortsVennSetsDemo(Scene):
         self.wait(0.3)
 
         solution_stack = VGroup()
-        bottom_limit = -config.frame_height / 2 + BOTTOM_BUFF
 
         steps = [
             vn("Gọi T, V, A là tập HS giỏi Toán, Văn, Anh.", 28),
@@ -114,14 +125,14 @@ class ShortsVennSetsDemo(Scene):
             if len(solution_stack) == 0:
                 part.next_to(figure, DOWN, buff=0.08)
             else:
-                part.next_to(solution_stack, DOWN, buff=0.08)
-            center_x(part)
+                part.align_to(solution_stack, LEFT).next_to(solution_stack, DOWN, buff=0.08)
 
             self.play(Write(part))
             solution_stack.add(part)
+            center_block(solution_stack)
             self.wait(0.85)
 
         box = SurroundingRectangle(solution_stack[-1], color=STYLE_VN["highlight"], buff=0.08)
-        center_x(box)
+        center_block(box)
         self.play(Create(box))
         self.wait(2.0)

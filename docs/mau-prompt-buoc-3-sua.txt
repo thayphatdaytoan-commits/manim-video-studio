@@ -3,15 +3,15 @@ Nhiệm vụ BƯỚC 3 (SỬA): chỉnh code theo yêu cầu — GIỮ shorts fu
 
 QUY TẮC:
 1. Giữ luồng TQH: đề+hình → ẩn đề → hình to_edge(UP, buff=TOP_BUFF) → lời giải từng dòng → page_break
-2. GIỮ config 1080×1920, TOP_BUFF=0.05, FIGURE_RATIO=0.58, SAFE_W, center_x(), fit_figure_full_width()
-3. Chữ đề và lời giải CANH GIỮA (center_x) — CẤM align_to(LEFT_EDGE, LEFT)
+2. GIỮ config 1080×1920, TOP_BUFF=0.05, FIGURE_RATIO=0.58, SAFE_W, TEXT_W, center_block(), center_x(), fit_figure_full_width()
+3. Khối chữ: center_block + aligned_edge=LEFT (canh trái bên trong, khối nằm giữa màn); đoạn dài: vn(..., justify=True)
 4. CẤM đổi sang landscape (LEFT*2.8, panel RIGHT, scale 0.38)
 5. CẤM Tex() — chỉ MathTex(r"...")
 6. Góc bị cung reflex (>180°): thay Angle bằng interior_angle_at(đỉnh, arm1, arm2)
 7. Trả TOÀN BỘ file trong ```python ... ```
 
 YÊU CẦU SỬA:
-[GHI CHÚ CỦA BẠN — ví dụ: "chữ canh giữa", "bớt khoảng trống trên dưới", "hình Venn to hơn"]
+[GHI CHÚ CỦA BẠN — ví dụ: "khối chữ giữa màn canh trái", "bớt khoảng trống trên dưới", "hình Venn to hơn"]
 
 KỊCH BẢN JSON (nếu có):
 [DÁN JSON]

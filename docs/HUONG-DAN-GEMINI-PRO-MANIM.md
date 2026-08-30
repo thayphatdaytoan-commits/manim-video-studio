@@ -44,7 +44,12 @@ TOP_BUFF = 0.05
 BOTTOM_BUFF = 0.05
 MARGIN = 0.08
 SAFE_W = config.frame_width - 2 * MARGIN   # ~4.34
+TEXT_W = SAFE_W
 FIGURE_RATIO = 0.58
+
+def center_block(mob):
+    mob.set_x(0)
+    return mob
 
 def center_x(mob):
     mob.set_x(0)
@@ -53,12 +58,12 @@ def center_x(mob):
 
 | Giai đoạn | Bố cục | Gemini phải làm |
 |-----------|--------|-----------------|
-| 1 `problem_and_figure` | **Chữ đề TRÊN → hình DƯỚI** | `problem_block.to_edge(UP, buff=TOP_BUFF)` + `center_x`; `figure.next_to(problem_block, DOWN)` + `scale_to_fit_width(SAFE_W)` + `center_x` |
+| 1 `problem_and_figure` | **Chữ đề TRÊN → hình DƯỚI** | `problem_block.arrange(LEFT)` + `center_block`; `figure.next_to(problem_block, DOWN)` + `scale_to_fit_width(SAFE_W)` + `center_x` |
 | 2 `transition_hide_problem` | Ẩn đề, hình **phóng to sát mép trên** | `FadeOut` đề → `fit_figure_full_width(FIGURE_RATIO)` + `to_edge(UP, buff=TOP_BUFF)` + `center_x` — **CẤM** `shift(UP*2)` |
-| 3 `solution_steps` | **Hình TRÊN → chữ DƯỚI, CANH GIỮA** | `next_to(figure, DOWN, buff=0.08)` + `center_x(dòng)`, font **28–32** |
+| 3 `solution_steps` | **Hình TRÊN → khối chữ DƯỚI giữa màn** | `solution_stack` + `center_block`; `aligned_edge=LEFT`; đoạn dài `vn(..., justify=True)`; font **28–32** |
 | 4 `page_break` | Hết chỗ chữ | Sau 4 dòng → xóa chữ, **giữ hình** |
 
-**CẤM:** `align_to(LEFT_EDGE, LEFT)` cho đề/lời giải; `TOP_BUFF > 0.12`; `FIGURE_RATIO < 0.52`.
+**CẤM:** `center_x` từng dòng chữ; `align_to(LEFT_EDGE, LEFT)` sát mép trái; `TOP_BUFF > 0.12`; `FIGURE_RATIO < 0.52`.
 
 Mẫu code:
 - Hình học: `backend/examples/style_shorts_tqh_geometry.py`

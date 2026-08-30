@@ -49,9 +49,16 @@ TOP_BUFF = 0.05          # mép trên — NHỎ để bớt khoảng trống dư
 BOTTOM_BUFF = 0.05       # mép dưới
 MARGIN = 0.08            # chỉ tính SAFE_W ngang
 SAFE_W = config.frame_width - 2*MARGIN
+TEXT_W = SAFE_W            # chiều rộng khối chữ Shorts
 FIGURE_RATIO = 0.58      # % chiều cao khung cho hình (sau ẩn đề) — tận dụng khung, bớt viền đen
 
+def center_block(mob):
+    \"\"\"Đặt khối chữ vào giữa màn hình (các dòng canh trái bên trong).\"\"\"
+    mob.set_x(0)
+    return mob
+
 def center_x(mob):
+  # Hình Venn/hình học — giữ tên cũ
     mob.set_x(0)
     return mob
 
@@ -65,14 +72,15 @@ def fit_figure_full_width(fig, max_h):
 - Nhãn điểm: 26–28 (CẤM 22)
 - MathTex: scale 1.0 (CẤM scale 0.9 hoặc panel.scale 0.38)
 
-【CANH GIỮA — BẮT BUỘC (không canh trái)】
-- Mọi khối chữ (đề, lời giải, kết luận): sau khi đặt vị trí dọc → center_x(mob)
-- VGroup.arrange(DOWN, aligned_edge=ORIGIN) — KHÔNG aligned_edge=LEFT
+【CANH CHỮ — BẮT BUỘC (khối giữa màn, canh trái bên trong)】
+- Khối chữ (đề, lời giải, kết luận): VGroup.arrange(DOWN, aligned_edge=LEFT) → center_block(mob)
+- Đoạn đề dài (1 câu): vn("...", justify=True) — canh đều 2 bên trong khung TEXT_W
 - Hình Venn/hình học: center_x(figure) sau next_to / to_edge
-- CẤM: align_to(LEFT_EDGE, LEFT) cho đề và lời giải (gây lệch trái như ảnh mẫu lỗi)
+- CẤM: center_x từng dòng chữ (canh giữa từng dòng) — SAI
+- CẤM: align_to(LEFT_EDGE, LEFT) sát mép trái màn hình — SAI
 
 【GIAI ĐOẠN 1 — problem_and_figure: CHỮ TRÊN → HÌNH DƯỚI】
-- problem_block.to_edge(UP, buff=TOP_BUFF); center_x(problem_block)
+- problem_block.to_edge(UP, buff=TOP_BUFF); center_block(problem_block)
 - avail_h = config.frame_height/2 - problem_block.height - 0.2
 - figure = fit_figure_full_width(figure, avail_h)
 - figure.next_to(problem_block, DOWN, buff=0.1); center_x(figure)
@@ -86,9 +94,9 @@ def fit_figure_full_width(fig, max_h):
 - figure.to_edge(UP, buff=TOP_BUFF); center_x(figure)
 - CẤM: figure.animate.shift(UP*2) mù — không phóng to, gây viền đen
 
-【GIAI ĐOẠN 3 — solution_steps: HÌNH TRÊN → CHỮ DƯỚI, CANH GIỮA】
-- Dòng đầu: new_line.next_to(figure, DOWN, buff=0.08); center_x(new_line)
-- Các dòng sau: next_to(solution_stack, DOWN, buff=0.08); center_x(new_line)
+【GIAI ĐOẠN 3 — solution_steps: HÌNH TRÊN → CHỮ DƯỚI, KHỐI GIỮA MÀN】
+- solution_stack = VGroup(); mỗi dòng: next_to(figure/stack, DOWN, buff=0.08, aligned_edge=LEFT)
+- Sau mỗi dòng: solution_stack.add(part); center_block(solution_stack)
 - Mỗi bước: Write 1 dòng + Indicate/RightAngle; self.wait(0.8)
 
 【GIAI ĐOẠN 4 — page_break】
@@ -99,7 +107,7 @@ def fit_figure_full_width(fig, max_h):
 【Tự kiểm tra full-frame】
 - Không có khoảng trống lớn trên/dưới (TOP_BUFF/BOTTOM_BUFF ≤ 0.06)
 - Hình chiếm gần hết SAFE_W và FIGURE_RATIO ≥ 0.55
-- Chữ canh GIỮA (center_x), không thu nhỏ scale(0.38)
+- Khối chữ center_block (canh trái bên trong), không thu nhỏ scale(0.38)
 """
 
 GEMINI_ANTI_PATTERNS = """
@@ -121,11 +129,12 @@ GEMINI_ANTI_PATTERNS = """
 15. shift(UP*2) không kèm phóng to hình — lời giải bị chèn giữa khoảng trống
 16. panel.scale(0.38), font_size≤24, MathTex.scale(0.9) — chữ quá nhỏ trên Shorts
 17. Thiếu config.pixel_width=1080, pixel_height=1920 ở đầu file
-18. align_to(LEFT_EDGE, LEFT) cho đề/lời giải Shorts → SAI; dùng center_x(mob)
-19. TOP_BUFF > 0.12 hoặc FIGURE_RATIO < 0.52 → viền đen trên/dưới quá lớn
-20. Angle/ Arc reflex (>180°) tại đỉnh → dùng interior_angle_at(vertex, arm1, arm2)
-21. RightAngle(Line(A,B), Line(B,C)) khi cần tia từ B → SAI; dùng right_angle_at(B, A, C)
-22. Tự vẽ Arc thay Angle cho góc trong → dễ sai cung lớn
+18. center_x từng dòng chữ hoặc aligned_edge=ORIGIN cho khối chữ → SAI; dùng center_block + aligned_edge=LEFT
+19. align_to(LEFT_EDGE, LEFT) sát mép trái màn → SAI
+20. TOP_BUFF > 0.12 hoặc FIGURE_RATIO < 0.52 → viền đen trên/dưới quá lớn
+21. Angle/ Arc reflex (>180°) tại đỉnh → dùng interior_angle_at(vertex, arm1, arm2)
+22. RightAngle(Line(A,B), Line(B,C)) khi cần tia từ B → SAI; dùng right_angle_at(B, A, C)
+23. Tự vẽ Arc thay Angle cho góc trong → dễ sai cung lớn
 """
 
 GEMINI_SELF_CHECK = """
@@ -136,7 +145,7 @@ GEMINI_SELF_CHECK = """
 □ Bước nói cạnh/góc có indicate_targets hoặc actions right_angle?
 □ Code có vn(), STYLE_VN, MAX_LINES_PER_PAGE=4, self.wait(≥0.8) mỗi beat?
 □ Không Tex(), Label(), MovingCameraScene, ThreeDScene?
-□ Hình đã scale_to_fit_width(SAFE_W) + chữ font≥28 + center_x — không viền đen dư?
+□ Hình scale_to_fit_width(SAFE_W) + chữ font≥28 + center_block — không viền đen dư?
 □ Mọi ký hiệu góc dùng interior_angle_at / right_angle_at — không cung reflex >180°?
 □ config.pixel_width=1080, pixel_height=1920 ở đầu file?
 """
@@ -148,7 +157,7 @@ GEMINI_ACTION_MAP = """
 | create_figure | Create(circle), FadeIn(dots), Create(segments) tuần tự |
 | fade_out_problem | self.play(FadeOut(problem_block)) |
 | shift_figure_up | fit_figure_full_width + figure.to_edge(UP, buff=TOP_BUFF) + center_x(figure) |
-| write_line | Write(new_line) — 1 dòng vn()/MathTex; center_x sau next_to |
+| write_line | Write(new_line) — 1 dòng vn()/MathTex; center_block(solution_stack) sau add |
 | indicate:AB | Indicate(segment_AB, color=STYLE_VN["highlight"]) |
 | right_angle:ACB | right_angle_at(C, A, B, length=0.22, color=STYLE_VN["highlight"]) |
 | angle:AHK | interior_angle_at(H, A, K, radius=0.28, color=STYLE_VN["highlight"]) |
@@ -162,9 +171,9 @@ SHORTS_VENN_SET_RULES = """
 - fit_figure_full_width(figure, config.frame_height * FIGURE_RATIO) sau khi dựng xong
 - figure.next_to(problem_block, DOWN, buff=0.1); center_x(figure)
 - Sau FadeOut đề: fit_figure_full_width(figure, config.frame_height * FIGURE_RATIO); to_edge(UP, buff=TOP_BUFF); center_x(figure)
-- solution_stack = VGroup(); mỗi dòng next_to(figure/stack, DOWN, buff=0.08) + center_x(dòng)
-- Công thức |T∪V∪A|: MathTex(r"n(T \\cup V \\cup A) = ...") — font scale 1.0, canh GIỮA
-- CẤM: align_to(LEFT_EDGE, LEFT) cho lời giải; CẤM khoảng trống lớn trên/dưới
+- solution_stack = VGroup(); mỗi dòng next_to(figure/stack, DOWN, buff=0.08, aligned_edge=LEFT) + center_block(solution_stack)
+- Công thức |T∪V∪A|: MathTex(r"n(T \\cup V \\cup A) = ...") — font scale 1.0, trong khối center_block
+- CẤM: center_x từng dòng chữ; CẤM khoảng trống lớn trên/dưới
 """
 
 GEMINI_ANGLE_RULES = """
@@ -239,11 +248,11 @@ Ví dụ beat solution_steps:
  "actions": ["write_line", "right_angle:ACB"], "indicate_targets": ["ACB"]}
 
 === GEMINI — CODE PYTHON (video_format=shorts) ===
-1. Đầu file: config 1080×1920; TOP_BUFF; BOTTOM_BUFF; MARGIN; SAFE_W; FIGURE_RATIO; center_x(); fit_figure_full_width(); vn(size=28+)
-2. Đề: problem_block.to_edge(UP, buff=TOP_BUFF); center_x(problem_block)
+1. Đầu file: config 1080×1920; TOP_BUFF; BOTTOM_BUFF; MARGIN; SAFE_W; TEXT_W; FIGURE_RATIO; center_block(); center_x(); fit_figure_full_width(); vn(size=28+, justify cho đoạn dài)
+2. Đề: problem_block.arrange(LEFT) → to_edge(UP, buff=TOP_BUFF) → center_block(problem_block)
 3. Hình dưới đề: fit_figure_full_width + next_to(problem_block, DOWN); center_x(figure)
 4. FadeOut đề → fit_figure_full_width(figure, frame_height*FIGURE_RATIO) + to_edge(UP, buff=TOP_BUFF) + center_x — KHÔNG shift(UP*2)
-5. Lời giải: next_to(figure, DOWN, buff=0.08), center_x; font 28–32 — CANH GIỮA, không align LEFT
+5. Lời giải: solution_stack + center_block; font 28–32 — khối giữa màn, canh trái bên trong (hoặc justify cho đoạn dài)
 6. page_break khi ≥4 dòng
 Mẫu: backend/examples/style_shorts_tqh_geometry.py, style_shorts_venn_sets.py
 CẤM Tex(). CẤM landscape. CẤM viền đen trên/dưới do buff lớn.
@@ -312,8 +321,11 @@ video_format: "shorts" | "landscape"  — MẶC ĐỊNH: "shorts" (9:16)
 - CẤM nhét chữ tiếng Việt (có dấu) vào MathTex/Tex — chỉ ký hiệu toán trong MathTex
 - Tách dòng: vn("Ta có CK") + MathTex(r"CK \perp AE") + vn("nên") — KHÔNG gộp chữ Việt vào MathTex
 
-def vn(text, size=28, color=None):
-    return Text(text, font_size=size, font="Arial", color=color or "#FFFFFF", disable_ligatures=True)
+def vn(text, size=28, color=None, justify=False):
+    kw = dict(font_size=size, font="Arial", color=color or "#FFFFFF", disable_ligatures=True)
+    if justify:
+        return Text(text, width=TEXT_W, justify=True, **kw)
+    return Text(text, **kw)
 
 === KỊCH BẢN median ===
 - Câu hỏi gợi mở TRƯỚC, đáp án SAU (không vào thẳng kết quả)

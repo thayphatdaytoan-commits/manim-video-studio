@@ -238,7 +238,7 @@ export function buildManimReferenceCode(manifest, constructionOrder) {
   lines.push(`    ${figParts.join(', ') || '...'}`)
   lines.push(')')
   lines.push('# Sau ẩn đề: fit_figure_full_width(figure, config.frame_height*FIGURE_RATIO); figure.to_edge(UP, buff=TOP_BUFF); center_x(figure)')
-  lines.push('# Lời giải: next_to(figure, DOWN, buff=0.08); center_x(dòng) — CANH GIỮA')
+  lines.push('# Lời giải: solution_stack + center_block — khối giữa màn, canh trái bên trong')
   lines.push('')
   lines.push('# --- Thứ tự dựng hình (problem_and_figure beat) ---')
   lines.push(`CONSTRUCTION_ORDER = ${JSON.stringify(order)}`)

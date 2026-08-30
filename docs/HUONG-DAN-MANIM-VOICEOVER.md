@@ -167,16 +167,17 @@ Xem [Speech Services](https://voiceover.manim.community/en/stable/services.html)
 
 ## 5. Khớp chữ Shorts TQH + voiceover
 
-Áp dụng layout Shorts như file mẫu thường (`center_x`, `FIGURE_RATIO`…), nhưng **mỗi bước lời giải** bọc voiceover:
+Áp dụng layout Shorts như file mẫu thường (`center_block`, `center_x` cho hình, `FIGURE_RATIO`…), nhưng **mỗi bước lời giải** bọc voiceover:
 
 ```python
 # Bước lời giải thứ N
 line = vn("Nội dung dòng chữ", 28)
 with self.voiceover(text="Nội dung đọc thành tiếng, không LaTeX") as tracker:
-    line.next_to(figure, DOWN, buff=0.08)
-    center_x(line)
+    line.align_to(solution_stack, LEFT).next_to(solution_stack or figure, DOWN, buff=0.08)
+    solution_stack.add(line)
+    center_block(solution_stack)
     self.play(Write(line), run_time=tracker.duration)
-solution_stack.add(line)
+```
 ```
 
 **Lời đọc (`text=`)** viết dạng nói được: "góc A C B", "a bình phương" — không dùng `\\angle`, `^2`.

@@ -13,20 +13,20 @@ LAYOUT JSON:
   "bottom_buff": 0.05,
   "margin": 0.08,
   "figure_ratio": 0.58,
-  "text_align": "center",
+  "text_align": "block_center_left",
   "max_lines_per_page": 4,
-  "problem_layout": "text_top_figure_below_center",
-  "solution_layout": "figure_top_text_below_center",
+  "problem_layout": "text_top_figure_below_block_center",
+  "solution_layout": "figure_top_text_below_block_center",
   "figure_initial": "fit_figure_full_width + next_to(problem_block,DOWN) + center_x",
   "figure_after_transition": "to_edge(UP, buff=TOP_BUFF) + fit_figure_full_width(FIGURE_RATIO) + center_x"
 }
 
 QUY TẮC:
-- Mỗi solution_steps: đúng 1 text_line HOẶC 1 latex_line — CANH GIỮA màn hình
+- Mỗi solution_steps: đúng 1 text_line HOẶC 1 latex_line — khối chữ giữa màn, canh trái bên trong
 - Venn/tập hợp: figure_targets là các vòng tròn; hình phải full SAFE_W + center_x
 - Góc trong JSON: indicate_targets dạng "angle:AHK" (đỉnh ở giữa) hoặc "right_angle:ACB"
 - CẤM layout landscape (hình trái, panel phải)
-- CẤM text_align: "left" — luôn "center"
+- text_align: "block_center_left" (khối giữa màn, canh trái; đoạn dài justify)
 - figure_objects: tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5]
 
 OUTPUT: chỉ 1 JSON (không markdown, không ```).

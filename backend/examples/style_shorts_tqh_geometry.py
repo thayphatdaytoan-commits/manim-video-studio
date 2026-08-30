@@ -1,4 +1,4 @@
-"""Shorts 9:16 — hình học TQH, FULL MÀN HÌNH (đề trên → hình dưới; lời giải canh giữa).
+"""Shorts 9:16 — hình học TQH, FULL MÀN HÌNH (đề trên → hình dưới; khối lời giải giữa màn).
 
 Render dọc:
   manim -pq style_shorts_tqh_geometry.py ShortsTQHGeometryDemo
@@ -24,6 +24,13 @@ BOTTOM_BUFF = 0.05
 MARGIN = 0.08
 FIGURE_RATIO = 0.58
 MAX_LINES_PER_PAGE = 4
+SAFE_W = config.frame_width - 2 * MARGIN
+TEXT_W = SAFE_W
+
+
+def center_block(mob):
+    mob.set_x(0)
+    return mob
 
 
 def center_x(mob):
@@ -31,14 +38,16 @@ def center_x(mob):
     return mob
 
 
-def vn(text, size=28, color=None):
-    return Text(
-        text,
+def vn(text, size=28, color=None, justify=False):
+    kw = dict(
         font="Arial",
         font_size=size,
         color=color or STYLE_VN["text"],
         disable_ligatures=True,
     )
+    if justify:
+        return Text(text, width=TEXT_W, justify=True, **kw)
+    return Text(text, **kw)
 
 
 def shorts_safe_width():
@@ -76,7 +85,7 @@ def right_angle_at(vertex, arm1, arm2, length=0.22, **kwargs):
 
 
 class ShortsTQHGeometryDemo(Scene):
-    """Mẫu full-frame: đề+chữ trên / hình dưới → ẩn đề → hình trên / lời giải canh giữa."""
+    """Mẫu full-frame: đề+chữ trên / hình dưới → ẩn đề → hình trên / khối lời giải giữa màn."""
 
     def construct(self):
         self.camera.background_color = STYLE_VN["bg"]
@@ -87,10 +96,10 @@ class ShortsTQHGeometryDemo(Scene):
             vn("Cho đường tròn (O), đường kính AB.", 28),
             vn("C là điểm trên cung. Chứng minh:", 28),
             vn("góc ACB vuông.", 28, STYLE_VN["highlight"]),
-        ).arrange(DOWN, aligned_edge=ORIGIN, buff=0.1)
-        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=ORIGIN, buff=0.15)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
+        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=LEFT, buff=0.15)
         problem_block.to_edge(UP, buff=TOP_BUFF)
-        center_x(problem_block)
+        center_block(problem_block)
 
         O = ORIGIN
         circle = Circle(radius=1.35, color=STYLE_VN["circle"], stroke_width=4)
@@ -144,7 +153,7 @@ class ShortsTQHGeometryDemo(Scene):
                 new_parts.add(vn(text_vi, 28))
             if latex:
                 new_parts.add(MathTex(latex))
-            new_parts.arrange(DOWN, aligned_edge=ORIGIN, buff=0.06)
+            new_parts.arrange(DOWN, aligned_edge=LEFT, buff=0.06)
 
             if len(solution_stack) >= MAX_LINES_PER_PAGE or (
                 solution_stack and solution_stack.get_bottom().y < bottom_limit + 0.5
@@ -155,8 +164,7 @@ class ShortsTQHGeometryDemo(Scene):
             if len(solution_stack) == 0:
                 new_parts.next_to(figure, DOWN, buff=0.08)
             else:
-                new_parts.next_to(solution_stack, DOWN, buff=0.08)
-            center_x(new_parts)
+                new_parts.align_to(solution_stack, LEFT).next_to(solution_stack, DOWN, buff=0.08)
 
             anims = [Write(new_parts)]
             if indicate_targets:
@@ -170,12 +178,14 @@ class ShortsTQHGeometryDemo(Scene):
 
             self.play(*anims)
             solution_stack.add(new_parts)
+            center_block(solution_stack)
             self.wait(0.8)
 
         conclusion = vn("ĐPCM.", 30, STYLE_VN["conclusion"])
-        conclusion.next_to(solution_stack, DOWN, buff=0.1)
-        center_x(conclusion)
+        conclusion.align_to(solution_stack, LEFT).next_to(solution_stack, DOWN, buff=0.1)
+        solution_stack.add(conclusion)
+        center_block(solution_stack)
         box = SurroundingRectangle(conclusion, color=STYLE_VN["highlight"], buff=0.1)
-        center_x(box)
+        center_block(box)
         self.play(Write(conclusion), Create(box))
         self.wait(2.0)

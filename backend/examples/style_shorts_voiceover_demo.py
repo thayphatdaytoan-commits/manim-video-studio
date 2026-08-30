@@ -34,6 +34,12 @@ TOP_BUFF = 0.05
 MARGIN = 0.08
 FIGURE_RATIO = 0.58
 SAFE_W = config.frame_width - 2 * MARGIN
+TEXT_W = SAFE_W
+
+
+def center_block(mob):
+    mob.set_x(0)
+    return mob
 
 
 def center_x(mob):
@@ -41,14 +47,16 @@ def center_x(mob):
     return mob
 
 
-def vn(text, size=28, color=None):
-    return Text(
-        text,
+def vn(text, size=28, color=None, justify=False):
+    kw = dict(
         font="Arial",
         font_size=size,
         color=color or STYLE_VN["text"],
         disable_ligatures=True,
     )
+    if justify:
+        return Text(text, width=TEXT_W, justify=True, **kw)
+    return Text(text, **kw)
 
 
 def fit_figure_full_width(fig, max_h):
@@ -84,11 +92,15 @@ class ShortsVoiceoverTQHDemo(VoiceoverScene):
         title = vn("Bài toán hình học", 30, STYLE_VN["highlight"])
         problem_lines = VGroup(
             vn("Cho đường tròn (O), đường kính AB.", 28),
-            vn("C là điểm trên cung. Chứng minh góc ACB vuông.", 28),
-        ).arrange(DOWN, aligned_edge=ORIGIN, buff=0.1)
-        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=ORIGIN, buff=0.12)
+            vn(
+                "C là điểm trên cung. Chứng minh góc ACB vuông.",
+                28,
+                justify=True,
+            ),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
+        problem_block = VGroup(title, problem_lines).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
         problem_block.to_edge(UP, buff=TOP_BUFF)
-        center_x(problem_block)
+        center_block(problem_block)
 
         circle = Circle(radius=1.35, color=STYLE_VN["circle"], stroke_width=4)
         A = Dot(LEFT * 1.35, color=STYLE_VN["point"])
@@ -129,27 +141,28 @@ class ShortsVoiceoverTQHDemo(VoiceoverScene):
         line1 = vn("Ta có AB là đường kính.", 28)
         with self.voiceover(text="Ta có A B là đường kính.") as tracker:
             line1.next_to(figure, DOWN, buff=0.08)
-            center_x(line1)
+            solution_stack.add(line1)
+            center_block(solution_stack)
             self.play(Write(line1), Indicate(AB, color=STYLE_VN["highlight"]), run_time=tracker.duration)
-        solution_stack.add(line1)
 
         # === VOICEOVER 3: góc vuông + công thức ===
         line2 = MathTex(r"\Rightarrow \angle ACB = 90^\circ")
         ang = right_angle_at(C, A, B, length=0.25)
         figure.add(ang)
         with self.voiceover(text="Suy ra góc A C B bằng chín mươi độ.") as tracker:
-            line2.next_to(solution_stack, DOWN, buff=0.08)
-            center_x(line2)
+            line2.align_to(solution_stack, LEFT).next_to(solution_stack, DOWN, buff=0.08)
+            solution_stack.add(line2)
+            center_block(solution_stack)
             self.play(Write(line2), Create(ang), run_time=tracker.duration)
-        solution_stack.add(line2)
 
         # === VOICEOVER 4: kết luận ===
         line3 = vn("Vậy tam giác ACB vuông tại C. ĐPCM.", 30, STYLE_VN["highlight"])
         with self.voiceover(text="Vậy tam giác A C B vuông tại C. Điều phải chứng minh.") as tracker:
-            line3.next_to(solution_stack, DOWN, buff=0.08)
-            center_x(line3)
+            line3.align_to(solution_stack, LEFT).next_to(solution_stack, DOWN, buff=0.08)
+            solution_stack.add(line3)
+            center_block(solution_stack)
             box = SurroundingRectangle(line3, color=STYLE_VN["highlight"], buff=0.08)
-            center_x(box)
+            center_block(box)
             self.play(Write(line3), Create(box), run_time=tracker.duration)
 
         self.wait(1.0)
