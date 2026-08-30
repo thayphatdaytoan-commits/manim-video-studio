@@ -131,6 +131,29 @@ def synthesize_speech(
     return out_path
 
 
+def probe_has_audio_stream(path: Path) -> bool:
+    """True nếu file media có ít nhất một stream audio."""
+    if not path.exists() or not shutil.which("ffprobe"):
+        return False
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "a",
+        "-show_entries",
+        "stream=codec_type",
+        "-of",
+        "csv=p=0",
+        str(path),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        return bool((result.stdout or "").strip())
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
 def probe_duration_seconds(path: Path) -> float:
     """Đọc độ dài media bằng ffprobe; lỗi thì trả 0."""
     if not shutil.which("ffprobe"):

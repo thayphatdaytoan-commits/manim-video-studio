@@ -43,6 +43,7 @@ from voiceover import (
     generate_script,
     list_voices,
     merge_audio_video,
+    probe_has_audio_stream,
     synthesize_speech,
 )
 
@@ -796,6 +797,7 @@ def run_manim(
     out_name = f"{job_id}_{scene}.mp4"
     out_path = OUTPUT_DIR / out_name
     shutil.copy2(mp4, out_path)
+    has_audio = probe_has_audio_stream(out_path)
 
     return {
         "status": "done",
@@ -803,6 +805,7 @@ def run_manim(
         "video_path": str(out_path),
         "video_url": f"/api/video/{job_id}",
         "uses_voiceover": voiceover_job,
+        "has_audio": has_audio,
     }
 
 
@@ -934,6 +937,7 @@ async def api_voiceover(req: VoiceoverRequest) -> dict[str, Any]:
             out_path,
             sync_to_narration=req.sync_to_narration,
         )
+        has_audio = probe_has_audio_stream(out_path)
         return {
             "job_id": req.job_id,
             "status": "done",
@@ -946,6 +950,7 @@ async def api_voiceover(req: VoiceoverRequest) -> dict[str, Any]:
             "video_duration": merged.get("video_duration"),
             "audio_duration": merged.get("audio_duration"),
             "sync_note": merged.get("sync_note"),
+            "has_audio": has_audio,
         }
 
     try:
@@ -962,12 +967,14 @@ async def api_voiceover(req: VoiceoverRequest) -> dict[str, Any]:
         jobs[req.job_id]["video_url"] = result["video_url"]
         jobs[req.job_id]["status"] = "done"
         jobs[req.job_id]["has_voiceover"] = True
+        jobs[req.job_id]["has_audio"] = result.get("has_audio", True)
     else:
         jobs[req.job_id] = {
             "status": "done",
             "video_path": str(out_path),
             "video_url": result["video_url"],
             "has_voiceover": True,
+            "has_audio": result.get("has_audio", True),
             "scene": scene,
         }
     return result
@@ -1157,6 +1164,9 @@ def get_job(job_id: str) -> dict[str, Any]:
         "video_url": job.get("video_url"),
         "scene": job.get("scene"),
         "quality": job.get("quality"),
+        "uses_voiceover": job.get("uses_voiceover", False),
+        "has_voiceover": job.get("has_voiceover", False),
+        "has_audio": job.get("has_audio"),
     }
 
 

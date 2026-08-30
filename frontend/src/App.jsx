@@ -854,6 +854,8 @@ export default function App() {
   const [generatingScript, setGeneratingScript] = useState(false)
   const [applyingVoice, setApplyingVoice] = useState(false)
   const [audioUrl, setAudioUrl] = useState(null)
+  const [videoHasAudio, setVideoHasAudio] = useState(null)
+  const [compileUsesVoiceover, setCompileUsesVoiceover] = useState(false)
   const [voiceSyncMsg, setVoiceSyncMsg] = useState(null)
 
   const pollRef = useRef(null)
@@ -1234,6 +1236,14 @@ export default function App() {
           stopPolling()
           setCompiling(false)
           setVideoUrl(`${API_BASE}/api/video/${id}?t=${Date.now()}`)
+          setCompileUsesVoiceover(Boolean(job.uses_voiceover))
+          setVideoHasAudio(
+            typeof job.has_audio === 'boolean'
+              ? job.has_audio
+              : job.has_voiceover
+                ? true
+                : null,
+          )
         } else if (job.status === 'error') {
           stopPolling()
           setCompiling(false)
@@ -1257,6 +1267,8 @@ export default function App() {
     setLog('Đang gửi yêu cầu biên dịch...\n')
     setVideoUrl(null)
     setAudioUrl(null)
+    setVideoHasAudio(null)
+    setCompileUsesVoiceover(false)
     try {
       const res = await api('/api/compile', {
         method: 'POST',
@@ -1270,6 +1282,7 @@ export default function App() {
         }),
       })
       setJobId(res.job_id)
+      setCompileUsesVoiceover(Boolean(res.uses_voiceover))
       setLog((prev) => prev + `Job ${res.job_id} đã bắt đầu.\n`)
       pollJob(res.job_id)
     } catch (err) {
@@ -1453,6 +1466,7 @@ export default function App() {
       })
       const bust = Date.now()
       setVideoUrl(`${API_BASE}${data.video_url}?t=${bust}`)
+      setVideoHasAudio(data.has_audio !== false)
       if (data.audio_url) {
         setAudioUrl(`${API_BASE}${data.audio_url}?t=${bust}`)
       }
@@ -3330,7 +3344,29 @@ export default function App() {
 
           <div className="preview compact">
             {videoUrl ? (
-              <video key={videoUrl} src={videoUrl} controls autoPlay />
+              <>
+                <video key={videoUrl} src={videoUrl} controls autoPlay />
+                {videoHasAudio === false && (
+                  <div className="step-hint audio-hint-warn">
+                    <strong>Video im lặng</strong> — biên dịch Manim mặc định không có tiếng.
+                    {compileUsesVoiceover ? (
+                      <>
+                        {' '}
+                        Code có VoiceoverScene nhưng file MP4 chưa có track âm thanh: kiểm tra{' '}
+                        <code>set_speech_service(GTTSService(lang=&quot;vi&quot;))</code>, mạng
+                        internet, và <code>pip install &quot;manim-voiceover[gtts]&quot;</code>.
+                      </>
+                    ) : (
+                      <>
+                        {' '}
+                        Cuộn xuống <strong>Lồng tiếng AI</strong> → bấm &quot;AI viết đề + lời
+                        giải&quot; rồi <strong>Lồng tiếng vào video</strong>. Hoặc chọn mẫu{' '}
+                        <code>Shorts — Voiceover</code> (giọng khớp từng câu trong code).
+                      </>
+                    )}
+                  </div>
+                )}
+              </>
             ) : previewImageUrl ? (
               <div className="preview-frame-wrap">
                 <SceneLayerEditor
@@ -3416,13 +3452,24 @@ export default function App() {
               <Mic size={16} /> Lồng tiếng AI (Edge TTS — miễn phí)
             </h3>
             <p className="step-hint">
+              <strong>Bước bắt buộc nếu code dùng Scene thường:</strong> sau khi &quot;Tạo video&quot;,
+              phải bấm <strong>Lồng tiếng vào video</strong> bên dưới — biên dịch Manim không tự
+              thêm tiếng.
+              <br />
               AI viết lời thoại gồm <strong>đề bài</strong> + <strong>hướng dẫn giải</strong>, rồi Edge
-              TTS đọc và ghép vào MP4 (sau khi render). Bật “Khớp nhịp hình” để kéo giãn/nén hiệu ứng.
+              TTS đọc và ghép vào MP4. Bật “Khớp nhịp hình” để kéo giãn/nén hiệu ứng.
               <br />
               <strong>Khớp từng câu tốt hơn:</strong> dùng mẫu{' '}
               <code>Shorts — Voiceover</code> (VoiceoverScene + GTTSService) — Validate + Biên dịch
-              trực tiếp trên Studio.
+              trực tiếp (cần mạng + manim-voiceover).
             </p>
+            {backend.deps && !backend.deps.edge_tts && (
+              <div className="step-hint audio-hint-warn">
+                Thiếu <code>edge-tts</code> — chạy:{' '}
+                <code>pip install -r backend\requirements.txt</code> trong .venv rồi khởi động lại
+                Studio.
+              </div>
+            )}
 
             <label className="field check-row">
               <input
