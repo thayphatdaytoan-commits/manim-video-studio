@@ -112,10 +112,46 @@ panel = VGroup(...).arrange(DOWN, aligned_edge=LEFT, buff=0.2).scale(0.38).to_ed
 |----------|-------------------|
 | Hình Euclidean sạch, từng bước dựng | Beat `construction`: Create từng đường/tròn |
 | Chứng minh ngắn, logic rõ | Mỗi beat ≤2 dòng + 1 công thức `MathTex` |
-| Nhấn góc/cạnh đang nói | `Indicate` + `RightAngle` / `Angle` vàng |
+| Nhấn góc/cạnh đang nói | `Indicate` + `interior_angle_at` / `right_angle_at` (góc <180°) |
 | Kết luận khung vàng | `SurroundingRectangle` quanh kết quả |
 
 > **Lưu ý:** Thầy Trần Quang Hùng (HSGS Hà Nội) đã [cảnh báo](https://qhtran.org/blogs/fake-youtube/) một số kênh YouTube dùng tên ông không chính thức. Học **phong cách trình bày hình học**, không sao chép watermark/tên người khác.
+
+---
+
+## 1g. Ký hiệu góc — luôn < 180° (cấm cung reflex)
+
+Lỗi thường gặp: cung vàng quanh gần hết vòng tròn tại đỉnh A, H, D (góc lớn >180°).
+
+**Nguyên nhân:** `Angle`/`Arc` với 2 `Line` sai chiều (không xuất phát từ đỉnh), hoặc `other_angle=True`.
+
+**Cách đúng — copy 2 hàm vào file:**
+
+```python
+def interior_angle_at(vertex, arm1, arm2, radius=0.28, color=None, **kwargs):
+    v = vertex.get_center()
+    a1, a2 = arm1.get_center(), arm2.get_center()
+    return Angle(
+        Line(v, a1, buff=0), Line(v, a2, buff=0),
+        radius=radius, other_angle=False,
+        color=color or "#FFD700", **kwargs,
+    )
+
+def right_angle_at(vertex, arm1, arm2, length=0.22, **kwargs):
+    v = vertex.get_center()
+    a1, a2 = arm1.get_center(), arm2.get_center()
+    return RightAngle(Line(v, a1, buff=0), Line(v, a2, buff=0), length=length, **kwargs)
+```
+
+| Góc | Code |
+|-----|------|
+| ∠AHK tại H | `interior_angle_at(H, A, K)` |
+| ∠CDE tại D | `interior_angle_at(D, C, E)` |
+| Vuông tại C | `right_angle_at(C, A, B)` |
+
+**Cấm:** `Arc(angle>PI)`, `other_angle=True`, `Angle(Line(A,B), Line(C,D))` không chung đỉnh.
+
+Nếu vẫn sai: đổi thứ tự `arm1`/`arm2`.
 
 ---
 

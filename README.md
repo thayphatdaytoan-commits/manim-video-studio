@@ -206,6 +206,7 @@ manim-video-studio/
 - **Local + LaTeX:** bật chế độ trên web → cho phép `MathTex` (cần MiKTeX); tiếng Việt vẫn dùng `Text`
 - **Render Free:** ưu tiên `Text` / `MarkupText` — không `Tex` / `MathTex`
 - Hướng dẫn Gemini Pro / Gem: [`docs/HUONG-DAN-GEMINI-PRO-MANIM.md`](docs/HUONG-DAN-GEMINI-PRO-MANIM.md) — tạo Gem chat: [`docs/TAO-GEM-GEMINI-PRO.md`](docs/TAO-GEM-GEMINI-PRO.md)
+- Giọng khớp từng câu (plugin): [`docs/HUONG-DAN-MANIM-VOICEOVER.md`](docs/HUONG-DAN-MANIM-VOICEOVER.md) — mẫu `backend/examples/style_shorts_voiceover_demo.py`
 - Windows: double-click `Mo-Manim-Studio.bat` để mở backend + frontend
 - Validate CE: cấm scene nặng, import lạ; chế độ local cho phép LaTeX
 - Render lần đầu có thể chậm
