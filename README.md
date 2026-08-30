@@ -162,7 +162,8 @@ Luồng **Math-To-Manim** với Gemini (tùy chọn trong web):
 3. **AI tạo code GeoGebra** → chỉnh/kéo thả → **Lưu hình**
 4. **Cursor Agent:** Copy brief → viết `scenes/*.py` → dán vào editor → **Validate CE** → biên dịch
 5. (Tuỳ chọn) Gemini Pro trong web — không khuyến nghị cho code chính
-6. Lồng tiếng Edge TTS (tuỳ chọn)
+6. **Lồng tiếng theo beat** (khuyến nghị): cột 2 → «Tạo lời đọc từng beat» → biên dịch video → cột 3 → «Ghép giọng theo timeline»
+7. Hoặc lồng tiếng một đoạn dài (Edge TTS — tuỳ chọn)
 
 API:
 - `POST /api/generate-problem-solution`
@@ -173,7 +174,9 @@ API:
 - `POST /api/revise-manim` / `POST /api/repair-manim`
 - `POST /api/generate-script` — Gemini viết lời thoại
 - `GET /api/tts-voices` — danh sách giọng Edge TTS
-- `POST /api/voiceover` — TTS + ghép audio vào video
+- `POST /api/generate-beat-narrations` — TTS text từng beat (đề / câu a / câu b…) từ kịch bản JSON
+- `POST /api/voiceover/beats` — Edge TTS từng beat + ghép timeline lên MP4
+- `POST /api/voiceover` — TTS một đoạn dài + ghép audio vào video
 
 Tuỳ chọn: đặt `GEMINI_API_KEY` trên Render.
 
