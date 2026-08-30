@@ -178,7 +178,6 @@ with self.voiceover(text="Nội dung đọc thành tiếng, không LaTeX") as tr
     center_block(solution_stack)
     self.play(Write(line), run_time=tracker.duration)
 ```
-```
 
 **Lời đọc (`text=`)** viết dạng nói được: "góc A C B", "a bình phương" — không dùng `\\angle`, `^2`.
 
