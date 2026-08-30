@@ -1037,20 +1037,71 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 280px;
+  max-height: 420px;
   overflow-y: auto;
 }
 
 .scene-timeline-item {
-  display: grid;
-  grid-template-columns: 16px 28px minmax(88px, 0.9fr) 1fr auto;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   padding: 6px 8px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-elevated);
   font-size: 0.82rem;
+}
+
+.scene-timeline-item.has-narration {
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+.timeline-row-main {
+  display: grid;
+  grid-template-columns: 16px 28px minmax(88px, 0.9fr) 1fr auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.timeline-narration-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 44px;
+}
+
+.timeline-narration-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.timeline-narration-input {
+  width: 100%;
+  font-size: 0.8rem;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  resize: vertical;
+  min-height: 2.5rem;
+  font-family: inherit;
+}
+
+.beat-narration-actions {
+  margin: 4px 0 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.beat-voice-primary {
+  margin-bottom: 8px;
 }
 
 .scene-timeline-item.is-hidden {

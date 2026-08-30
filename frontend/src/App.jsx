@@ -42,7 +42,9 @@ import {
   moveTimelineItem,
   parseStoryboardJson,
   storyboardWithVisibleBeats,
+  timelineToNarrationSegments,
   toggleTimelineVisibility,
+  updateTimelineNarration,
 } from './storyboardTimeline'
 import {
   applyLayoutTemplateToStoryboard,
@@ -856,6 +858,9 @@ export default function App() {
   const [audioUrl, setAudioUrl] = useState(null)
   const [videoHasAudio, setVideoHasAudio] = useState(null)
   const [compileUsesVoiceover, setCompileUsesVoiceover] = useState(false)
+  const [generatingBeatNarrations, setGeneratingBeatNarrations] = useState(false)
+  const [beatVoiceMsg, setBeatVoiceMsg] = useState(null)
+  const [showBeatNarration, setShowBeatNarration] = useState(true)
   const [voiceSyncMsg, setVoiceSyncMsg] = useState(null)
 
   const pollRef = useRef(null)
@@ -1065,6 +1070,94 @@ export default function App() {
     },
     [sceneTimeline, syncTimelineToStoryboard],
   )
+
+  const handleTimelineNarrationChange = useCallback(
+    (index, text) => {
+      syncTimelineToStoryboard(updateTimelineNarration(sceneTimeline, index, text))
+    },
+    [sceneTimeline, syncTimelineToStoryboard],
+  )
+
+  const handleGenerateBeatNarrations = async () => {
+    const sb = parseStoryboardJson(storyboardText)
+    if (!sb?.beats?.length) {
+      setError('Chưa có kịch bản beats — tạo kịch bản JSON ở cột 2 trước.')
+      return
+    }
+    setGeneratingBeatNarrations(true)
+    setError(null)
+    setBeatVoiceMsg(null)
+    try {
+      const data = await api('/api/generate-beat-narrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storyboard: sb,
+          problem_text: problemText,
+          solution_steps: solutionSteps,
+        }),
+      })
+      if (data.storyboard) {
+        setStoryboardText(JSON.stringify(data.storyboard, null, 2))
+        setSceneTimeline(beatsToTimeline(data.storyboard.beats))
+      }
+      setShowBeatNarration(true)
+      setBeatVoiceMsg(`Đã tạo ${data.count || 0} đoạn lời đọc (đề / từng bước lời giải). Chỉnh trên timeline rồi ghép giọng.`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setGeneratingBeatNarrations(false)
+    }
+  }
+
+  const handleApplyBeatVoiceover = async () => {
+    if (!jobId || !videoUrl) {
+      setError('Hãy tạo video Manim trước, rồi mới ghép giọng theo beat.')
+      return
+    }
+    const sb = parseStoryboardJson(storyboardText)
+    if (!sb?.beats?.length) {
+      setError('Cần kịch bản JSON có beats — tạo ở cột 2.')
+      return
+    }
+    const segments = timelineToNarrationSegments(sceneTimeline)
+    if (!segments.length) {
+      setError('Chưa có lời đọc beat nào — bấm «Tạo lời đọc từng beat» hoặc gõ vào timeline.')
+      return
+    }
+    setApplyingVoice(true)
+    setError(null)
+    setBeatVoiceMsg(null)
+    setVoiceSyncMsg(null)
+    try {
+      const data = await api('/api/voiceover/beats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job_id: jobId,
+          storyboard: sb,
+          segments,
+          voice: ttsVoice,
+          rate: ttsRate,
+          sync_to_narration: syncToNarration,
+        }),
+      })
+      const bust = Date.now()
+      setVideoUrl(`${API_BASE}${data.video_url}?t=${bust}`)
+      setVideoHasAudio(data.has_audio !== false)
+      const tl = data.beat_timeline || []
+      const summary = tl.map((t) => `${t.label || t.beat_id} @${t.start_s}s`).join(' · ')
+      setBeatVoiceMsg(
+        data.sync_note
+          ? `${data.sync_note}${summary ? ` — ${summary}` : ''}`
+          : `Đã ghép ${data.segment_count || segments.length} đoạn theo timeline.`,
+      )
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setApplyingVoice(false)
+    }
+  }
 
   const handleApplyLayoutTemplate = useCallback(
     (templateId) => {
@@ -2869,8 +2962,37 @@ export default function App() {
             timeline={sceneTimeline}
             onMove={handleTimelineMove}
             onToggleVisible={handleTimelineToggle}
+            onNarrationChange={handleTimelineNarrationChange}
+            showNarration={showBeatNarration && storyboardReady}
             disabled={!storyboardReady}
           />
+
+          {storyboardReady && (
+            <div className="export-row beat-narration-actions">
+              <button
+                type="button"
+                className="btn secondary export-btn"
+                onClick={handleGenerateBeatNarrations}
+                disabled={generatingBeatNarrations}
+              >
+                {generatingBeatNarrations ? (
+                  <Loader2 className="spin" size={15} />
+                ) : (
+                  <Mic size={15} />
+                )}
+                {generatingBeatNarrations ? 'Đang tạo lời đọc...' : 'Tạo lời đọc từng beat'}
+              </button>
+              <label className="field check-row">
+                <input
+                  type="checkbox"
+                  checked={showBeatNarration}
+                  onChange={(e) => setShowBeatNarration(e.target.checked)}
+                />
+                <span>Hiện ô lời đọc trên timeline</span>
+              </label>
+            </div>
+          )}
+          {beatVoiceMsg && storyboardReady && <div className="step-ok">{beatVoiceMsg}</div>}
 
           {storyboardReady && (
             <div className="step-ok">Đã có kịch bản — chỉnh timeline cảnh ở trên, hoặc copy brief Cursor Agent (cột 3).</div>
@@ -3452,16 +3574,11 @@ export default function App() {
               <Mic size={16} /> Lồng tiếng AI (Edge TTS — miễn phí)
             </h3>
             <p className="step-hint">
-              <strong>Bước bắt buộc nếu code dùng Scene thường:</strong> sau khi &quot;Tạo video&quot;,
-              phải bấm <strong>Lồng tiếng vào video</strong> bên dưới — biên dịch Manim không tự
-              thêm tiếng.
+              <strong>Khuyến nghị — ghép theo beat:</strong> tạo kịch bản cột 2 → «Tạo lời đọc từng
+              beat» → render video → «Ghép giọng theo timeline» (đề / câu a / câu b khớp thứ tự beat).
               <br />
-              AI viết lời thoại gồm <strong>đề bài</strong> + <strong>hướng dẫn giải</strong>, rồi Edge
-              TTS đọc và ghép vào MP4. Bật “Khớp nhịp hình” để kéo giãn/nén hiệu ứng.
-              <br />
-              <strong>Khớp từng câu tốt hơn:</strong> dùng mẫu{' '}
-              <code>Shorts — Voiceover</code> (VoiceoverScene + GTTSService) — Validate + Biên dịch
-              trực tiếp (cần mạng + manim-voiceover).
+              <strong>Cách cũ — một đoạn đọc dài:</strong> AI viết lời thoại liền mạch rồi «Lồng tiếng
+              vào video».
             </p>
             {backend.deps && !backend.deps.edge_tts && (
               <div className="step-hint audio-hint-warn">
@@ -3470,6 +3587,22 @@ export default function App() {
                 Studio.
               </div>
             )}
+
+            <div className="export-row beat-voice-primary">
+              <button
+                type="button"
+                className="btn primary export-btn"
+                onClick={handleApplyBeatVoiceover}
+                disabled={
+                  applyingVoice || !videoUrl || !storyboardText.trim() || !sceneTimeline.length
+                }
+              >
+                {applyingVoice ? <Loader2 className="spin" size={15} /> : <Volume2 size={15} />}
+                {applyingVoice ? 'Đang ghép giọng...' : 'Ghép giọng theo timeline (beat)'}
+              </button>
+            </div>
+
+            <p className="step-hint step-hint-tight">Hoặc một đoạn đọc liền mạch (cách cũ):</p>
 
             <label className="field check-row">
               <input

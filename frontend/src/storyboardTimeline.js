@@ -44,14 +44,19 @@ export function parseStoryboardJson(text) {
 /** Chuyển beats JSON → mảng timeline (id, order, visible). */
 export function beatsToTimeline(beats) {
   if (!Array.isArray(beats)) return []
-  return beats.map((beat, index) => ({
-    id: beat?.id || `beat-${index}-${beat?.phase || 'scene'}`,
-    order: index,
-    visible: beat?.visible !== false,
-    phase: beat?.phase || `beat_${index + 1}`,
-    summary: beatSummary(beat, index),
-    beat,
-  }))
+  return beats.map((beat, index) => {
+    const id = beat?.id ?? `beat-${index}`
+    const narrationText = beat?.narration_text || ''
+    return {
+      id,
+      order: index,
+      visible: beat?.visible !== false,
+      phase: beat?.phase || `beat_${index + 1}`,
+      summary: beatSummary(beat, index),
+      narrationText,
+      beat: { ...beat, id, narration_text: narrationText },
+    }
+  })
 }
 
 /** Gộp timeline (đổi thứ tự / ẩn hiện) ngược vào storyboard JSON. */
@@ -62,6 +67,9 @@ export function applyTimelineToStoryboard(storyboard, timeline) {
     const beat = { ...(item.beat || {}) }
     beat.visible = item.visible !== false
     beat.id = item.id
+    if (item.narrationText != null) {
+      beat.narration_text = item.narrationText
+    }
     return beat
   })
   return { ...storyboard, beats }
@@ -91,4 +99,25 @@ export function toggleTimelineVisibility(timeline, index) {
   return timeline.map((item, i) =>
     i === index ? { ...item, visible: !item.visible } : item,
   )
+}
+
+/** Cập nhật lời đọc TTS của một beat trên timeline. */
+export function updateTimelineNarration(timeline, index, narrationText) {
+  return timeline.map((item, i) => {
+    if (i !== index) return item
+    const beat = { ...(item.beat || {}), narration_text: narrationText }
+    return { ...item, narrationText, beat }
+  })
+}
+
+/** Lấy danh sách segment gửi API voiceover/beats. */
+export function timelineToNarrationSegments(timeline) {
+  return timeline
+    .filter((item) => item.visible && (item.narrationText || '').trim())
+    .map((item) => ({
+      beat_id: item.id,
+      phase: item.phase,
+      label: item.beat?.comment_vi || item.summary?.slice(0, 40) || item.phase,
+      narration_text: (item.narrationText || '').trim(),
+    }))
 }

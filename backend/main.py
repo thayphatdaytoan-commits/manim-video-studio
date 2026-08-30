@@ -46,6 +46,7 @@ from voiceover import (
     probe_has_audio_stream,
     synthesize_speech,
 )
+from beat_voiceover import build_narration_segments, merge_beats_voiceover
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("manim-studio")
@@ -311,6 +312,31 @@ class VoiceoverRequest(BaseModel):
         default=True,
         description="Kéo giãn/nén nhịp hình để khớp tương đối độ dài lời đọc",
     )
+
+
+class GenerateBeatNarrationsRequest(BaseModel):
+    storyboard: dict[str, Any] | None = Field(default=None, description="Kịch bản JSON đầy đủ")
+    problem_text: str = Field(default="")
+    solution_steps: list[str] = Field(default_factory=list)
+
+
+class BeatNarrationSegment(BaseModel):
+    beat_id: str
+    narration_text: str = ""
+    label: str = ""
+    phase: str = ""
+
+
+class VoiceoverBeatsRequest(BaseModel):
+    job_id: str = Field(..., min_length=1)
+    storyboard: dict[str, Any] = Field(..., description="Kịch bản beats (thứ tự timeline)")
+    segments: list[BeatNarrationSegment] = Field(
+        default_factory=list,
+        description="Lời đọc từng beat — đề / câu a / câu b…",
+    )
+    voice: str = Field(default="vi-VN-HoaiMyNeural")
+    rate: str = Field(default="+0%")
+    sync_to_narration: bool = Field(default=True)
 
 
 def resolve_video_path(job_id: str) -> Path:
@@ -978,6 +1004,120 @@ async def api_voiceover(req: VoiceoverRequest) -> dict[str, Any]:
             "scene": scene,
         }
     return result
+
+
+@app.post("/api/generate-beat-narrations")
+async def api_generate_beat_narrations(req: GenerateBeatNarrationsRequest) -> dict[str, Any]:
+    """Tạo lời đọc riêng cho từng beat (đề, câu a, câu b…) từ kịch bản JSON."""
+    sb = req.storyboard or {}
+    beats = sb.get("beats") if isinstance(sb, dict) else []
+    if not isinstance(beats, list) or not beats:
+        raise HTTPException(400, "Kịch bản thiếu beats — tạo kịch bản JSON trước")
+    segments = build_narration_segments(
+        beats,
+        problem_text=req.problem_text,
+        solution_steps=req.solution_steps,
+    )
+    # Ghi narration_text ngược vào beats (client có thể merge vào storyboard)
+    seg_by_id = {s["beat_id"]: s for s in segments}
+    updated_beats = []
+    for i, beat in enumerate(beats):
+        b = dict(beat)
+        bid = str(b.get("id") or f"beat-{i}")
+        b["id"] = bid
+        if bid in seg_by_id:
+            b["narration_text"] = seg_by_id[bid]["narration_text"]
+        updated_beats.append(b)
+    return {
+        "segments": segments,
+        "storyboard": {**sb, "beats": updated_beats},
+        "count": len(segments),
+    }
+
+
+@app.post("/api/voiceover/beats")
+async def api_voiceover_beats(req: VoiceoverBeatsRequest) -> dict[str, Any]:
+    """Edge TTS từng beat + ghép timeline theo thứ tự kịch bản."""
+    video_path = resolve_video_path(req.job_id)
+    beats = req.storyboard.get("beats") if isinstance(req.storyboard, dict) else []
+    if not isinstance(beats, list) or not beats:
+        raise HTTPException(400, "Thiếu beats trong storyboard")
+
+    seg_map = {s.beat_id: s.model_dump() for s in req.segments}
+    merged_segments: list[dict[str, Any]] = []
+    for i, beat in enumerate(beats):
+        if beat.get("visible") is False:
+            continue
+        bid = str(beat.get("id") or f"beat-{i}")
+        override = seg_map.get(bid)
+        text = (override or {}).get("narration_text") or beat.get("narration_text") or ""
+        text = str(text).strip()
+        if not text:
+            continue
+        merged_segments.append(
+            {
+                "beat_id": bid,
+                "phase": beat.get("phase") or "",
+                "label": (override or {}).get("label") or beat.get("comment_vi") or bid,
+                "narration_text": text,
+            }
+        )
+
+    if not merged_segments:
+        raise HTTPException(400, "Không có beat nào có lời đọc — bấm «Tạo lời đọc từng beat» trước")
+
+    work_dir = JOBS_DIR / req.job_id
+    scene = (jobs.get(req.job_id) or {}).get("scene") or "scene"
+    out_path = OUTPUT_DIR / f"{req.job_id}_{scene}_voiced.mp4"
+
+    def _run() -> dict[str, Any]:
+        result = merge_beats_voiceover(
+            video_path,
+            beats,
+            merged_segments,
+            out_path,
+            voice=req.voice,
+            rate=req.rate,
+            sync_to_narration=req.sync_to_narration,
+        )
+        has_audio = probe_has_audio_stream(out_path)
+        return {
+            "job_id": req.job_id,
+            "status": "done",
+            "video_url": f"/api/video/{req.job_id}",
+            "segment_count": result.get("segment_count"),
+            "beat_timeline": result.get("beat_timeline"),
+            "sync_note": result.get("sync_note"),
+            "has_audio": has_audio,
+            "message": result.get("sync_note"),
+        }
+
+    try:
+        payload = await asyncio.to_thread(_run)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("voiceover/beats failed")
+        raise HTTPException(502, str(exc)) from exc
+
+    if req.job_id in jobs:
+        jobs[req.job_id]["video_path"] = str(out_path)
+        jobs[req.job_id]["video_url"] = payload["video_url"]
+        jobs[req.job_id]["status"] = "done"
+        jobs[req.job_id]["has_voiceover"] = True
+        jobs[req.job_id]["has_audio"] = payload.get("has_audio", True)
+        jobs[req.job_id]["beat_timeline"] = payload.get("beat_timeline")
+    else:
+        jobs[req.job_id] = {
+            "status": "done",
+            "video_path": str(out_path),
+            "video_url": payload["video_url"],
+            "has_voiceover": True,
+            "has_audio": payload.get("has_audio", True),
+            "beat_timeline": payload.get("beat_timeline"),
+            "scene": scene,
+        }
+    return payload
 
 
 @app.get("/api/audio/{job_id}")
