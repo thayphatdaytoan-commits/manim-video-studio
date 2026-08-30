@@ -202,7 +202,7 @@ manim-video-studio/
 
 ## Ghi chú Manim
 
-- Class Scene phải kế thừa `Scene` (hoặc biến thể như `ThreeDScene`)
+- Class Scene kế thừa `Scene` hoặc `VoiceoverScene` (manim-voiceover — giọng khớp từng câu)
 - **Local + LaTeX:** bật chế độ trên web → cho phép `MathTex` (cần MiKTeX); tiếng Việt vẫn dùng `Text`
 - **Render Free:** ưu tiên `Text` / `MarkupText` — không `Tex` / `MathTex`
 - Hướng dẫn Gemini Pro / Gem: [`docs/HUONG-DAN-GEMINI-PRO-MANIM.md`](docs/HUONG-DAN-GEMINI-PRO-MANIM.md) — tạo Gem chat: [`docs/TAO-GEM-GEMINI-PRO.md`](docs/TAO-GEM-GEMINI-PRO.md)
