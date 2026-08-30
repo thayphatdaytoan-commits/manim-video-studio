@@ -1087,7 +1087,7 @@ def repair_manim_loop(
             prompt = (
                 "Sửa mã để PASS validate Manim CE và/hoặc hết lỗi biên dịch. "
                 "Đổi Tex/MathTex/Label(\"...\") sang Text/MarkupText(disable_ligatures=True). "
-                "Chỉ dùng Scene (không MovingCameraScene/ThreeDScene). Giữ ý đồ bài giảng."
+                "Chỉ dùng Scene hoặc VoiceoverScene (không MovingCameraScene/ThreeDScene). Giữ ý đồ bài giảng."
             )
 
         revised = revise_manim_code(
@@ -1195,7 +1195,7 @@ Trả về ĐÚNG 1 JSON (không markdown):
 
 QUY TẮC MANIM CE:
 1. Trả về TOÀN BỘ file Python đã sửa (không truncation, không diff).
-2. scene_name khớp class; class CHỈ kế thừa Scene (không MovingCameraScene/ThreeDScene).
+2. scene_name khớp class; class kế thừa Scene hoặc VoiceoverScene (không MovingCameraScene/ThreeDScene).
 3. Ưu tiên sửa lỗi trong nhật ký / validate (SyntaxError, NameError, Tex, Label...).
 4. Tex(...) → thay bằng Text(font=\"Arial\") cho tiếng Việt HOẶC MathTex(r\"...\") cho công thức — CẤM Tex.
 5. Ô vuông □ thay chữ có dấu: tách tiếng Việt ra Text(font=\"Arial\"); MathTex chỉ công thức.

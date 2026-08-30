@@ -36,6 +36,7 @@ from generate import (
 from validate_manim import (
     default_validation_mode,
     normalize_validation_mode,
+    uses_manim_voiceover,
     validate_manim_code,
 )
 from voiceover import (
@@ -118,6 +119,12 @@ TEMPLATES: list[dict[str, Any]] = [
         "default_scene": "ShortsVennSetsDemo",
     },
     {
+        "id": "style_shorts_voiceover",
+        "name": "Shorts 9:16 — Voiceover (giọng khớp từng câu)",
+        "file": "style_shorts_voiceover_demo.py",
+        "default_scene": "ShortsVoiceoverTQHDemo",
+    },
+    {
         "id": "style_shorts_viet",
         "name": "Mẫu Shorts — Thanh Thầy Việt",
         "file": "style_shorts_thanh_viet.py",
@@ -169,6 +176,7 @@ class CompileResponse(BaseModel):
     job_id: str
     status: str
     message: str
+    uses_voiceover: bool = False
 
 
 class PreviewFrameRequest(BaseModel):
@@ -725,6 +733,8 @@ def run_manim(
 
     media_dir = work_dir / "media"
     log_path = work_dir / "compile.log"
+    voiceover_job = uses_manim_voiceover(code)
+    compile_timeout = 900 if voiceover_job else 600
 
     cmd = [
         "manim",
@@ -741,6 +751,8 @@ def run_manim(
     env["PYTHONUNBUFFERED"] = "1"
 
     logger.info("Job %s: %s", job_id, " ".join(cmd))
+    if voiceover_job:
+        logger.info("Job %s: manim-voiceover detected — timeout %ss", job_id, compile_timeout)
 
     try:
         result = subprocess.run(
@@ -748,14 +760,17 @@ def run_manim(
             cwd=str(work_dir),
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=compile_timeout,
             env=env,
         )
     except subprocess.TimeoutExpired:
-        log_path.write_text("Timeout: biên dịch vượt quá 10 phút.\n", encoding="utf-8")
+        log_path.write_text(
+            f"Timeout: biên dịch vượt quá {compile_timeout // 60} phút.\n",
+            encoding="utf-8",
+        )
         return {
             "status": "error",
-            "log": "Timeout: biên dịch vượt quá 10 phút.",
+            "log": f"Timeout: biên dịch vượt quá {compile_timeout // 60} phút.",
             "video_path": None,
         }
     except FileNotFoundError:
@@ -787,6 +802,7 @@ def run_manim(
         "log": log_text,
         "video_path": str(out_path),
         "video_url": f"/api/video/{job_id}",
+        "uses_voiceover": voiceover_job,
     }
 
 
@@ -796,12 +812,26 @@ def health() -> dict[str, Any]:
     latex_ok = shutil.which("latex") is not None or shutil.which("pdflatex") is not None
     ffmpeg_ok = shutil.which("ffmpeg") is not None
     edge_tts_ok = False
+    voiceover_ok = False
+    gtts_ok = False
     try:
         import edge_tts  # noqa: F401
 
         edge_tts_ok = True
     except ImportError:
         edge_tts_ok = False
+    try:
+        import manim_voiceover  # noqa: F401
+
+        voiceover_ok = True
+    except ImportError:
+        voiceover_ok = False
+    try:
+        import gtts  # noqa: F401
+
+        gtts_ok = True
+    except ImportError:
+        gtts_ok = False
     ready = manim_ok and ffmpeg_ok
     return {
         "status": "ok" if ready else "degraded",
@@ -812,6 +842,8 @@ def health() -> dict[str, Any]:
             "latex": latex_ok,
             "ffmpeg": ffmpeg_ok,
             "edge_tts": edge_tts_ok,
+            "manim_voiceover": voiceover_ok,
+            "gtts": gtts_ok,
         },
         "gemini_configured": bool(
             os.environ.get("GEMINI_API_KEY", "").strip()
@@ -1088,10 +1120,16 @@ async def compile_video(req: CompileRequest) -> CompileResponse:
 
     asyncio.create_task(_run())
 
+    vo = uses_manim_voiceover(req.code)
+    msg = "Đã bắt đầu biên dịch video"
+    if vo:
+        msg += " (manim-voiceover — tạo giọng từng câu, có thể mất 5–15 phút, cần mạng)"
+
     return CompileResponse(
         job_id=job_id,
         status="running",
-        message="Đã bắt đầu biên dịch video",
+        message=msg,
+        uses_voiceover=vo,
     )
 
 

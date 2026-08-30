@@ -132,14 +132,29 @@ solution_stack.add(line)
 | | Studio cột 4 (Edge TTS) | manim-voiceover trong code |
 |--|-------------------------|----------------------------|
 | Khớp từng câu | Khó (chỉ chỉnh tốc độ cả video) | **Tốt** (từng block) |
-| Giọng VN | Hoài My, Nam Minh | gTTS / Recorder / Azure… |
+| Giọng VN | Hoài My, Nam Minh | gTTS (`lang="vi"`) |
 | Cần sửa code | Không | Có (`VoiceoverScene`) |
-| Render | Studio web | Lệnh `manim` trên máy |
-| Validate Studio | OK | **Chưa hỗ trợ** import `manim_voiceover` |
+| Render | Studio web (sau render) | **Studio Validate + Biên dịch** |
+| Micro | Không cần | Cấm `RecorderService` trên web |
 
 ---
 
-## 7. Dùng với Gemini / Gem
+## 7. Dùng trên Manim Video Studio (web)
+
+1. Chọn mẫu **Shorts 9:16 — Voiceover** (hoặc dán code có `VoiceoverScene`)
+2. **Validate** — phải có `GTTSService(lang="vi")`, không dùng `RecorderService`
+3. **Biên dịch** — video xuất ra **đã có tiếng** (lần đầu chậm hơn, cần internet)
+4. Không cần bấm “Lồng tiếng” cột 4 (trừ khi muốn giọng Edge Hoài My / Nam Minh)
+
+Cài backend (máy local / Docker):
+
+```powershell
+pip install "manim-voiceover[gtts]"
+```
+
+---
+
+## 8. Dùng với Gemini / Gem
 
 Thêm vào prompt Bước 2 (code):
 
@@ -154,15 +169,15 @@ Hoặc copy file mẫu `style_shorts_voiceover_demo.py` làm khung.
 
 ---
 
-## 8. Hạn chế hiện tại
+## 9. Hạn chế hiện tại
 
-1. **Studio web** chưa biên dịch file có `manim_voiceover` — chạy bằng PowerShell: `manim -pq file.py TenScene`
-2. Plugin **chưa có Edge TTS** chính thức (Hoài My / Nam Minh) — dùng gTTS hoặc Recorder
-3. Lần render đầu **chậm** vì phải tạo audio từng câu (cache lại lần sau nhanh hơn)
+1. **RecorderService** (tự đọc micro) không chạy trên Studio web — chỉ `GTTSService`
+2. Plugin **chưa có Edge TTS** chính thức (Hoài My / Nam Minh) — gTTS chất lượng trung bình
+3. Lần render đầu **chậm** vì tạo audio từng câu (cache lại lần sau nhanh hơn)
 
 ---
 
-## 9. Lỗi thường gặp
+## 10. Lỗi thường gặp
 
 | Lỗi | Cách xử lý |
 |-----|------------|

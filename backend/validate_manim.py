@@ -84,7 +84,26 @@ _HEAVY_SCENE_BASES = {
     "OpenGLSurface",
 }
 
-_ALLOWED_IMPORT_ROOTS = {"manim", "numpy", "np", "math", "random", "typing", "__future__"}
+_ALLOWED_IMPORT_ROOTS = {
+    "manim",
+    "manim_voiceover",
+    "gtts",
+    "numpy",
+    "np",
+    "math",
+    "random",
+    "typing",
+    "__future__",
+}
+
+_VOICEOVER_SCENE_BASES = {"VoiceoverScene"}
+
+_RECORDER_SERVICE_PATTERNS = [
+    (
+        r"\bRecorderService\s*\(",
+        "RecorderService cần micro — trên Studio web dùng GTTSService(lang='vi')",
+    ),
+]
 
 _VN_DIACRITIC = re.compile(
     r"[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]",
@@ -106,6 +125,23 @@ def normalize_validation_mode(mode: str | None) -> ValidationMode:
     return "render_free"
 
 
+def _strip_hash_comments(code: str) -> str:
+    """Bỏ comment # để tránh false positive trong validate."""
+    out: list[str] = []
+    for line in code.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        if "#" in line:
+            line = line.split("#", 1)[0]
+        out.append(line)
+    return "\n".join(out)
+
+
+def uses_manim_voiceover(code: str) -> bool:
+    text = code or ""
+    return "manim_voiceover" in text or "VoiceoverScene" in text
+
+
 def validate_manim_code(
     code: str,
     mode: ValidationMode | str | None = None,
@@ -125,6 +161,7 @@ def validate_manim_code(
             "warnings": [],
             "scene_names": [],
             "mode": resolved_mode,
+            "uses_voiceover": False,
         }
 
     if "from manim import" not in text and "import manim" not in text:
@@ -140,6 +177,22 @@ def validate_manim_code(
     for pat, msg in forbidden:
         if re.search(pat, text, flags=re.M | re.I):
             errors.append(msg)
+
+    if uses_manim_voiceover(text):
+        code_no_comments = _strip_hash_comments(text)
+        for pat, msg in _RECORDER_SERVICE_PATTERNS:
+            if re.search(pat, code_no_comments, flags=re.M | re.I):
+                errors.append(msg)
+        if "set_speech_service" not in text:
+            errors.append("VoiceoverScene: thiếu self.set_speech_service(...) — thêm GTTSService(lang='vi')")
+        if "self.voiceover" not in text:
+            warnings.append("VoiceoverScene: chưa có with self.voiceover(...) — giọng sẽ không khớp từng câu")
+        elif "tracker.duration" not in text:
+            warnings.append(
+                "Voiceover: nên dùng run_time=tracker.duration trong self.play(...) để khớp giọng"
+            )
+        if "GTTSService" in text and "lang=" not in text and "lang =" not in text:
+            warnings.append("GTTSService: nên đặt lang='vi' cho tiếng Việt")
 
     warn_patterns = list(_WARNING_PATTERNS)
     if resolved_mode == "local_latex":
@@ -160,6 +213,7 @@ def validate_manim_code(
             "warnings": warnings,
             "scene_names": [],
             "mode": resolved_mode,
+            "uses_voiceover": uses_manim_voiceover(text),
         }
 
     for node in tree.body:
@@ -251,6 +305,7 @@ def validate_manim_code(
         "warnings": warnings,
         "scene_names": scene_names,
         "mode": resolved_mode,
+        "uses_voiceover": uses_manim_voiceover(text),
     }
 
 

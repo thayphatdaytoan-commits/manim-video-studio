@@ -11,7 +11,7 @@ Ghi âm giọng thật (không cần internet, chất lượng tốt nhất):
   manim --write_to_movie style_shorts_voiceover_demo.py ShortsVoiceoverTQHDemo
   (plugin sẽ hỏi bạn đọc từng câu vào micro khi render)
 
-Lưu ý: file này chạy bằng lệnh manim trực tiếp — Studio web chưa tích hợp plugin.
+Lưu ý: chạy được trên Manim Video Studio (Validate + Biên dịch). Cần mạng cho GTTSService.
 """
 
 from manim import *
@@ -75,7 +75,7 @@ class ShortsVoiceoverTQHDemo(VoiceoverScene):
 
     def construct(self):
         # Giọng tiếng Việt (Google Translate TTS — miễn phí, cần mạng)
-        # Đổi sang RecorderService() nếu muốn tự đọc vào micro
+        # Đổi sang RecorderService trên máy local có micro (không dùng trên Studio web)
         self.set_speech_service(GTTSService(lang="vi", tld="com.vn"))
 
         self.camera.background_color = STYLE_VN["bg"]

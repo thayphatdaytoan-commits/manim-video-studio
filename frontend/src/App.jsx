@@ -71,7 +71,7 @@ const KEY_STORAGE_LEGACY = 'mvs_gemini_api_key'
 const VALIDATION_MODE_STORAGE = 'mvs_validation_mode'
 
 const CE_CHECKLIST_RENDER_FREE = [
-  { id: 'scene', label: 'class kế thừa Scene (không MovingCamera / 3D)' },
+  { id: 'scene', label: 'class Scene hoặc VoiceoverScene (không MovingCamera / 3D)' },
   { id: 'text', label: 'Text / MarkupText tiếng Việt (disable_ligatures=True)' },
   { id: 'notex', label: 'Không Tex / MathTex / Label("A") / Typst' },
   { id: 'geom', label: 'Dot, Line, Circle, Polygon, Angle, VGroup, ImageMobject' },
@@ -80,7 +80,7 @@ const CE_CHECKLIST_RENDER_FREE = [
 ]
 
 const CE_CHECKLIST_LOCAL = [
-  { id: 'scene', label: 'class Scene (2D) — không MovingCamera / 3D' },
+  { id: 'scene', label: 'class Scene / VoiceoverScene (2D) — không MovingCamera / 3D' },
   { id: 'hybrid', label: 'Text tiếng Việt + MathTex(r"...") cho công thức' },
   { id: 'notex', label: 'CẤM Tex() — chỉ MathTex(r"...") cho công thức LaTeX đẹp' },
   { id: 'font', label: 'Text: font="Arial" + disable_ligatures=True (tránh ô vuông □)' },
@@ -3206,6 +3206,13 @@ export default function App() {
           {manimValidation && (
             <div className={`validation-box ${manimValidation.ok ? 'ok' : 'bad'}`}>
               <strong>{manimValidation.ok ? 'Validate OK' : 'Validate có lỗi'}</strong>
+              {manimValidation.uses_voiceover && (
+                <p className="step-hint step-hint-tight">
+                  manim-voiceover: video render sẽ có giọng khớp từng câu (GTTSService cần mạng).
+                  Không dùng RecorderService trên web. Mẫu:{' '}
+                  <code>backend/examples/style_shorts_voiceover_demo.py</code>
+                </p>
+              )}
               {(manimValidation.errors || []).length > 0 && (
                 <ul>
                   {manimValidation.errors.map((err, i) => (
@@ -3391,8 +3398,11 @@ export default function App() {
             </h3>
             <p className="step-hint">
               AI viết lời thoại gồm <strong>đề bài</strong> + <strong>hướng dẫn giải</strong>, rồi Edge
-              TTS đọc và ghép vào MP4. Bật “Khớp nhịp hình” để kéo giãn/nén hiệu ứng cho gần với độ dài
-              lời đọc (tương đối).
+              TTS đọc và ghép vào MP4 (sau khi render). Bật “Khớp nhịp hình” để kéo giãn/nén hiệu ứng.
+              <br />
+              <strong>Khớp từng câu tốt hơn:</strong> dùng mẫu{' '}
+              <code>Shorts — Voiceover</code> (VoiceoverScene + GTTSService) — Validate + Biên dịch
+              trực tiếp trên Studio.
             </p>
 
             <label className="field check-row">
