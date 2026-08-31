@@ -11,4 +11,7 @@ Trước khi grep/Task explore toàn repo, đọc **`docs/PROJECT-GRAPH.md`**.
 - Storyboard `beats[]` + `narration_text` + timeline TTS
 - API index + file map + chỉ mục sửa nhanh
 
-Skill chi tiết: `.cursor/skills/manim-studio-graph/SKILL.md`
+Skills:
+- Graph thủ công: `.cursor/skills/manim-studio-graph/SKILL.md`
+- Explore / debug / impact: `manim-studio-exploring`, `manim-studio-debugging`, `manim-studio-impact`
+- GitNexus (graph tự động): `AGENTS.md`, `docs/HUONG-DAN-GITNEXUS.md`

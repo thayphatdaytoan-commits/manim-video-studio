@@ -156,6 +156,21 @@ CẤM: Tex(), align_to(LEFT_EDGE), shift(UP*2), panel.scale(0.38)
 - **`main`** — bản giáo viên dùng (`git pull origin main`)
 - Feature cũ: `cursor/plan-a-timeline-preview-21cf` (đã merge vào main)
 
+## 11. GitNexus (graph tự động — học từ [GitNexus](https://github.com/abhigyanpatwari/GitNexus))
+
+| Thành phần | Vai trò |
+|------------|---------|
+| `docs/PROJECT-GRAPH.md` | Bản đồ thủ công (file này) — workflow + API + layout |
+| `npx gitnexus analyze` | Index ~30 file nguồn → graph symbol/flow |
+| `AGENTS.md` | Quy tắc agent: impact trước khi sửa, `query`/`context` MCP |
+| `.cursor/skills/manim-studio-{exploring,debugging,impact}` | Skill Việt + ngữ cảnh Manim |
+| `.claude/skills/gitnexus-*` | Skill auto (backend, examples, clusters) |
+
+**Cài Windows:** `docs/HUONG-DAN-GITNEXUS.md`  
+**Re-index:** sau pull lớn → `npx gitnexus@latest analyze` trong thư mục repo.
+
+**Vùng graph chính:** Backend (6 file, 83 symbols) · Frontend App/timeline (clusters) · Examples Manim.
+
 ---
 
 *Cập nhật: khi thêm API/module lớn → sửa file này trước, không để agent grep cả repo.*

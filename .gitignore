@@ -15,3 +15,8 @@ frontend/.vite/
 *.log
 .idea/
 .vscode/
+
+# GitNexus — chỉ commit runner, không commit DB index (~40MB)
+.gitnexus/*
+!.gitnexus/run.cjs
+!.gitnexus/.gitignore
