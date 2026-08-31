@@ -1,0 +1,14 @@
+---
+description: Bản đồ dự án Manim Video Studio — agent đọc trước khi explore
+alwaysApply: true
+---
+
+# Project graph (token saver)
+
+Trước khi grep/Task explore toàn repo, đọc **`docs/PROJECT-GRAPH.md`**.
+
+- Kiến trúc 3 cột UI + FastAPI + manim render
+- Storyboard `beats[]` + `narration_text` + timeline TTS
+- API index + file map + chỉ mục sửa nhanh
+
+Skill chi tiết: `.cursor/skills/manim-studio-graph/SKILL.md`
