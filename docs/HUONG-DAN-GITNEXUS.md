@@ -113,6 +113,15 @@ Chỉ cần khi:
 - Nhờ Cursor/Cloud Agent **sửa code** repo
 - Muốn agent **ít tốn token** và **ít sửa nhầm file**
 
+## Dùng cho dự án khác (skill Cursor toàn cục)
+
+Mẫu tái sử dụng đã ghi trong repo:
+
+- **Skill global Cursor:** `project-graph-gitnexus` (trong `~/.cursor/skills/` sau khi copy hoặc chạy setup)
+- **Template trong repo:** `.cursor/skills/project-graph-gitnexus/` + `references/PROJECT-GRAPH-TEMPLATE.md`
+
+Khi bắt đầu repo mới, nói với Cursor: *"Áp dụng skill project-graph-gitnexus cho dự án này"* — agent sẽ tạo `docs/PROJECT-GRAPH.md`, 3 skill exploring/debugging/impact, và chạy `gitnexus analyze --skills`.
+
 ## Tài liệu thêm
 
 - Project graph thủ công: `docs/PROJECT-GRAPH.md`

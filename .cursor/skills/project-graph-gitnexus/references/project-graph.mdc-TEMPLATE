@@ -1,0 +1,14 @@
+---
+description: Bản đồ dự án — agent đọc trước khi explore
+alwaysApply: true
+---
+
+# Project graph (token saver)
+
+Trước khi grep/Task explore toàn repo, đọc **`docs/PROJECT-GRAPH.md`**.
+
+Skills:
+- Graph: `.cursor/skills/<tên-dự-án>-graph/SKILL.md`
+- Explore / debug / impact: `<tên-dự-án>-exploring`, `-debugging`, `-impact`
+- GitNexus (mọi dự án): skill global `project-graph-gitnexus`
+- Bootstrap template: `.cursor/skills/project-graph-gitnexus/references/`
