@@ -2,6 +2,8 @@
 
 Ứng dụng web biên dịch mã **Manim** thành video Toán học (giao diện tiếng Việt).
 
+> **Bản đồ hệ thống (agent/dev):** [`docs/PROJECT-GRAPH.md`](docs/PROJECT-GRAPH.md) — đọc trước khi sửa repo, tiết kiệm token.
+
 ## Tính năng
 
 - Chọn mẫu minh họa (Parabol, hàm bậc nhất, hình tròn, Pythagore)
