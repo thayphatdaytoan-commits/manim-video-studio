@@ -15,19 +15,27 @@ LAYOUT JSON:
   "figure_ratio": 0.58,
   "text_align": "block_center_left",
   "max_lines_per_page": 4,
+  "animation_kit": "ntsm_sync_v1",
   "problem_layout": "text_top_figure_below_block_center",
   "solution_layout": "figure_top_text_below_block_center",
+  "figure_build_order": ["curves", "segments", "points", "labels"],
   "figure_initial": "fit_figure_full_width + next_to(problem_block,DOWN) + center_x",
   "figure_after_transition": "to_edge(UP, buff=TOP_BUFF) + fit_figure_full_width(FIGURE_RATIO) + center_x"
 }
 
-QUY TẮC:
-- Mỗi solution_steps: đúng 1 text_line HOẶC 1 latex_line — khối chữ giữa màn, canh trái bên trong
-- Venn/tập hợp: figure_targets là các vòng tròn; hình phải full SAFE_W + center_x
-- Góc trong JSON: indicate_targets dạng "angle:AHK" (đỉnh ở giữa) hoặc "right_angle:ACB"
-- CẤM layout landscape (hình trái, panel phải)
-- text_align: "block_center_left" (khối giữa màn, canh trái; đoạn dài justify)
-- figure_objects: tọa độ x∈[-3.5,3.5], y∈[-2.5,2.5]
+MÀU NTSM (ghi trong JSON layout.colors nếu cần):
+bg #0d1117 | circle #3d6b2f | segment #1e40af | point #8b1a1a | highlight #FFD700 | conclusion #FF8C00
+
+QUY TẮC KỊCH BẢN:
+- Mỗi solution_steps: đúng 1 text_line HOẶC 1 latex_line
+- Mỗi solution_steps BẮT BUỘC có:
+    "sync": true,
+    "figure_anims": ["indicate:AB"] | ["right_angle:ACB"] | ["angle:AHK"] | ["create:median_AM"] | []
+  → figure_anims khớp nội dung dòng chữ (beat nói cạnh AB thì phải indicate:AB)
+- problem_and_figure: actions dựng hình tuần tự ["write_problem","create_circle","create_segments","fade_in_points","write_labels"]
+- Góc: indicate_targets "angle:AHK" (đỉnh giữa) hoặc "right_angle:ACB"
+- Venn: figure_targets ["circle_T","circle_V","circle_A"]; màu venn_t/venn_v/venn_a
+- CẤM layout landscape; CẤM beat không có figure_anims khi dòng nói về hình
 
 OUTPUT: chỉ 1 JSON (không markdown, không ```).
 

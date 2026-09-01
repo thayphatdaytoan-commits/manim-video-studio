@@ -10,11 +10,13 @@ Dùng khi bạn muốn chat trực tiếp trên [gemini.google.com](https://gemi
 2. **Tên:** `Manim Toán VN Shorts`
 3. **Hướng dẫn (Instructions):** mở file trong repo và copy toàn bộ:
    - `docs/GEM-INSTRUCTIONS-MANIM.txt`
-4. **Kiến thức (Knowledge)** — upload các file (tùy chọn nhưng nên có):
+4. **Kiến thức (Knowledge)** — upload theo [`docs/GEM-KNOWLEDGE-PACK.md`](GEM-KNOWLEDGE-PACK.md):
    - `docs/GEM-INSTRUCTIONS-MANIM.txt`
-   - `docs-gem-manim-ce-cheatsheet.md`
+   - `backend/examples/style_shorts_sync_choreography.py` (**mẫu vàng** — đồng bộ chữ+hình)
    - `backend/examples/style_shorts_tqh_geometry.py` (hình học)
    - `backend/examples/style_shorts_venn_sets.py` (Venn / tập hợp)
+   - `backend/examples/shorts_animation_kit_snippet.py` (màu, thời lượng hiệu ứng)
+   - `docs/mau-prompt-buoc-1-kich-ban.txt`, `mau-prompt-buoc-2-code.txt`, `mau-prompt-buoc-3-sua.txt`
 5. **Lưu** Gem
 
 ---

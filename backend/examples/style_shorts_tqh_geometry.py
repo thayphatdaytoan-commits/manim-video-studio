@@ -121,11 +121,19 @@ class ShortsTQHGeometryDemo(Scene):
         center_x(figure)
 
         self.play(Write(title))
-        self.play(LaggedStart(*[Write(l) for l in problem_lines], lag_ratio=0.15))
-        self.wait(0.5)
-        self.play(Create(circle), FadeIn(A), FadeIn(B), FadeIn(C), run_time=1.0)
-        self.play(Create(AB), Create(AC), Create(BC), Write(la), Write(lb), Write(lc), Write(lo))
-        self.wait(0.8)
+        self.play(LaggedStart(*[Write(l) for l in problem_lines], lag_ratio=0.14))
+        self.wait(0.4)
+        self.play(Create(circle), run_time=1.0)
+        self.play(
+            LaggedStart(Create(AB), Create(AC), Create(BC), lag_ratio=0.1),
+            run_time=0.75,
+        )
+        self.play(
+            LaggedStart(FadeIn(A, scale=0.6), FadeIn(B, scale=0.6), FadeIn(C, scale=0.6), lag_ratio=0.1),
+            run_time=0.45,
+        )
+        self.play(Write(la), Write(lb), Write(lc), Write(lo), run_time=0.65)
+        self.wait(0.85)
 
         # --- Giai đoạn 2: Ẩn đề → hình phóng full phía trên ---
         self.play(FadeOut(problem_block))
@@ -166,20 +174,25 @@ class ShortsTQHGeometryDemo(Scene):
             else:
                 new_parts.align_to(solution_stack, LEFT).next_to(solution_stack, DOWN, buff=0.08)
 
-            anims = [Write(new_parts)]
+            fig_anims = []
             if indicate_targets:
                 if isinstance(indicate_targets, str) and indicate_targets == "ACB":
                     ang = right_angle_at(C, A, B, length=0.25, color=STYLE_VN["highlight"])
                     figure.add(ang)
-                    anims.append(Indicate(ang, color=STYLE_VN["highlight"]))
+                    fig_anims = [Create(ang), Indicate(ang, color=STYLE_VN["highlight"])]
+                elif isinstance(indicate_targets, str) and indicate_targets == "AB":
+                    fig_anims = [Indicate(AB, color=STYLE_VN["highlight"])]
                 elif isinstance(indicate_targets, tuple):
                     targets = [AC if t == "AC" else BC for t in indicate_targets]
-                    anims.append(Indicate(VGroup(*targets), color=STYLE_VN["highlight"]))
+                    fig_anims = [Indicate(VGroup(*targets), color=STYLE_VN["highlight"])]
 
-            self.play(*anims)
+            self.play(
+                AnimationGroup(Write(new_parts), *fig_anims, lag_ratio=0.0),
+                run_time=max(0.65, 0.55),
+            )
             solution_stack.add(new_parts)
             center_block(solution_stack)
-            self.wait(0.8)
+            self.wait(0.85)
 
         conclusion = vn("ĐPCM.", 30, STYLE_VN["conclusion"])
         conclusion.align_to(solution_stack, LEFT).next_to(solution_stack, DOWN, buff=0.1)

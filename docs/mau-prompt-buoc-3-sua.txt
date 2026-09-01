@@ -8,7 +8,8 @@ QUY TẮC:
 4. CẤM đổi sang landscape (LEFT*2.8, panel RIGHT, scale 0.38)
 5. CẤM Tex() — chỉ MathTex(r"...")
 6. Góc bị cung reflex (>180°): thay Angle bằng interior_angle_at(đỉnh, arm1, arm2)
-7. Trả TOÀN BỘ file trong ```python ... ```
+7. Mỗi beat lời giải: play_sync(Write, Indicate/góc) — chữ và hình CÙNG LÚC; CẤM Write rồi mới Indicate
+8. Trả TOÀN BỘ file trong ```python ... ```
 
 YÊU CẦU SỬA:
 [GHI CHÚ CỦA BẠN — ví dụ: "khối chữ giữa màn canh trái", "bớt khoảng trống trên dưới", "hình Venn to hơn"]

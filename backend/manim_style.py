@@ -116,7 +116,7 @@ GEMINI_ANTI_PATTERNS = """
 2. Tiếng Việt / nhãn điểm trong MathTex → ô vuông □; dùng vn() hoặc Text(font="Arial")
 3. shorts mà dùng layout landscape (figure LEFT*2.8 + panel RIGHT) → SAI
 4. problem_and_figure hiện lời giải → SAI (chỉ đề + dựng hình)
-5. Quên FadeOut(problem_block) hoặc quên figure.animate.shift(UP*2.0)
+5. Quên FadeOut(problem_block) hoặc quên fit_figure_full_width sau ẩn đề
 6. Gộp 2+ dòng lời giải vào 1 beat solution_steps → SAI (1 dòng/beat)
 7. page_break FadeOut cả figure → SAI (chỉ FadeOut solution_stack)
 8. Không chèn page_break sau mỗi 4 dòng solution_steps
@@ -163,6 +163,40 @@ GEMINI_ACTION_MAP = """
 | angle:AHK | interior_angle_at(H, A, K, radius=0.28, color=STYLE_VN["highlight"]) |
 | fade_out_solution_stack | self.play(FadeOut(solution_stack)); solution_stack = VGroup() |
 | surround_rect | SurroundingRectangle(conclusion, color=STYLE_VN["highlight"]) |
+"""
+
+GEMINI_ANIMATION_CHOREOGRAPHY = """
+=== ĐỒNG BỘ HIỆU ỨNG — CHỮ ↔ ĐƯỜNG ↔ GÓC ↔ ĐIỂM (ntsm_sync_v1) ===
+
+【Hằng số thời lượng — copy vào mọi file shorts】
+RUN_CREATE_MAJOR=1.0  RUN_CREATE_LINE=0.75  RUN_FADEIN_DOT=0.45
+RUN_WRITE=0.65  RUN_INDICATE=0.55  RUN_ANGLE=0.5  LAG_TEXT=0.14  WAIT_BEAT=0.85
+DOT_RADIUS=0.08  STROKE_CIRCLE=4  STROKE_SEGMENT=3
+
+【Hàm play_sync — BẮT BUỘC mỗi beat solution_steps】
+def play_sync(self, text_anim, *figure_anims, run_time=None):
+    anims = [text_anim, *figure_anims]
+    rt = run_time or max(RUN_WRITE, RUN_INDICATE, RUN_ANGLE)
+    self.play(AnimationGroup(*anims, lag_ratio=0.0), run_time=rt)
+    self.wait(WAIT_BEAT)
+
+【Thứ tự dựng hình problem_and_figure】
+1. Write title → LaggedStart Write đề (lag_ratio=LAG_TEXT)
+2. Create circle/axes (RUN_CREATE_MAJOR)
+3. LaggedStart Create segments (RUN_CREATE_LINE)
+4. LaggedStart FadeIn dots scale=0.6 (RUN_FADEIN_DOT)
+5. Write point labels
+
+【JSON beat — trường bắt buộc】
+"sync": true
+"figure_anims": ["indicate:AB"] | ["right_angle:ACB"] | ["angle:AHK"] | []
+
+【Quy tắc】
+- Beat nói cạnh/góc → figure_anims KHỚP nội dung; code dùng play_sync
+- CẤM: Write(line); wait; Indicate(...) — lệch nhịp so với kênh TQH
+- Venn: Create từng vòng lần lượt, không 3 vòng 1 frame
+
+Mẫu vàng: backend/examples/style_shorts_sync_choreography.py
 """
 
 SHORTS_VENN_SET_RULES = """
@@ -228,6 +262,7 @@ def right_angle_at(vertex, arm1, arm2, length=0.22, **kwargs):
 
 GEMINI_SHORTS_TQH_PROMPT = (
     SHORTS_TQH_LAYOUT_RULES
+    + GEMINI_ANIMATION_CHOREOGRAPHY
     + SHORTS_VENN_SET_RULES
     + GEMINI_ANGLE_RULES
     + GEMINI_ACTION_MAP

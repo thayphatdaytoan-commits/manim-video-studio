@@ -13,9 +13,9 @@ config.pixel_height = 1920
 
 STYLE_VN = {
     "bg": "#0d1117",
-    "circle_t": "#1e40af",
-    "circle_v": "#8b1a1a",
-    "circle_a": "#3d6b2f",
+    "circle_t": "#1e40af",   # venn T = màu segment
+    "circle_v": "#8b1a1a",   # venn V = màu point
+    "circle_a": "#3d6b2f",   # venn A = màu circle
     "text": "#FFFFFF",
     "highlight": "#FFD700",
     "conclusion": "#FF8C00",
@@ -95,10 +95,13 @@ class ShortsVennSetsDemo(Scene):
         figure.next_to(problem_block, DOWN, buff=0.1)
         center_x(figure)
 
-        self.play(Write(title), LaggedStart(*[Write(l) for l in problem_lines], lag_ratio=0.12))
+        self.play(Write(title), LaggedStart(*[Write(l) for l in problem_lines], lag_ratio=0.14))
         self.wait(0.4)
-        self.play(Create(c_t), Create(c_v), Create(c_a), Write(lt), Write(lv), Write(la))
-        self.wait(0.8)
+        self.play(Create(c_t), run_time=1.0)
+        self.play(Create(c_v), run_time=0.75)
+        self.play(Create(c_a), run_time=0.75)
+        self.play(Write(lt), Write(lv), Write(la), run_time=0.65)
+        self.wait(0.85)
 
         # --- Ẩn đề, hình lên trên (phóng to, sát mép trên) ---
         self.play(FadeOut(problem_block))
