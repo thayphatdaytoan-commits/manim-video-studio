@@ -91,8 +91,8 @@ CẤM: Tex(), align_to(LEFT_EDGE), shift(UP*2), panel.scale(0.38)
 ```
 
 **Nguồn chân lý:** `backend/manim_style.py` → `SHORTS_TQH_LAYOUT_RULES`  
-**Mẫu:** `backend/examples/style_shorts_tqh_geometry.py`, `style_shorts_venn_sets.py`, `style_shorts_voiceover_demo.py`  
-**Gem Instructions:** `docs/GEM-INSTRUCTIONS-MANIM.txt`
+**Mẫu:** `style_shorts_sync_choreography.py` (vàng), `style_shorts_tqh_geometry.py`, `style_shorts_venn_sets.py`, `style_shorts_voiceover_demo.py`  
+**Gem:** `docs/GEM-INSTRUCTIONS-MANIM.txt` + `docs/GEM-KNOWLEDGE-PACK.md` (upload Knowledge)
 
 ## 6. API index (main.py)
 
@@ -128,7 +128,10 @@ CẤM: Tex(), align_to(LEFT_EDGE), shift(UP*2), panel.scale(0.38)
 | `backend/shorts_layout.py` | Inject helpers Shorts vào code |
 | `backend/voiceover.py` | Edge TTS + merge 1 track |
 | `backend/beat_voiceover.py` | TTS từng beat + timeline slots |
-| `docs/GEM-INSTRUCTIONS-MANIM.txt` | Paste vào Gemini Gem |
+| `docs/GEM-INSTRUCTIONS-MANIM.txt` | Paste vào Gemini Gem Instructions |
+| `docs/GEM-KNOWLEDGE-PACK.md` | Danh sách file upload Gem Knowledge |
+| `backend/examples/style_shorts_sync_choreography.py` | Mẫu vàng đồng bộ chữ+hình+góc |
+| `backend/examples/shorts_animation_kit_snippet.py` | Hằng số màu NTSM, RUN_*, play_sync |
 | `docs/mau-prompt-buoc-*.txt` | Prompt 3 bước Gem |
 | `Mo-Manim-Studio.bat` | Khởi động Windows |
 
